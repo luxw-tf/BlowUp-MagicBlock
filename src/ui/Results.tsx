@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { SessionLike } from '../game/sessionTypes';
 import { Icon, type IconName } from './Icon';
 import { Portrait } from './Portrait';
@@ -27,6 +27,8 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
   const winner = ranked[0];
   const localWon = winner.id === session.localId;
   const local = s.players.find((p) => p.id === session.localId);
+  // the match keeps ticking behind the panel; the time shown is when it ended
+  const [endTime] = useState(() => Math.round(s.time));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,7 +54,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
         <h2 className="ribbon">{localWon ? 'Victory' : 'Match over'}</h2>
         <div className="results-title">{localWon ? 'Last one standing' : `${winner.name} takes it`}</div>
         <div className="results-sub">
-          {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last one standing'} · {Math.round(s.time)}s
+          {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last one standing'} · {endTime}s
         </div>
         <div className="results-verdict">{verdict(local?.placement)}</div>
 

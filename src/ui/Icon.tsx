@@ -16,11 +16,12 @@ export function Icon({ name, size = 22, fill, style, title }: { name: IconName; 
     case 'bomb':
       body = (
         <>
-          <circle cx="10.5" cy="14" r="6.8" {...o} fill={accent} />
-          <path d="M7.4 12.2 A3.4 3.4 0 0 1 9.6 10.2" {...o} />
-          <path d="M14.6 9.2 L16.4 7.4" {...o} />
-          <path d="M16.4 7.4 C17.4 5.2 19.2 4.6 20.6 4.8" {...o} />
-          <path d="M20.6 2.2 V3.4 M22.4 4.8 H21.2 M21.9 3 L21.1 3.8" {...o} strokeWidth={1.4} />
+          {/* round body, a cap straight on top and a curly fuse, so it never reads as the male sign */}
+          <circle cx="11" cy="15" r="6.6" {...o} fill={accent === 'none' ? 'currentColor' : accent} fillOpacity={accent === 'none' ? 0.18 : 1} />
+          <path d="M7.8 13.4 A3.4 3.4 0 0 1 10 11.2" {...o} />
+          <rect x="9.2" y="6.6" width="3.6" height="2" rx="0.6" {...o} />
+          <path d="M11 6.6 C 11 4.2, 13.4 3.4, 14.6 4.8 C 15.6 6, 17.2 5.6, 17.8 4.2" {...o} />
+          <path d="M19.4 1.6 V3.2 M19.4 5.2 V6.8 M17.4 4.2 H18.6 M20.2 4.2 H21.4" {...o} strokeWidth={1.4} />
         </>
       );
       break;

@@ -73,9 +73,10 @@ function CameraRig() {
     const spectating = !!me && !me.alive && s.phase !== 'finished' && !focus.overview;
 
     // what to look at, how close (0 = the whole yard, 1 = right on someone), and any orbit or roll
+    // open play sits a little closer than the whole yard, so characters read as characters, and follows you in depth too
     let tx = f.x;
-    let tz = -2.6 + THREE.MathUtils.clamp(f.z, -ARENA.halfDepth, ARENA.halfDepth) * 0.22;
-    let zoomT = 0.06;
+    let tz = THREE.MathUtils.lerp(-2.6, THREE.MathUtils.clamp(f.z, -ARENA.halfDepth, ARENA.halfDepth), 0.5);
+    let zoomT = 0.3;
     let yawT = 0;
     let rollT = 0;
     let follow = true; // open play keeps a dead zone, so small moves don't swim the view
@@ -89,7 +90,11 @@ function CameraRig() {
       const left = Math.max(0, s.phaseEndsAt - s.time);
       tx = mine.x; tz = mine.z; zoomT = THREE.MathUtils.clamp(left / 3, 0.15, 0.85); follow = false;
     } else if (spectating) {
-      tz = THREE.MathUtils.clamp(f.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2); zoomT = 1; follow = false;
+      // out of the match: follow the action (whoever holds the bomb), unless you picked someone to watch
+      const holder = s.bomb.holderId && getPlayer(s, s.bomb.holderId)?.alive ? s.bomb.holderId : null;
+      if (focus.auto !== false && holder) focus.id = holder;
+      const g = posOf(focus.id) ?? f;
+      tx = g.x; tz = THREE.MathUtils.clamp(g.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2); zoomT = 0.85; follow = false;
     } else if (s.phase === 'active' && alive.length === 2) {
       // the final two: frame both
       const a = posOf(alive[0].id)!, b = posOf(alive[1].id)!;
@@ -193,7 +198,7 @@ function OverlayProjector() {
       return;
     }
     const cx = THREE.MathUtils.clamp(sx, pad, size.width - pad);
-    const cy = THREE.MathUtils.clamp(sy, pad + 60, size.height - pad);
+    const cy = THREE.MathUtils.clamp(sy, pad + 130, size.height - pad); // below the fuse sign and the kill feed
     const ang = Math.atan2(sy - cy, sx - cx);
     ind.style.display = 'flex';
     ind.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%)`;

@@ -69,7 +69,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   );
   const settings = useSettings();
   const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [callout, setCallout] = useState<{ text: string; key: number; tone: string } | null>(null);
+  const [callout, setCallout] = useState<{ text: string; key: number; tone: string; top: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -79,6 +79,14 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   /** Bot trash talk over their heads: one bubble per bot, a few seconds each. */
   const [bubbles, setBubbles] = useState<Record<PlayerId, { text: string; key: number }>>({});
   const lastBubble = useRef(new Map<PlayerId, number>());
+  /** Where the big line goes: whichever half of the screen you're not standing in, so it never covers you. */
+  const calloutTop = () => {
+    const tag = overlay.tags.get(session.localId);
+    const box = wrap.current?.getBoundingClientRect();
+    if (!tag || !box || tag.style.display === 'none') return 26;
+    const y = (tag.getBoundingClientRect().top - box.top) / box.height;
+    return y < 0.5 ? 70 : 26;
+  };
   /** Words slammed all over the screen on the big moments. */
   const [pops, setPops] = useState<Pop[]>([]);
   const popId = useRef(0);
@@ -173,6 +181,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
     const i = alive.findIndex((p) => p.id === ctx.focus.id);
     ctx.focus.id = alive[(i + dir + alive.length) % alive.length].id;
     ctx.focus.overview = false; // picking someone means you want to watch them
+    ctx.focus.auto = false;
     force((n) => n + 1);
   };
   const toggleOverview = () => {
@@ -196,7 +205,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         warned = true;
         const now = performance.now();
         calloutUntil.current = now + 1000;
-        setCallout({ text: line('youCritical'), key: now, tone: 'danger' });
+        setCallout({ text: line('youCritical'), key: now, tone: 'danger', top: calloutTop() });
         slamRef.current('wordsCritical', 1);
       }
     }, 100);
@@ -217,7 +226,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
       const now = performance.now();
       if (!force && now < calloutUntil.current) return;
       calloutUntil.current = now + 1400;
-      setCallout({ text, key: now, tone });
+      setCallout({ text, key: now, tone, top: calloutTop() });
     };
     /** A bot says something (only bots talk; real players' words are their own). */
     const say = (id: PlayerId | null, pool: Pool, chance = 1) => {
@@ -283,11 +292,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             break;
           case 'miss':
             audio.miss();
-            push(
-              <>
-                <Name s={s} id={e.from} /> missed
-              </>,
-            );
+            // only your own misses make the feed; everyone else's would drown it
+            if (e.from === local)
+              push(
+                <>
+                  <Name s={s} id={e.from} /> missed
+                </>,
+              );
             if (e.from === local) {
               shout(line('youMissed'), 'bad');
               slam('wordsMiss', 1);
@@ -426,7 +437,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
   return (
     <GameContext.Provider value={ctx}>
-      <div ref={wrap} className="game-wrap" onPointerDown={() => audio.unlock()}>
+      <div ref={wrap} className={`game-wrap ${showResults ? 'results-open' : ''}`} onPointerDown={() => audio.unlock()}>
         <Canvas
           shadows={settings.shadows ? 'soft' : false}
           dpr={[1, 1.25]}
@@ -448,7 +459,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         </div>
 
         {callout && (
-          <div key={callout.key} className={`callout callout-${callout.tone}`} style={{ '--tilt': `${((callout.key % 7) - 3) * 1.6}deg` } as React.CSSProperties}>
+          <div key={callout.key} className={`callout callout-${callout.tone}`} style={{ top: `${callout.top}%`, '--tilt': `${((callout.key % 7) - 3) * 1.6}deg` } as React.CSSProperties}>
             {callout.text}
           </div>
         )}
@@ -481,9 +492,11 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         )}
 
         <div className="top-right">
-          <span className="net-pill" title={session.online ? 'Bomb ownership, fuses and eliminations are decided on a MagicBlock rollup' : 'Running the authoritative simulation locally'}>
-            {session.online ? 'Online · devnet rollup' : `Local sim · ${CONFIG.tickRate} tps`}
-          </span>
+          {session.online && (
+            <span className="net-pill" title="Bomb ownership, fuses and eliminations are decided on a MagicBlock rollup">
+              Online · devnet rollup
+            </span>
+          )}
           <button className="icon-btn ic-info" title="Match details" aria-label="Match details" onClick={() => setShowVerify(true)} />
           <button className="icon-btn ic-settings" title="Settings (Esc)" aria-label="Settings" onClick={() => setShowSettings(true)} />
         </div>
@@ -641,9 +654,10 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
 
       if (fuseText.current && fuseBar.current && fuseBox.current) {
         if (s.phase === 'active' && fuse !== null) {
-          fuseText.current.textContent = fuse.toFixed(1);
-          const pct = s.bomb.fuseDuration > 0 ? Math.min(1, fuse / s.bomb.fuseDuration) : 0;
-          fuseBar.current.style.transform = `scaleX(${pct})`;
+          // the fuse length is hidden (that's the game): no number, and the bar doesn't shrink with the time left;
+          // it just burns, and only the last seconds give it away
+          fuseText.current.textContent = fuse < 1 ? '!!!' : fuse < 2.5 ? '!!' : 'lit';
+          fuseBar.current.style.transform = 'scaleX(1)';
           fuseBox.current.dataset.state = fuse < 1 ? 'critical' : fuse < 2.5 ? 'warn' : 'ok';
           // the off-screen badge pulses faster as the fuse runs down
           overlay.indicator?.style.setProperty('--pulse', `${Math.max(0.16, Math.min(0.9, fuse / 5)).toFixed(2)}s`);
@@ -656,12 +670,12 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
           }
           if (alivePlayers(s).length === 2) audio.droneIntensity(Math.max(0, 1 - fuse / 4));
         } else if (s.phase === 'active') {
-          fuseText.current.textContent = '…';
+          fuseText.current.textContent = 'lighting';
           fuseBar.current.style.transform = 'scaleX(1)';
           fuseBox.current.dataset.state = 'arming';
           lastTickSlot = -1;
         } else {
-          fuseText.current.textContent = '—';
+          fuseText.current.textContent = '';
           fuseBar.current.style.transform = 'scaleX(0)';
           fuseBox.current.dataset.state = 'idle';
           lastTickSlot = -1;
@@ -758,7 +772,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
             style={inv && inv !== 'pending' ? { borderColor: ABILITY_DEFS[inv].color, boxShadow: `0 0 18px ${ABILITY_DEFS[inv].color}66` } : undefined}
             title={inv && inv !== 'pending' ? ABILITY_DEFS[inv].blurb : 'Pick up a mystery box'}
           >
-            <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? <Icon name={ABILITY_DEFS[inv].glyph as IconName} size={26} fill={ABILITY_DEFS[inv].color} /> : '·'}</span>
+            <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? <Icon name={ABILITY_DEFS[inv].glyph as IconName} size={26} fill={ABILITY_DEFS[inv].color} /> : <span className="slot-empty">?</span>}</span>
             <span className="slot-key">E</span>
           </div>
           <div className="item-name">
@@ -770,7 +784,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
             ) : inv === 'pending' ? (
               <small>revealing…</small>
             ) : (
-              <small className="dim">no item</small>
+              <small className="dim">Grab a crate</small>
             )}
           </div>
         </div>

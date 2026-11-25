@@ -10,7 +10,7 @@ export interface GameCtx {
    * Who the camera follows (local player, or a survivor while spectating). While spectating the camera moves in on
    * them, unless `overview` is set (the whole yard).
    */
-  focus: { id: PlayerId; overview?: boolean };
+  focus: { id: PlayerId; overview?: boolean; /** spectating: follow whoever holds the bomb (off once you pick someone) */ auto?: boolean };
   /** Shared smoothed render positions, written by creatures each frame. */
   renderPos: Map<PlayerId, { x: number; z: number }>;
   shake: { amount: number };

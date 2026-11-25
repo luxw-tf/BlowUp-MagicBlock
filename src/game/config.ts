@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // Flow
   matchCountdown: 3,
-  intermission: 1.6, // beat after an elimination before the next holder is drawn
+  intermission: 2.8, // beat after an elimination before the next holder is drawn: long enough to see the blast and breathe
   randomnessRetryAfter: 2.5,
 
   // Pickups (PRD §06)
