@@ -430,16 +430,22 @@ function useAbility(s: MatchState, p: PlayerState, inp: InputFrame) {
 }
 
 function movePlayer(s: MatchState, p: PlayerState, inp: InputFrame | null) {
+  const fx = s.weatherFx; // offline weather only: absent online and in tests unless set
   const slow = s.time < p.slowUntil ? 1 - CONFIG.slowFactor : 1;
-  const maxSpeed = CONFIG.moveSpeed * slow;
+  const maxSpeed = CONFIG.moveSpeed * slow * (fx?.speed ?? 1);
   if (s.time < p.dashUntil) {
     p.vel = scale(p.dashDir, p.dashSpeed * slow);
   } else {
-    if (len(p.vel) > maxSpeed) p.vel = scale(norm(p.vel), maxSpeed); // no post-dash slide
-    const target = scale(inp ? inp.move : v(), maxSpeed);
+    const push = fx ? fx.push : v();
+    if (len(sub(p.vel, push)) > maxSpeed) p.vel = add(scale(norm(sub(p.vel, push)), maxSpeed), push); // no post-dash slide
+    // the wind drifts everyone downwind, walking or standing: running into it is a little slower, with it faster
+    const target = add(scale(inp ? inp.move : v(), maxSpeed), push);
     let dv = sub(target, p.vel);
-    const rate = len(target) >= len(p.vel) ? CONFIG.acceleration : CONFIG.deceleration;
-    const maxDv = rate * TICK_DT;
+    const speedingUp = len(target) >= len(p.vel);
+    const rate = speedingUp ? CONFIG.acceleration : CONFIG.deceleration;
+    // a wet or snowy deck: slower to get going, much slower to stop
+    const grip = fx?.grip ?? 1;
+    const maxDv = rate * (speedingUp ? 0.5 + 0.5 * grip : grip) * TICK_DT;
     if (len(dv) > maxDv) dv = scale(norm(dv), maxDv);
     p.vel = add(p.vel, dv);
   }
@@ -474,7 +480,10 @@ function updateProjectile(s: MatchState) {
   const substeps = 4;
   const stepLen = (CONFIG.throwSpeed * TICK_DT) / substeps;
   const hitR = CONFIG.playerRadius + CONFIG.bombRadius;
+  const wind = s.weatherFx?.wind;
   for (let i = 0; i < substeps; i++) {
+    // offline weather only: the wind bends the throw a little (same push for everyone, speed unchanged)
+    if (wind) proj.dir = norm(add(proj.dir, scale(wind, TICK_DT / substeps / CONFIG.throwSpeed)));
     proj.pos = add(proj.pos, scale(proj.dir, stepLen));
     proj.traveled += stepLen;
     let hit: PlayerState | undefined;

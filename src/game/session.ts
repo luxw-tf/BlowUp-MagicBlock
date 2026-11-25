@@ -12,7 +12,7 @@ import { CONFIG, TICK_DT } from './config';
 import { BOT_NAMES, CHARACTERS } from './content';
 import { add, scale } from './math';
 import { createMatch, drainEvents, fulfillRandomness, step, type ParticipantSetup } from './sim';
-import { LAYOUTS, MOODS, selectLayout, selectMood } from './arena';
+import { LAYOUTS, MOODS, WEATHERS, WEATHER_FX, currentWeather, selectLayout, selectMood, selectWeather, weatherFor } from './arena';
 import { LocalDevRandomness, toHex, type RandomFulfillment, type RandomnessProvider } from './randomness';
 import type { InputSampler, SessionLike, SessionListener as Listener, VerificationEntry } from './sessionTypes';
 import type { CharacterId, InputFrame, MatchState, PlayerId, Vec2 } from './types';
@@ -70,8 +70,14 @@ export class GameSession implements SessionLike {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout')), mi = MOODS.indexOf((q?.get('mood') ?? '') as (typeof MOODS)[number]);
     selectLayout(li >= 0 ? li : Math.floor(Math.random() * LAYOUTS.length));
-    selectMood(mi >= 0 ? mi : Math.floor(Math.random() * MOODS.length));
+    const mood = selectMood(mi >= 0 ? mi : Math.floor(Math.random() * MOODS.length));
+    // weather too (?weather=rain); a storm needs the dark, so pinning one without a mood makes it night
+    const pw = WEATHERS.find((w) => w === q?.get('weather'));
+    if (pw === 'storm' && mi < 0 && mood !== 'night') selectMood(MOODS.indexOf('night'));
+    selectWeather(pw ?? weatherFor(mood, Math.floor(Math.random() * 1e9)));
     this.state = createMatch(participants);
+    // gameplay weather is offline only: this class is the local match, never the on-chain mirror
+    if (CONFIG.weatherGameplay && q?.get('weatherfx') !== '0') this.state.weatherFx = WEATHER_FX[currentWeather()];
     for (const p of this.state.players) {
       this.prevPos.set(p.id, { ...p.pos });
       if (p.isBot) this.bots.set(p.id, new BotBrain(p.id, Math.floor(Math.random() * 2 ** 31)));

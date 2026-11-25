@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { CHARACTERS } from '../game/content';
-import { LAYOUTS, MOODS, OBSTACLES, selectLayout, selectMood } from '../game/arena';
+import { LAYOUTS, MOODS, OBSTACLES, WEATHERS, selectLayout, selectMood, selectWeather, weatherFor } from '../game/arena';
 import type { CharacterId } from '../game/types';
 import { Arena, lightNow } from './Arena';
 import type { RigDrive } from './models';
@@ -116,8 +116,13 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
   const mood = useMemo(() => {
     selectLayout(Math.floor(Math.random() * LAYOUTS.length));
     OBSTACLES.splice(0, OBSTACLES.length); // a match picks its own layout again when it starts
-    const pinned = MOODS.indexOf(new URLSearchParams(location.search).get('mood') as (typeof MOODS)[number]); // ?mood=night
-    return selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
+    const q = new URLSearchParams(location.search);
+    const pinned = MOODS.indexOf(q.get('mood') as (typeof MOODS)[number]); // ?mood=night
+    let mood = selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
+    // and weather to go with it (?weather=fog); a storm brings the night with it unless the mood is pinned
+    const pw = WEATHERS.find((w) => w === q.get('weather'));
+    if (pw === 'storm' && pinned < 0) mood = selectMood(MOODS.indexOf('night'));
+    return `${mood}-${selectWeather(pw ?? weatherFor(mood, Math.floor(Math.random() * 1e9)))}`;
   }, []);
   const L = lightNow();
 

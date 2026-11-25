@@ -4,7 +4,9 @@ Browser party game from `BlowUp-PRD-v0.1.docx`: six creatures, one bomb, a rando
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173  (add ?quick to skip menus)
+npm run dev        # http://localhost:5173  (add ?quick to skip menus; pin the scene with
+                   #   ?layout=alley&mood=night&weather=storm, weathers: clear breezy rain fog storm snow;
+                   #   ?weatherfx=0 keeps an offline match's weather to looks only)
 npm run server     # lobby service for "Play online" (needs .keys/authority.json with devnet SOL)
 npm test           # simulation unit tests + full bot-match runs
 npm run build
@@ -128,6 +130,7 @@ All third-party assets are CC0 (public domain), credited anyway:
 ## Not done yet / next steps
 
 - On-chain gaps: throw line-of-sight/obstacles, pickups and abilities.
+- Weather online: every client sees the same weather (it is picked from the match address with the layout and time of day), but online it is looks only. Offline matches feel it (wind drifts people and bends throws, rain and snow make the deck slippery, snow is slower going: `WEATHER_FX` in `game/arena.ts`, switched by `CONFIG.weatherGameplay`). Doing the same online would need program support: the weather (or its seed) in the match account, and the same wind, grip and speed terms in the on-chain movement and throw code, or clients would desync.
 - Hosting: deploy the lobby somewhere reachable, with the authority key in a proper secret store, so remote players can join.
 - Offline matches still use `LocalDevRandomness` (labelled not verifiable); online matches use MagicBlock VRF.
 - Final art/audio: creatures and the dock are primitive blockouts, and the sound is synthesized.

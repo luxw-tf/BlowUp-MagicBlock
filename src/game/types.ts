@@ -140,4 +140,9 @@ export interface MatchState {
   winnerId: PlayerId | null;
   /** Events produced during the most recent tick. */
   events: GameEvent[];
+  /**
+   * Gameplay weather (offline only, see WEATHER_FX in arena.ts): wind on thrown bombs and people, the deck's grip and
+   * the going underfoot. Never set online, so the rules there stay exactly the on-chain ones.
+   */
+  weatherFx?: { wind: Vec2; push: Vec2; grip: number; speed: number } | null;
 }

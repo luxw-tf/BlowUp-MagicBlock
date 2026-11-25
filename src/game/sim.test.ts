@@ -199,9 +199,12 @@ describe('input validation', () => {
 });
 
 describe('full bot match', () => {
-  it('six bots finish a match with exactly one winner in bounded time', () => {
-    for (let trial = 0; trial < 5; trial++) {
+  it('six bots finish a match with exactly one winner in bounded time (also in a storm and in snow)', async () => {
+    const { WEATHER_FX } = await import('./arena');
+    for (let trial = 0; trial < 7; trial++) {
       const s = createMatch(PARTS);
+      if (trial === 5) s.weatherFx = WEATHER_FX.storm;
+      if (trial === 6) s.weatherFx = WEATHER_FX.snow;
       const brains = PARTS.map((p, i) => new BotBrain(p.id, 1234 + i * 7 + trial * 101));
       let rng = 99 + trial;
       const next = () => ((rng = (rng * 1103515245 + 12345) % 2147483648) / 2147483648);
@@ -247,5 +250,54 @@ describe('layouts', () => {
     // the same match address always gives the same layout
     expect(selectLayoutFor('Match111').id).toBe(selectLayoutFor('Match111').id);
     selectLayout(0);
+  });
+
+  it('pick the same weather from the same match address, and storms only at night', async () => {
+    const { selectLayoutFor, currentMood, currentWeather, WEATHERS } = await import('./arena');
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      const key = `Match${i * 7919}`;
+      selectLayoutFor(key);
+      const a = `${currentMood()}/${currentWeather()}`;
+      selectLayoutFor('other');
+      selectLayoutFor(key);
+      expect(`${currentMood()}/${currentWeather()}`).toBe(a);
+      if (currentWeather() === 'storm') expect(currentMood()).toBe('night');
+      seen.add(currentWeather());
+    }
+    expect(seen.size).toBe(WEATHERS.length); // every weather turns up
+  });
+
+  it('move people with the weather only when the match carries it, the same for everyone', async () => {
+    const { WEATHER_FX } = await import('./arena');
+    // the rules themselves carry no weather: only the offline session adds it (never the on-chain mirror)
+    expect(createMatch(PARTS.slice(0, 2)).weatherFx).toBeUndefined();
+    // a wet deck makes a runner slide further when they let go
+    const slide = (fx: keyof typeof WEATHER_FX | null) => {
+      const s = createMatch(PARTS.slice(0, 2));
+      if (fx) s.weatherFx = WEATHER_FX[fx];
+      for (let i = 0; i < 20; i++) step(s, new Map([['a', frame('a', { move: { x: 0, z: 1 } })]]));
+      const z0 = s.players[0].pos.z;
+      for (let i = 0; i < 20; i++) step(s, new Map([['a', frame('a')]]));
+      return s.players[0].pos.z - z0;
+    };
+    expect(slide('rain')).toBeGreaterThan(slide(null));
+    // the wind drifts anyone standing still downwind, every player by exactly the same amount
+    const s = createMatch(PARTS.slice(0, 2));
+    s.weatherFx = WEATHER_FX.storm;
+    const before = s.players.map((p) => ({ ...p.pos }));
+    for (let i = 0; i < 10; i++) step(s, new Map());
+    const drift = s.players.map((p, i) => p.pos.x - before[i].x);
+    expect(drift[0]).toBeGreaterThan(0.3);
+    expect(drift[1]).toBeCloseTo(drift[0], 6);
+    // snow is heavy going: a 2 s run covers less ground
+    const run = (fx: keyof typeof WEATHER_FX | null) => {
+      const m = createMatch(PARTS.slice(0, 2));
+      if (fx) m.weatherFx = { ...WEATHER_FX[fx]!, push: { x: 0, z: 0 } };
+      const z0 = m.players[0].pos.z;
+      for (let i = 0; i < 40; i++) step(m, new Map([['a', frame('a', { move: { x: 0, z: 1 } })]]));
+      return m.players[0].pos.z - z0;
+    };
+    expect(run('snow')).toBeLessThan(run(null));
   });
 });
