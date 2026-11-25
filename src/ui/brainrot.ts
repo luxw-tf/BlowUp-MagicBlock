@@ -1,112 +1,104 @@
 /**
- * The commentary: big callouts for you, speech bubbles for the bots, flavour for the kill feed and the results.
- * Every pool is a shuffled bag, so lines don't repeat until the pool runs dry. `{name}` and `{by}` get filled in.
+ * The commentary. Big callouts for you, words slammed all over the screen, speech bubbles for the bots, flavour
+ * for the kill feed and the results. Every pool is a shuffled bag, so lines don't repeat until the pool runs dry.
+ * `{name}` gets filled in.
  */
 
 export const LINES = {
   // ── big callouts (you) ──
   youStart: [
-    'you spawned in Ohio',
-    'the fuse chose you',
-    'RNG said skill issue',
-    'day one bomb holder',
-    'you started cooked',
-    'main character syndrome',
-    'bro got drafted',
-    'the bomb picked its fav',
+    'YOU SPAWNED IN OHIO',
+    'THE FUSE CHOSE YOU',
+    'RNG SAID SKILL ISSUE',
+    'DAY ONE COOKED',
+    'MAIN CHARACTER (DOOMED)',
+    'BRO GOT DRAFTED',
+    'TUNG TUNG TUNG... YOU',
+    'CONGRATS, YOU ARE THE BOMB',
   ],
   youGot: [
-    'its giving explosive',
-    'not the bomb again',
-    'bro got fanum taxed',
-    'hot potato era',
-    'pass it. PASS IT.',
-    'chat, we are cooked',
-    'tick tock, unc',
-    'this is so Ohio',
-    'aura check incoming',
-    'who sent this',
-    'certified bomb moment',
-    'holding it is not sigma',
-    'bro is the delivery guy',
-    'skibidi bomb bop',
+    'BRO GOT FANUM TAXED',
+    'CHAT WE ARE COOKED',
+    'PASS IT. PASS IT. PASS IT.',
+    'NOT THE BOMB 😭',
+    'HOT POTATO ERA',
+    'THIS IS SO OHIO',
+    'TICK TOCK UNC',
+    'WHO SENT THIS 💀',
+    'BOMBARDIRO CROCODILO',
+    'SKIBIDI BOMB BOP',
+    'IT IS GIVING EXPLOSIVE',
+    'BRO IS THE DELIVERY GUY',
+    'NAH THIS IS CRAZY',
+    'LOCK IN. NOW.',
   ],
-  youPassed: [
-    'yeet',
-    'not my problem now',
-    'its their problem now',
-    'hot potato diff',
-    'delivered. no tip.',
-    'fanum taxed it back',
-    'catch, unc',
-    'free bomb, no cap',
-  ],
+  youPassed: ['YEET', 'NOT MY PROBLEM', 'DELIVERED, NO TIP', 'CATCH UNC', 'FANUM TAXED IT BACK', 'BYE BYE 👋', 'RETURN TO SENDER'],
   youClutch: [
     'PLOT ARMOUR',
-    'clutch or kick',
     '+1000 AURA',
-    'frame perfect fr',
-    'that was illegal',
-    'lowkey cinema',
-    'the audacity',
-    'HIM behaviour',
-    'certified clutch',
-    'bro has plot armour',
+    'CLUTCH OR KICK',
+    'FRAME PERFECT FR',
+    'THAT WAS ILLEGAL',
+    'ABSOLUTE CINEMA',
+    'HIM BEHAVIOUR',
+    'BRO IS BUILT DIFFERENT',
+    'SHEEEESH',
+    'WE ARE SO BACK',
   ],
   youMissed: [
     'AIRBALL',
-    'bro threw like an NPC',
-    'aim assist where',
-    'mid throw ngl',
-    'caught missing in 4K',
-    'the aim is on vacation',
-    'that was for the fish',
-    'throwing. literally.',
+    'BRO THREW LIKE AN NPC',
+    'AIM ASSIST WHERE',
+    'CAUGHT IN 4K MISSING',
+    'THAT WAS FOR THE FISH',
+    'THROWING. LITERALLY.',
+    '-500 AURA',
+    'MID THROW NGL',
   ],
-  youReflected: ['RETURN TO SENDER', 'NO U', 'uno reverse', 'reflected. ratio.', 'deflect diff', 'not in my house'],
-  youBlocked: ['NOT TODAY', 'denied, unc', 'shield go brr', 'no bombs allowed', 'blocked and reported'],
-  youSlowed: ['skill issue applied', 'legs: buffering', 'you got slowed. L.', 'walking in Ohio mud'],
-  youSwapped: ['plot twist fr', 'teleported to Ohio', 'swap diff', 'wait where am I'],
-  youCritical: ['PASS IT', 'you are SO cooked', 'its so over', 'OH NO OH NO', 'bro is about to crash out', 'final aura check'],
-  youItem: ['free item, no cap', 'loot goblin moment', 'W pickup', 'mystery box rizz'],
-  firstOut: [
-    'first of all, skill issue',
-    'first one to Ohio',
-    'and so it begins',
-    'someone ate the L',
-    'first L of the day',
-    'F in the chat',
-    'aura: deleted',
+  youReflected: ['NO U', 'UNO REVERSE', 'RETURN TO SENDER', 'REFLECTED + RATIO', 'NOT IN MY HOUSE'],
+  youBlocked: ['NOT TODAY', 'DENIED UNC', 'BLOCKED AND REPORTED', 'SHIELD GO BRRR'],
+  youSlowed: ['LEGS: BUFFERING', 'SKILL ISSUE APPLIED', 'WALKING IN OHIO MUD', 'BRO IS ON 0.5X'],
+  youSwapped: ['PLOT TWIST FR', 'TELEPORTED TO OHIO', 'WAIT WHERE AM I'],
+  youCritical: ['PASS IT PASS IT PASS IT', 'YOU ARE SO COOKED', 'ITS SO OVER', 'OH NO OH NO OH NO', 'BRO IS ABOUT TO CRASH OUT', 'FINAL AURA CHECK'],
+  youItem: ['FREE ITEM NO CAP', 'LOOT GOBLIN', 'W PICKUP', 'MYSTERY BOX RIZZ'],
+  firstOut: ['FIRST OF ALL, SKILL ISSUE', 'FIRST ONE TO OHIO', 'SOMEONE ATE THE L', 'F IN THE CHAT', 'AURA: DELETED', 'AND SO IT BEGINS'],
+  survived: ['SURVIVED. BARELY.', 'STILL HERE, STILL GOATED', 'AURA INTACT', 'LIVING RENT FREE', 'NOT COOKED YET', 'LOCKED IN'],
+  finalTwo: ['GENERATIONAL BEEF', '1V1 ME BRO', 'FINAL BOSS MUSIC', 'ONLY ONE AURA SURVIVES', 'BRR BRR PATAPIM TIME', 'TRALALERO TRALALA'],
+  youOutBot: ['UNINSTALL', 'BOT DIFF', 'OUTPLAYED BY AN NPC', 'SKELETON MOGGED YOU', '-1000 AURA', 'THE SKELETON HAS RIZZ'],
+  youOut: ['YOU GOT COOKED', 'RATIO + EXPLODED', 'SENT TO THE SHADOW REALM', 'L + BOOM', 'TOUCH GRASS', 'CRASHED OUT. LITERALLY.'],
+  youWon: ['UNFORTUNATELY, YOU COOKED', 'ABSOLUTE CINEMA', 'SIGMA BEHAVIOUR', 'AURA: INFINITE', 'YOU ARE HIM', 'W W W W W'],
+  theyWon: ['{name} COOKED', '{name} IS HIM', '{name} ATE, NO CRUMBS', '{name} MOGGED THE LOBBY', '{name} SAID GG EZ'],
+
+  // ── words slammed onto the screen ──
+  wordsGot: ['💀', 'COOKED', 'NAH', 'BRUH', 'OHIO', 'L', '😭', 'FANUM TAX', 'RUN', 'PANIK', 'TICK TOCK', 'UNLUCKY'],
+  wordsPass: ['YEET', 'BYE', 'W', 'EZ', 'NOT ME', 'CATCH', 'SKIBIDI', 'ZOOM'],
+  wordsClutch: ['+1000 AURA', 'W', 'SHEESH', 'HIM', 'CINEMA', 'GOATED', 'CLUTCH', '🔥', 'LOCK IN', 'SIGMA', 'NO CAP'],
+  wordsMiss: ['AIRBALL', 'L', 'BRUH', 'NPC', 'MID', '-500 AURA', '💀', 'WHIFF', 'LAG?'],
+  wordsBoom: [
+    'L',
+    '💀',
+    'RATIO',
+    'RIP BOZO',
+    'COOKED',
+    'SKILL ISSUE',
+    'GG',
+    'OOF',
+    'KABOOM',
+    '-1000 AURA',
+    'F',
+    'BOMBARDIRO CROCODILO',
+    'TUNG TUNG TUNG SAHUR',
+    'OHIO',
+    'CRASHOUT',
+    'MOGGED',
+    '6 7',
+    'BRO EXPLODED',
   ],
-  survived: [
-    'survived. barely.',
-    'still here, still goated',
-    'aura intact',
-    'living rent free',
-    'next round, same rizz',
-    'not cooked yet',
-    'certified survivor',
-  ],
-  finalTwo: [
-    'GENERATIONAL BEEF',
-    '1v1 me bro',
-    'final boss music',
-    'only one aura survives',
-    'its giving final round',
-    'Bombardiro Crocodilo time',
-  ],
-  youOutBot: ['uninstall', 'bot diff', 'outplayed by an NPC', 'skeleton mogged you', '-1000 aura', 'the skeleton has rizz'],
-  youOut: ['you got cooked', 'ratio + exploded', 'sent to the shadow realm', 'L + boom', 'touch grass, respawn never', 'crashed out. literally.'],
-  youWon: [
-    'UNFORTUNATELY, YOU COOKED',
-    'absolute cinema',
-    'sigma behaviour',
-    'built different',
-    'aura: infinite',
-    'W rizz W bomb',
-    'you are HIM',
-  ],
-  theyWon: ['{name} cooked', '{name} is HIM', '{name} ate, no crumbs', '{name} has aura', '{name} mogged the lobby', '{name} said GG EZ'],
+  wordsCritical: ['PASS IT', 'RUN', 'PANIK', '1 SEC', 'OH NO', 'BRO', '😭', 'ITS OVER'],
+  wordsFinal: ['1V1', 'BEEF', 'FINAL BOSS', 'LOCK IN', 'AURA FARMING', 'NO CAP', 'TRALALERO TRALALA', 'BRR BRR PATAPIM'],
+  wordsWin: ['W', 'GOATED', 'HIM', 'SIGMA', 'GG EZ', '🔥', 'CINEMA', '+∞ AURA', 'CHAMPION', 'RIZZ', 'BUSSIN', 'NO CAP'],
+  wordsLose: ['L', 'RATIO', '💀', 'UNLUCKY', 'NPC', 'TOUCH GRASS', 'COOKED', 'MID'],
+  wordsReflect: ['NO U', 'UNO REVERSE', 'DENIED', 'BLOCKED', 'NOPE'],
 
   // ── bot speech bubbles ──
   botGot: [
@@ -118,13 +110,15 @@ export const LINES = {
     'hold my aura',
     'chat is this real',
     'ok who threw that',
-    'not the bomb',
+    'not the bomb 😭',
     'my bones are shaking',
+    'tung tung tung NO',
+    'I am literally a skeleton',
   ],
-  botPassed: ['yeet', 'hot potato!', 'byeee', 'your problem now', 'catch, unc', 'fanum tax', 'skibidi pass', 'special delivery', 'sending it'],
-  botClutch: ['CLUTCH', 'plot armour', 'too ez', 'diff', '+1000 aura', 'did you see that'],
-  botGotLate: ['NAH THATS CRAZY', 'I am cooked', 'not like this', 'bro passed me a nuke', 'tell my mom'],
-  botMissed: ['my bad', 'lag', 'the wind did that', 'aim was on vacation', 'that was a warning'],
+  botPassed: ['yeet', 'hot potato!', 'byeee', 'your problem now', 'catch, unc', 'fanum tax', 'skibidi pass', 'special delivery', 'sending it', 'ratio + bomb'],
+  botClutch: ['CLUTCH', 'plot armour', 'too ez', 'diff', '+1000 aura', 'did you see that', 'I am HIM'],
+  botGotLate: ['NAH THATS CRAZY', 'I am cooked', 'not like this', 'bro passed me a nuke', 'tell my mom', 'AAAAAAA'],
+  botMissed: ['my bad', 'lag', 'the wind did that', 'aim was on vacation', 'that was a warning', 'my bones slipped'],
   botBlocked: ['not today', 'nope', 'denied', 'shield up, bozo'],
   botReflected: ['no u', 'uno reverse', 'return to sender'],
   botWitness: [
@@ -138,6 +132,9 @@ export const LINES = {
     'press F',
     'skill issue tbh',
     'that could be me',
+    'LMAOOO',
+    'bro became confetti',
+    '6 7',
   ],
   botWon: ['GG EZ', 'sigma grindset', 'absolute cinema', 'bones too strong', 'skeleton supremacy'],
   botSlowed: ['my legs', 'why am I slow', 'who did that'],
@@ -156,6 +153,7 @@ export const LINES = {
     'got cooked medium rare',
     'became confetti',
     'logged off permanently',
+    'got tung tung tung sahur-ed',
   ],
 } satisfies Record<string, string[]>;
 
@@ -179,23 +177,23 @@ export function line(pool: Pool, vars: Record<string, string> = {}): string {
   }
   const text = bag.pop()!;
   lastLine.set(pool, text);
-  return text.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '');
+  return text.replace(/\{(\w+)\}/g, (_, k: string) => (vars[k] ?? '').toUpperCase());
 }
 
 /** A verdict for the results screen, by your finishing place. */
 export function verdict(place: number | null | undefined): string {
   switch (place) {
     case 1:
-      return 'Absolute cinema. Nobody else had aura.';
+      return 'ABSOLUTE CINEMA. NOBODY ELSE HAD AURA.';
     case 2:
-      return 'So close. Generational beef with the winner.';
+      return 'SO CLOSE. GENERATIONAL BEEF WITH THE WINNER.';
     case 3:
-      return 'Bronze. Mid, but respectable mid.';
+      return 'BRONZE. MID, BUT RESPECTABLE MID.';
     case 4:
-      return 'Fourth. The NPC of the podium.';
+      return 'FOURTH. THE NPC OF THE PODIUM.';
     case 5:
-      return 'Fifth. Lowkey cooked.';
+      return 'FIFTH. LOWKEY COOKED.';
     default:
-      return 'Last. First of all, skill issue.';
+      return 'LAST. FIRST OF ALL, SKILL ISSUE.';
   }
 }
