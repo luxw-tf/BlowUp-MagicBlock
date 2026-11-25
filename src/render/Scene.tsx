@@ -23,54 +23,125 @@ const CAM_DIST = VIEW_HEIGHT / 2 / Math.tan((FOV * Math.PI) / 360);
 
 // ───────────────────────────── camera ─────────────────────────────
 
+/**
+ * The match camera. Readable first: in open play it frames the yard and follows you gently on both axes. The big
+ * moments move it: the countdown starts close on you and swoops out, the bomb landing on you kicks a quick zoom,
+ * the last second of a fuse pushes in on the holder, a blow-up cuts in on the blast, the final two get framed
+ * together, and the winner gets a slow orbit. "Reduced screen shake" tones all of it down.
+ */
 function CameraRig() {
   const { camera, size } = useThree();
   const { session, input, focus, renderPos, shake } = useGame();
-  const state = useRef({ x: 0, bob: 0, z: -2.6, zoom: 0 });
+  const state = useRef({ x: 0, z: -2.6, zoom: 0.9, yaw: 0, roll: 0, punch: 0, blast: null as null | { x: number; z: number; until: number } });
   const ray = useMemo(() => new THREE.Raycaster(), []);
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const hit = useMemo(() => new THREE.Vector3(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
 
+  // big moments kick the camera
+  useEffect(
+    () =>
+      session.subscribe((events) => {
+        const st = state.current;
+        for (const e of events) {
+          if (e.type === 'transfer' && e.to === session.localId) st.punch = Math.max(st.punch, 0.16);
+          else if (e.type === 'holderAssigned' && e.holder === session.localId) st.punch = Math.max(st.punch, 0.12);
+          else if (e.type === 'elimination') {
+            st.punch = Math.max(st.punch, 0.22);
+            st.blast = { x: e.at.x, z: e.at.z, until: performance.now() + 1900 };
+          }
+        }
+      }),
+    [session],
+  );
+
   useFrame(({ clock }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
     const cam = camera as THREE.PerspectiveCamera;
-    if (cam.fov !== FOV) { cam.fov = FOV; }
     cam.aspect = size.width / size.height;
-    // Perspective: the visible half-width at the look-at distance (PRD: horizontal tracking only).
     const halfW = CAM_DIST * Math.tan((FOV * Math.PI) / 360) * cam.aspect;
-
-    const f = renderPos.get(focus.id) ?? getPlayer(session.state, focus.id)?.pos ?? { x: 0, z: 0 };
+    const calm = getSettings().reducedShake;
+    const s = session.state;
+    const t = clock.elapsedTime;
+    const now = performance.now();
     const st = state.current;
-    // spectating: glide in on whoever you're following (both axes), or stay wide in overview
-    const me = getPlayer(session.state, session.localId);
-    const spectating = !!me && !me.alive && session.state.phase !== 'finished' && !focus.overview;
-    st.zoom += ((spectating ? 1 : 0) - st.zoom) * (1 - Math.exp(-3 * dt));
-    const dead = Math.min(2.2, halfW * 0.18) * (1 - st.zoom);
-    let goal = st.x;
-    if (f.x > st.x + dead) goal = f.x - dead;
-    if (f.x < st.x - dead) goal = f.x + dead;
-    const margin = 1.6;
-    const viewHalfW = halfW * (1 - 0.45 * st.zoom);
-    const maxX = Math.max(0, ARENA.halfWidth + margin - viewHalfW);
-    goal = THREE.MathUtils.clamp(goal, -maxX, maxX);
-    st.x += (goal - st.x) * (1 - Math.exp(-5 * dt));
-    const zGoal = THREE.MathUtils.lerp(-2.6, THREE.MathUtils.clamp(f.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2), st.zoom);
-    st.z += (zGoal - st.z) * (1 - Math.exp(-5 * dt));
+
+    const posOf = (id: string | null) => (id ? renderPos.get(id) ?? getPlayer(s, id)?.pos ?? null : null);
+    const f = posOf(focus.id) ?? { x: 0, z: 0 };
+    const me = getPlayer(s, session.localId);
+    const alive = s.players.filter((p) => p.alive);
+    const spectating = !!me && !me.alive && s.phase !== 'finished' && !focus.overview;
+
+    // what to look at, how close (0 = the whole yard, 1 = right on someone), and any orbit or roll
+    let tx = f.x;
+    let tz = -2.6 + THREE.MathUtils.clamp(f.z, -ARENA.halfDepth, ARENA.halfDepth) * 0.22;
+    let zoomT = 0.06;
+    let yawT = 0;
+    let rollT = 0;
+    let follow = true; // open play keeps a dead zone, so small moves don't swim the view
+    if (s.phase === 'finished') {
+      const w = posOf(s.winnerId) ?? f;
+      tx = w.x; tz = w.z; zoomT = 0.95; yawT = calm ? 0 : t * 0.22; follow = false;
+    } else if (st.blast && now < st.blast.until && !spectating) {
+      tx = st.blast.x; tz = st.blast.z; zoomT = 0.55; yawT = calm ? 0 : 0.18; follow = false;
+    } else if (s.phase === 'countdown') {
+      const mine = posOf(session.localId) ?? f;
+      const left = Math.max(0, s.phaseEndsAt - s.time);
+      tx = mine.x; tz = mine.z; zoomT = THREE.MathUtils.clamp(left / 3, 0.15, 0.85); follow = false;
+    } else if (spectating) {
+      tz = THREE.MathUtils.clamp(f.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2); zoomT = 1; follow = false;
+    } else if (s.phase === 'active' && alive.length === 2) {
+      // the final two: frame both
+      const a = posOf(alive[0].id)!, b = posOf(alive[1].id)!;
+      tx = (a.x + b.x) / 2; tz = (a.z + b.z) / 2;
+      const spread = Math.hypot(a.x - b.x, (a.z - b.z) * 1.6);
+      zoomT = THREE.MathUtils.clamp(0.75 - spread / 34, 0.12, 0.6); follow = false;
+    }
+    // the last second of a fuse: a slow push toward whoever holds it, and a slight tilt
+    const fuse = s.phase === 'active' ? fuseRemaining(s) : null;
+    if (fuse !== null && fuse < 1.4 && s.phase === 'active') {
+      const h = posOf(s.bomb.holderId);
+      const k = 1 - fuse / 1.4;
+      if (h) { tx = THREE.MathUtils.lerp(tx, h.x, 0.35 * k); tz = THREE.MathUtils.lerp(tz, h.z, 0.25 * k); }
+      zoomT += 0.18 * k;
+      if (!calm) rollT = 0.012 * k * Math.sin(t * 2.2);
+    }
+
+    // ease toward the targets
+    const ease = (rate: number) => 1 - Math.exp(-rate * dt);
+    st.zoom += (THREE.MathUtils.clamp(zoomT, 0, 1) - st.zoom) * ease(follow ? 2.2 : 3);
+    st.punch = Math.max(0, st.punch - dt * 0.55);
+    const punch = calm ? st.punch * 0.3 : st.punch;
+    const zoom = THREE.MathUtils.clamp(st.zoom + punch, 0, 1.1);
+    const viewHalfW = halfW * (1 - 0.45 * zoom);
+    if (follow) {
+      const dead = Math.min(2.2, halfW * 0.18);
+      let goal = st.x;
+      if (tx > st.x + dead) goal = tx - dead;
+      if (tx < st.x - dead) goal = tx + dead;
+      tx = goal;
+    }
+    const maxX = Math.max(0, ARENA.halfWidth + 1.6 - viewHalfW);
+    tx = THREE.MathUtils.clamp(tx, -maxX, maxX);
+    tz = THREE.MathUtils.clamp(tz, -ARENA.halfDepth + 1, ARENA.halfDepth - 1);
+    st.x += (tx - st.x) * ease(follow ? 5 : 4);
+    st.z += (tz - st.z) * ease(follow ? 3 : 4);
+    st.yaw += (yawT - st.yaw) * ease(1.5);
+    st.roll += (rollT - st.roll) * ease(4);
 
     shake.amount = Math.max(0, shake.amount - dt * 2.5);
-    const sMul = getSettings().reducedShake ? 0.2 : 1;
-    const sh = shake.amount * shake.amount * sMul;
+    const sh = shake.amount * shake.amount * (calm ? 0.2 : 1);
     const ox = (Math.random() - 0.5) * sh * 0.8;
     const oy = (Math.random() - 0.5) * sh * 0.8;
-    // a slow, tiny drift so the harbour never looks frozen (kept well under a degree)
-    const drift = getSettings().reducedShake ? 0 : Math.sin(clock.elapsedTime * 0.25) * 0.18;
+    // a slow, tiny drift so the harbour never looks frozen
+    const drift = calm ? 0 : Math.sin(t * 0.25) * 0.18;
 
-    // normally aim a little toward the sea, so the quay and harbour show along the top; spectating aims at the player
-    const tz = st.z;
-    const dist = CAM_DIST * (1 - 0.45 * st.zoom);
-    cam.position.set(st.x + ox + drift, Math.sin(ELEVATION) * dist + oy, tz + Math.cos(ELEVATION) * dist);
-    cam.lookAt(st.x + ox, oy, tz);
+    const dist = CAM_DIST * (1 - 0.45 * zoom);
+    const back = Math.cos(ELEVATION) * dist;
+    cam.fov = FOV - (calm ? 0 : punch * 9);
+    cam.position.set(st.x + ox + drift + Math.sin(st.yaw) * back, Math.sin(ELEVATION) * dist + oy, st.z + Math.cos(st.yaw) * back);
+    cam.up.set(Math.sin(st.roll), Math.cos(st.roll), 0);
+    cam.lookAt(st.x + ox, oy, st.z);
     cam.updateProjectionMatrix();
 
     // Aim: mouse ray onto the ground plane.
