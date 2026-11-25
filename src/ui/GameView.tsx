@@ -301,13 +301,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
         {spectating && (
           <div className="spectator-bar">
-            <button onClick={() => cycleSpectate(-1)} aria-label="Previous player"><Icon name="prev" size={16} fill="#f6efe1" /></button>
+            <button onClick={() => cycleSpectate(-1)} aria-label="Previous player"><Icon name="prev" size={16} fill="#ffffff" /></button>
             <span className="spectating">
               <small>{ctx.focus.overview ? 'Overview' : 'Following'}</small>
               <Name s={session.state} id={ctx.focus.id} />
               {session.state.bomb.holderId === ctx.focus.id && <Icon name="bomb" size={16} title="Holding the bomb" />}
             </span>
-            <button onClick={() => cycleSpectate(1)} aria-label="Next player"><Icon name="next" size={16} fill="#f6efe1" /></button>
+            <button onClick={() => cycleSpectate(1)} aria-label="Next player"><Icon name="next" size={16} fill="#ffffff" /></button>
             <button className="spectate-mode" onClick={toggleOverview} title="Space">
               {ctx.focus.overview ? 'Follow' : 'Overview'}
             </button>
@@ -316,14 +316,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
         <div className="top-right">
           <span className="net-pill" title={session.online ? 'Bomb ownership, fuses and eliminations are decided on a MagicBlock rollup' : 'Running the authoritative simulation locally'}>
-            {session.online ? 'online · devnet rollup' : `local sim · ${CONFIG.tickRate} tps`}
+            {session.online ? 'Online · devnet rollup' : `Local sim · ${CONFIG.tickRate} tps`}
           </span>
-          <button className="icon-btn" title="Match details" onClick={() => setShowVerify(true)}>
-            <Icon name="info" size={20} fill="#ffffff" />
-          </button>
-          <button className="icon-btn" title="Settings (Esc)" onClick={() => setShowSettings(true)}>
-            <Icon name="gear" size={20} fill="#ffffff" />
-          </button>
+          <button className="icon-btn ic-info" title="Match details" aria-label="Match details" onClick={() => setShowVerify(true)} />
+          <button className="icon-btn ic-settings" title="Settings (Esc)" aria-label="Settings" onClick={() => setShowSettings(true)} />
         </div>
 
         {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} onLeave={onMenu} />}
@@ -438,7 +434,7 @@ function Hud({ session }: { session: SessionLike }) {
   else if (s.phase === 'assigning')
     banner = (
       <div className="phase-banner">
-        <span className="spinner" /> drawing bomb holder…
+        <span className="spinner" /> Drawing the bomb holder…
       </div>
     );
   else if (s.phase === 'intermission') banner = <div className="phase-banner">{alive} left · next round</div>;

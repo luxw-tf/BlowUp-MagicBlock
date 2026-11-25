@@ -8,26 +8,78 @@ import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 
 
-/** The "O" of the wordmark: a bomb engraved in the same gold as the letters, fuse lit. */
+/** The "O" of the wordmark: a painted iron bomb with a brass cap and a lit fuse. */
 function BombO() {
   return (
     <svg className="logo-o" viewBox="0 0 100 118" aria-hidden>
       <defs>
-        <linearGradient id="logo-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f7e2a8" />
-          <stop offset="0.55" stopColor="#d4ae62" />
-          <stop offset="1" stopColor="#8f6c2c" />
+        <radialGradient id="logo-iron" cx="0.36" cy="0.32" r="0.75">
+          <stop offset="0" stopColor="#5d6a7c" />
+          <stop offset="0.45" stopColor="#2c3442" />
+          <stop offset="1" stopColor="#151a23" />
+        </radialGradient>
+        <linearGradient id="logo-brass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffe7a0" />
+          <stop offset="1" stopColor="#d08a1e" />
         </linearGradient>
       </defs>
-      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="url(#logo-gold)" strokeWidth="6" strokeLinecap="round" />
-      <rect x="50" y="28" width="20" height="13" rx="2" fill="url(#logo-gold)" transform="rotate(32 60 34)" />
-      <circle cx="46" cy="76" r="34" fill="none" stroke="url(#logo-gold)" strokeWidth="15" />
-      <path d="M27 66 A 20 20 0 0 1 40 54" fill="none" stroke="#fff4d0" strokeWidth="4" strokeLinecap="round" opacity="0.55" />
+      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="#7a4a22" strokeWidth="6" strokeLinecap="round" />
+      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="#c48a4a" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="3 4" />
+      <rect x="49" y="26" width="22" height="15" rx="3" fill="url(#logo-brass)" transform="rotate(32 60 34)" />
+      <circle cx="46" cy="76" r="38" fill="url(#logo-iron)" />
+      <path d="M24 64 A 24 24 0 0 1 40 48" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" opacity="0.4" />
+      <circle cx="28" cy="74" r="3.4" fill="#fff" opacity="0.3" />
       <g className="logo-spark">
-        <circle cx="90" cy="6" r="7" fill="#ffb347" opacity="0.35" />
-        <path d="M90 -2 L92 4 L98 6 L92 8 L90 14 L88 8 L82 6 L88 4 Z" fill="#ffe2a0" />
+        <circle cx="90" cy="6" r="9" fill="#ffb347" opacity="0.45" />
+        <path d="M90 -4 L92.6 3.4 L100 6 L92.6 8.6 L90 16 L87.4 8.6 L80 6 L87.4 3.4 Z" fill="#ffe27a" />
       </g>
     </svg>
+  );
+}
+
+/** The painted wordmark, "O" swapped for the bomb. */
+function Wordmark({ className = '' }: { className?: string }) {
+  return (
+    <h1 className={`logo ${className}`} aria-label={GAME_TITLE}>
+      <span className="logo-word">BL</span>
+      <BombO />
+      <span className="logo-word">WUP</span>
+    </h1>
+  );
+}
+
+/** The title card shows once per visit, before the menu. */
+let titleSeen = false;
+
+/** Title screen: the wordmark over the dock, waiting for any key or tap. */
+function TitleScreen({ onStart }: { onStart: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const start = () => {
+    if (leaving) return;
+    audio.unlock();
+    setLeaving(true);
+    setTimeout(onStart, 450);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.key === 'Tab') return;
+      e.preventDefault();
+      start();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  return (
+    <div className={`title-screen ${leaving ? 'leaving' : ''}`} onPointerDown={start} role="button" tabIndex={-1} aria-label="Start">
+      <div className="title-art" aria-hidden />
+      <div className="title-shade" aria-hidden />
+      <div className="title-center">
+        <Wordmark className="title-logo" />
+        <div className="ribbon title-ribbon">Pass the bomb. Don't be holding it.</div>
+      </div>
+      <div className="title-start">Press any key to start</div>
+      <div className="title-foot">A party game for up to six · Live on a MagicBlock rollup</div>
+    </div>
   );
 }
 
@@ -55,6 +107,8 @@ export function Landing({
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
+  // Skip the title card for invite links and rejoins: those people came to play.
+  const [title, setTitle] = useState(() => !titleSeen && !pendingRoom && !onRejoin && !new URLSearchParams(location.search).has('quick'));
   const clean = name.trim().slice(0, 18);
   const idx = CHARACTERS.findIndex((c) => c.id === character);
   const cycle = (d: number) => {
@@ -66,7 +120,7 @@ export function Landing({
   // ← / → switch hero (unless you're typing your name)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      if (title || (e.target as HTMLElement).tagName === 'INPUT') return;
       if (e.key === 'ArrowLeft') cycle(-1);
       if (e.key === 'ArrowRight') cycle(1);
     };
@@ -81,8 +135,20 @@ export function Landing({
   };
   const hero = characterDef(character);
 
+  if (title)
+    return (
+      <div className="screen landing">
+        <TitleScreen
+          onStart={() => {
+            titleSeen = true;
+            setTitle(false);
+          }}
+        />
+      </div>
+    );
+
   return (
-    <div className="screen landing">
+    <div className="screen landing menu-in">
       <div className="menu-shade" />
 
       <label className="name-chip" title="Your name">
@@ -92,13 +158,8 @@ export function Landing({
       </label>
 
       <div className="menu-left">
-        <h1 className="logo" aria-label={GAME_TITLE}>
-          <span className="logo-word">BL</span>
-          <BombO />
-          <span className="logo-word">WUP</span>
-        </h1>
+        <Wordmark />
         <p className="tagline">Pass the bomb. Nobody knows how long the fuse is.</p>
-        <div className="rule" aria-hidden />
 
         <nav className="menu-list">
           {onRejoin && (
@@ -130,9 +191,7 @@ export function Landing({
       </div>
 
       <div className="picker" style={{ '--c': hero.color } as React.CSSProperties}>
-        <button className="picker-arrow" onClick={() => cycle(-1)} aria-label="Previous hero">
-          <Icon name="prev" size={26} fill="#fff" />
-        </button>
+        <button className="picker-arrow prev" onClick={() => cycle(-1)} aria-label="Previous hero" />
         <div className="picker-mid">
           <div className="picker-name" key={hero.id}>{hero.name}</div>
           <div className="picker-dots">
@@ -150,9 +209,7 @@ export function Landing({
             ))}
           </div>
         </div>
-        <button className="picker-arrow" onClick={() => cycle(1)} aria-label="Next hero">
-          <Icon name="next" size={26} fill="#fff" />
-        </button>
+        <button className="picker-arrow next" onClick={() => cycle(1)} aria-label="Next hero" />
       </div>
 
       <div className="how">
@@ -161,7 +218,7 @@ export function Landing({
         <span><kbd>Right click</kbd> tag</span>
         <span><kbd>Space</kbd> dash</span>
         <span><kbd>E</kbd> item</span>
-        <span className="how-free">No wallet needed · same stats for everyone</span>
+        <span className="how-free">No wallet needed. Same stats for everyone.</span>
       </div>
     </div>
   );
@@ -190,10 +247,10 @@ export function Lobby({ participants, onStart, onCancel }: { participants: Parti
     <div className="screen lobby">
       <div className="panel lobby-panel">
         <div className="lobby-head">
-          <h2>{filled < ordered.length ? (filled === 1 ? 'Rounding up a crew…' : 'Filling the empty spots…') : 'All aboard'}</h2>
+          <h2 className="ribbon">{filled < ordered.length ? (filled === 1 ? 'Rounding up a crew' : 'Filling the seats') : 'All aboard'}</h2>
           <span className="room-code">Room {code}</span>
         </div>
-        <div className="slots">
+        <div className="slots sheet">
           {ordered.map((p, i) => {
             const on = i < filled;
             return (
@@ -207,7 +264,7 @@ export function Lobby({ participants, onStart, onCancel }: { participants: Parti
                   </>
                 ) : (
                   <span className="dim">
-                    <span className="spinner" /> waiting
+                    <span className="spinner" /> Waiting
                   </span>
                 )}
               </div>
@@ -218,7 +275,7 @@ export function Lobby({ participants, onStart, onCancel }: { participants: Parti
           <button className="btn ghost" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn" onClick={onStart}>
+          <button className="btn primary" onClick={onStart}>
             Start now
           </button>
         </div>
