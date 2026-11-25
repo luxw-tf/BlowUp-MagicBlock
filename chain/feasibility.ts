@@ -590,7 +590,8 @@ async function main() {
     authority,
   );
   if (r.err) throw new Error(`finalize failed: ${r.err} ${r.sig}`);
-  const commitSig = await GetCommitmentSignature(r.sig, er);
+  // The SDK helper needs >= confirmed commitment; our latency connection uses processed.
+  const commitSig = await GetCommitmentSignature(r.sig, new Connection(er.rpcEndpoint, 'confirmed'));
   await base.confirmTransaction(commitSig, 'confirmed');
   let owner = (await base.getAccountInfo(match))?.owner;
   const tOwner = now();
