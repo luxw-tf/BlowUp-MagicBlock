@@ -4,6 +4,7 @@ import { characterDef } from '../game/content';
 import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { api, joinPayload, SETUP_STEPS, waitForMatch, type GuestKeys } from './onlineFlow';
+import { Icon } from './Icon';
 
 interface RoomView {
   code: string;
@@ -193,7 +194,7 @@ export function RoomScreen({
           <div className="slots">
             {SETUP_STEPS.map((s, i) => (
               <div key={s.status} className={`slot-row ${i <= stepIndex ? 'on' : ''}`}>
-                {i < stepIndex ? <span className="ready">✓</span> : i === stepIndex ? <span className="spinner" /> : <span className="dim">·</span>}
+                {i < stepIndex ? <span className="ready"><Icon name="check" size={16} /></span> : i === stepIndex ? <span className="spinner" /> : <span className="dim">·</span>}
                 <span className="slot-name">{s.label}</span>
               </div>
             ))}

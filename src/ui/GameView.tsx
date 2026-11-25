@@ -14,6 +14,7 @@ import { useSettings } from '../state/settings';
 import { Results } from './Results';
 import { SettingsPanel } from './SettingsPanel';
 import { VerificationPanel } from './VerificationPanel';
+import { Icon, type IconName } from './Icon';
 
 interface FeedItem {
   id: number;
@@ -125,7 +126,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.fuseReset();
             push(
               <>
-                💣 <Name s={s} id={e.holder} /> starts round {e.round} with the bomb
+                <Icon name="bomb" size={16} /> <Name s={s} id={e.holder} /> starts round {e.round} with the bomb
               </>,
             );
             if (e.holder === local) shout('you have the bomb', 'danger', true);
@@ -208,7 +209,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.explosion();
             push(
               <>
-                💥 <Name s={s} id={e.id} /> blew up
+                <Icon name="boom" size={16} /> <Name s={s} id={e.id} /> blew up
               </>,
             );
             const by = getPlayer(s, e.by);
@@ -269,8 +270,8 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
         <NameTags session={session} />
         <div className="bomb-indicator" ref={(el) => (overlay.indicator = el)}>
-          <div className="bomb-indicator-arrow">➤</div>
-          <span>💣</span>
+          <div className="bomb-indicator-arrow"><Icon name="arrow" size={20} fill="#ff6b35" /></div>
+          <span><Icon name="bomb" size={22} /></span>
         </div>
 
         <Hud session={session} />
@@ -291,11 +292,11 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
         {spectating && (
           <div className="spectator-bar">
-            <button onClick={() => cycleSpectate(-1)}>◀</button>
+            <button onClick={() => cycleSpectate(-1)} aria-label="Previous player"><Icon name="prev" size={16} fill="#f6efe1" /></button>
             <span>
               spectating <Name s={session.state} id={ctx.focus.id} />
             </span>
-            <button onClick={() => cycleSpectate(1)}>▶</button>
+            <button onClick={() => cycleSpectate(1)} aria-label="Next player"><Icon name="next" size={16} fill="#f6efe1" /></button>
           </div>
         )}
 
@@ -304,10 +305,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             {session.online ? 'online · devnet rollup' : `local sim · ${CONFIG.tickRate} tps`}
           </span>
           <button className="icon-btn" title="Match details" onClick={() => setShowVerify(true)}>
-            ⓘ
+            <Icon name="info" size={20} fill="#f6efe1" />
           </button>
           <button className="icon-btn" title="Settings (Esc)" onClick={() => setShowSettings(true)}>
-            ⚙
+            <Icon name="gear" size={20} fill="#f6efe1" />
           </button>
         </div>
 
@@ -448,7 +449,7 @@ function Hud({ session }: { session: SessionLike }) {
           <div className="fuse-holder">
             {holder ? (
               <>
-                💣{' '}
+                <Icon name="bomb" size={16} />{' '}
                 <span style={{ color: characterDef(holder.character).color }}>
                   {holder.id === session.localId ? 'YOU' : holder.name}
                 </span>
@@ -469,7 +470,7 @@ function Hud({ session }: { session: SessionLike }) {
         <div className="hud-bottom">
           <div className="slot dash-slot" title="Dash (Space)">
             <div className="dash-fill" ref={dashFill} />
-            <span className="slot-glyph">⚡</span>
+            <span className="slot-glyph"><Icon name="dash" size={24} /></span>
             <span className="slot-key">SPACE</span>
           </div>
           <div
@@ -477,7 +478,7 @@ function Hud({ session }: { session: SessionLike }) {
             style={inv && inv !== 'pending' ? { borderColor: ABILITY_DEFS[inv].color, boxShadow: `0 0 18px ${ABILITY_DEFS[inv].color}66` } : undefined}
             title={inv && inv !== 'pending' ? ABILITY_DEFS[inv].blurb : 'Pick up a mystery box'}
           >
-            <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? ABILITY_DEFS[inv].glyph : '·'}</span>
+            <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? <Icon name={ABILITY_DEFS[inv].glyph as IconName} size={26} fill={ABILITY_DEFS[inv].color} /> : '·'}</span>
             <span className="slot-key">E</span>
           </div>
           <div className="item-name">

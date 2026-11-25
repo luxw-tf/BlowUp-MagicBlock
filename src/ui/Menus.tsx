@@ -4,6 +4,7 @@ import { CHARACTERS, GAME_TITLE, characterDef } from '../game/content';
 import type { ParticipantSetup } from '../game/sim';
 import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
+import { Icon } from './Icon';
 
 // each pirate's initial on its own colour (the 3D crew is the real portrait)
 const ICON: Record<CharacterId, string> = {
@@ -60,7 +61,7 @@ export function Landing({
       <div className="landing-inner">
         <h1 className="logo">
           {GAME_TITLE}
-          <span className="logo-bomb">💣</span>
+          <span className="logo-bomb"><Icon name="bomb" size={64} /></span>
         </h1>
         <p className="tagline">six creatures. one bomb. the fuse lies.</p>
 
