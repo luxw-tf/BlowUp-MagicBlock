@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-blowup = "11111111111111111111111111111111"
+blowup = "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob"
 
 [programs.localnet]
 blowup = "11111111111111111111111111111111"
@@ -17,3 +17,5 @@ wallet = ".keys/authority.json"
 
 [scripts]
 test = "cargo test -p blowup"
+
+[hooks]

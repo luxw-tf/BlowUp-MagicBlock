@@ -32,7 +32,7 @@ use errors::BlowupError;
 use rules::*;
 use state::*;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob");
 
 /// Scoped VRF requester identity, derived at compile time (SDK 0.18+).
 const PROGRAM_IDENTITY: Pubkey = program_identity_pubkey(&crate::ID);
