@@ -79,7 +79,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive }: { id: Character
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const k = HEIGHT / Math.max(0.001, box.max.y - box.min.y);
     // the ink outline, about 1% of the figure's height
-    const ink = outlineMaterial((box.max.y - box.min.y) * 0.011);
+    const ink = outlineMaterial((box.max.y - box.min.y) * 0.008);
     const meshes: THREE.Mesh[] = [];
     scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     for (const m of meshes) {
