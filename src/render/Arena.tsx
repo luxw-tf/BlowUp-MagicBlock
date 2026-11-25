@@ -144,8 +144,8 @@ const WATER_VERT = /* glsl */ `
   varying vec3 vWorld;
   void main() {
     vec4 w = modelMatrix * vec4(position, 1.0);
-    // gentle swells, two directions
-    w.y += sin(w.x * 0.35 + uTime * 1.1) * 0.08 + cos(w.z * 0.42 + uTime * 0.9) * 0.07;
+    // gentle rolling swells in two directions (kept small so the water still reads as flat from above)
+    w.y += sin(w.x * 0.32 + uTime * 1.0) * 0.07 + cos(w.z * 0.4 + uTime * 0.8) * 0.06 + sin((w.x + w.z) * 0.9 + uTime * 1.7) * 0.02;
     vWorld = w.xyz;
     gl_Position = projectionMatrix * viewMatrix * w;
   }
@@ -153,39 +153,80 @@ const WATER_VERT = /* glsl */ `
 const WATER_FRAG = /* glsl */ `
   uniform float uTime;
   uniform vec3 uDeep;
+  uniform vec3 uMid;
   uniform vec3 uShallow;
   uniform vec3 uFoam;
   uniform float uEdgeZ;      // the quay line (foam hugs it)
   uniform vec2 uCentre;      // basin mode: centre and radius of the rim
   uniform float uRadius;
   uniform float uBasin;
+  uniform vec3 uRings[10];   // things floating in the sea: x, z, radius (foam rings round them)
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
   varying vec3 vWorld;
+
+  vec2 hash2(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
   }
+  // cellular noise: distance to the nearest and second-nearest drifting point (F1, F2)
+  vec2 cells(vec2 p, float t) {
+    vec2 i = floor(p), f = fract(p);
+    float d1 = 8.0, d2 = 8.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(float(x), float(y));
+      vec2 o = hash2(i + g);
+      o = 0.5 + 0.42 * sin(t + 6.2831 * o);
+      float d = length(g + o - f);
+      if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+    }
+    return vec2(d1, d2);
+  }
+
   void main() {
     vec2 p = vWorld.xz;
-    float edge = uBasin > 0.5 ? uRadius - length(p - uCentre) : uEdgeZ - p.y;   // distance from the wall
-    float depth = clamp(edge / (uBasin > 0.5 ? 2.0 : 14.0), 0.0, 1.0);
-    vec3 col = mix(uShallow, uDeep, depth);
-    // drifting light streaks
-    float n = noise(p * 0.22 + vec2(uTime * 0.12, uTime * 0.06)) * 0.65 + noise(p * 0.6 - vec2(uTime * 0.1, -uTime * 0.12)) * 0.35;
-    col += smoothstep(0.55, 0.85, n) * 0.07;
-    // thin wavy highlight lines, the way stylised water is painted
-    float lines = smoothstep(0.035, 0.0, abs(fract(p.y * 0.35 + sin(p.x * 0.25 + uTime * 0.8) * 0.35 + uTime * 0.05) - 0.5) - 0.0);
-    col += lines * 0.06;
-    // foam: a soft band against the wall plus little moving bands
-    float band = smoothstep(0.9, 0.0, edge) + smoothstep(0.08, 0.0, abs(edge - 0.9 - sin(uTime * 1.6 + p.x * 0.6) * 0.25)) * 0.55;
-    col = mix(col, uFoam, clamp(band, 0.0, 1.0) * 0.85);
-    // sparkles that blink and drift
-    vec2 cell = floor(p * 2.2 + vec2(uTime * 0.3, 0.0));
-    float sp = step(0.985, hash(cell)) * smoothstep(0.4, 1.0, sin(uTime * 3.0 + hash(cell + 3.1) * 6.28));
-    col += sp * 0.55;
+    float basin = uBasin;
+    float edge = basin > 0.5 ? uRadius - length(p - uCentre) : uEdgeZ - p.y;   // distance from the wall
+    float depth = clamp(edge / (basin > 0.5 ? 2.2 : 18.0), 0.0, 1.0);
+    // a three-step ramp: bright turquoise by the wall, clear blue, deep blue out at sea
+    vec3 col = depth < 0.35 ? mix(uShallow, uMid, depth / 0.35) : mix(uMid, uDeep, (depth - 0.35) / 0.65);
+
+    // painted foam: the edges of drifting cells, broken up so it comes in patches (the classic toon-water look)
+    float scale = basin > 0.5 ? 1.4 : 0.55;
+    vec2 c = cells(p * scale + vec2(uTime * 0.05, uTime * 0.03), uTime * 0.6);
+    float web = smoothstep(0.05, 0.012, c.y - c.x);
+    float patchy = smoothstep(0.5, 0.78, noise(p * 0.09 + vec2(uTime * 0.025, -uTime * 0.018)));
+    float foamAmt = web * patchy * mix(0.95, 0.35, depth);
+    // subtle darker cell centres give the surface a hammered, moving feel
+    col *= 1.0 - smoothstep(0.0, 0.6, c.x) * 0.06;
+
+    // foam hugging the wall, with a second line that swells in and out
+    float lap = sin(uTime * 1.4 + (basin > 0.5 ? atan(p.y - uCentre.y, p.x - uCentre.x) * 6.0 : p.x * 0.45)) * 0.22;
+    foamAmt += smoothstep(0.55, 0.05, edge);
+    foamAmt += smoothstep(0.07, 0.0, abs(edge - 0.95 - lap)) * (basin > 0.5 ? 0.35 : 0.7);
+
+    // foam rings round everything floating: a hugging ring plus slow ripples spreading out
+    if (basin < 0.5) {
+      for (int k = 0; k < 10; k++) {
+        vec3 r = uRings[k];
+        if (r.z <= 0.0) continue;
+        float d = length(p - r.xy) - r.z;
+        foamAmt += smoothstep(0.35, 0.0, abs(d - 0.15)) * 0.9;
+        float t = fract(uTime * 0.3 + float(k) * 0.37);
+        foamAmt += smoothstep(0.12, 0.0, abs(d - t * 2.4)) * (1.0 - t) * 0.7;
+      }
+    }
+
+    col = mix(col, uFoam, clamp(foamAmt, 0.0, 1.0));
+
+    // sun glints: tiny diamonds that wink on and off
+    vec2 cell = floor(p * 2.4 + vec2(uTime * 0.25, 0.0));
+    float sp = step(0.988, hash(cell)) * smoothstep(0.5, 1.0, sin(uTime * 3.2 + hash(cell + 3.1) * 6.28));
+    col += sp * 0.6 * (1.0 - depth * 0.4);
+
     // match the scene fog so the far water melts into the sky
     float d = length(cameraPosition - vWorld);
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
@@ -194,30 +235,40 @@ const WATER_FRAG = /* glsl */ `
   }
 `;
 
+/** Where things float in the sea (x, z, foam radius), so the water draws foam round them. */
+export const SEA_RINGS: [number, number, number][] = [
+  [15, -20.5, 2.6], [-22, -24, 2.4], [-4, -30, 1.9], [32, -40, 7], [3, -17.5, 0.55], [-13, -19, 0.5], [24, -17, 0.5],
+  [10.5, -16.6, 0.35], [14.5, -16.6, 0.35], [12.5, -18.6, 0.35],
+];
+
 export const FOG = { color: '#bfe6f5', near: 70, far: 170 };
 
 function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
-  return useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        vertexShader: WATER_VERT,
-        fragmentShader: WATER_FRAG,
-        uniforms: {
-          uTime: { value: 0 },
-          uDeep: { value: new THREE.Color(basin ? '#2aa9d6' : '#1690c4') },
-          uShallow: { value: new THREE.Color(basin ? '#7fe0f2' : '#46c8e0') },
-          uFoam: { value: new THREE.Color('#f4fbff') },
-          uEdgeZ: { value: -13.3 },
-          uCentre: { value: new THREE.Vector2(basin?.x ?? 0, basin?.z ?? 0) },
-          uRadius: { value: basin?.r ?? 0 },
-          uBasin: { value: basin ? 1 : 0 },
-          uFogColor: { value: new THREE.Color(FOG.color) },
-          uFogNear: { value: FOG.near },
-          uFogFar: { value: FOG.far },
-        },
-      }),
-    [basin],
-  );
+  return useMemo(() => {
+    const rings = Array.from({ length: 10 }, (_, i) => {
+      const r = basin ? undefined : SEA_RINGS[i];
+      return new THREE.Vector3(r?.[0] ?? 0, r?.[1] ?? 0, r?.[2] ?? 0);
+    });
+    return new THREE.ShaderMaterial({
+      vertexShader: WATER_VERT,
+      fragmentShader: WATER_FRAG,
+      uniforms: {
+        uTime: { value: 0 },
+        uDeep: { value: new THREE.Color(basin ? '#1f9ccc' : '#0f6fb0') },
+        uMid: { value: new THREE.Color(basin ? '#3cc3e2' : '#1ea7d6') },
+        uShallow: { value: new THREE.Color(basin ? '#8ff0f0' : '#5fe2e6') },
+        uFoam: { value: new THREE.Color('#f5feff') },
+        uEdgeZ: { value: -13.3 },
+        uCentre: { value: new THREE.Vector2(basin?.x ?? 0, basin?.z ?? 0) },
+        uRadius: { value: basin?.r ?? 0 },
+        uBasin: { value: basin ? 1 : 0 },
+        uRings: { value: rings },
+        uFogColor: { value: new THREE.Color(FOG.color) },
+        uFogNear: { value: FOG.near },
+        uFogFar: { value: FOG.far },
+      },
+    });
+  }, [basin]);
 }
 
 function Sea() {
