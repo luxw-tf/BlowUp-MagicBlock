@@ -1275,29 +1275,164 @@ kbd {
 .callout-neutral {
   color: #ffe08a;
 }
+/* name tags: a pill in the player's own colour with their face, so nobody reads alike */
 .name-tag {
   font-family: var(--body);
   font-weight: 700;
+  font-size: 12px;
 }
-.name-tag span {
-  color: var(--cream);
-  background: rgba(59, 31, 14, 0.82);
-  border: 0;
-  border-bottom: 3px solid;
-  border-radius: 6px;
-  padding: 1px 7px;
+.name-tag .nt-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px 1px 1px;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55), 0 0 3px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 88%, #fff), color-mix(in srgb, var(--c) 70%, #1a0e06));
+  border: 2px solid color-mix(in srgb, var(--c) 45%, #1a0e06);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 rgba(26, 14, 6, 0.55), 0 4px 8px rgba(0, 0, 0, 0.25);
 }
-.name-tag.is-local span {
-  background: linear-gradient(180deg, #ffd766, #f2a529);
-  color: #4a2506;
+.name-tag .nt-pill .portrait {
+  padding: 0;
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c) 70%, #fff), var(--c) 70%);
+  border-color: var(--cream);
+  border-radius: 50%;
+  border-width: 2px;
+  box-shadow: none;
 }
-.name-tag em {
+.name-tag .nt-pill b {
   font-weight: 700;
-  opacity: 0.7;
 }
+/* yours: a bigger gold sign with a pointer down at your head */
+.name-tag.is-local {
+  font-size: 14px;
+  padding-bottom: 9px;
+}
+.name-tag.is-local .nt-pill {
+  padding-right: 11px;
+  color: #4a2506;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: linear-gradient(180deg, #fff0b0, #ffd766 40%, #f2a529);
+  border: 3px solid #3b1f0e;
+  box-shadow: 0 3px 0 #2a1408, 0 0 0 3px color-mix(in srgb, var(--c) 80%, transparent), 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+.name-tag.is-local .nt-pill b {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.name-tag.is-local::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 14px;
+  height: 10px;
+  transform: translateX(-50%);
+  background: #3b1f0e;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+/* the bomb holder: a black iron pill with a burning rim, a colour no player has */
+.name-tag.has-bomb .nt-pill {
+  color: #ffe9b0;
+  text-shadow: 0 1px 0 #000;
+  background: radial-gradient(ellipse at 30% 20%, #4a5262, #1b1f27 70%);
+  border: 2px solid #ff8a2a;
+  animation: ntBomb 0.4s ease-in-out infinite alternate;
+}
+.name-tag.has-bomb.is-local .nt-pill {
+  border-width: 3px;
+}
+.name-tag.has-bomb .nt-pill .icon {
+  color: #ffb347;
+}
+@keyframes ntBomb {
+  from {
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 0 6px 1px rgba(255, 138, 42, 0.55);
+  }
+  to {
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 0 14px 4px rgba(255, 110, 30, 0.85);
+    transform: scale(1.1);
+  }
+}
+
+/* roster down the right edge */
+.roster {
+  position: absolute;
+  top: 70px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 168px;
+  pointer-events: none;
+}
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 8px 0 3px;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--cream);
+  text-shadow: 0 1px 0 #2a1408;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 30%, rgba(42, 20, 8, 0.85)), rgba(42, 20, 8, 0.72));
+  border: 2px solid rgba(26, 14, 6, 0.6);
+  border-left: 5px solid var(--c);
+  border-radius: 8px;
+  transition: opacity 0.3s, transform 0.2s;
+}
+.roster-row .portrait {
+  border-width: 2px;
+  box-shadow: none;
+}
+.roster-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roster-row.is-local {
+  color: #4a2506;
+  text-shadow: none;
+  background: linear-gradient(90deg, #ffe08a, #f2b234);
+  border-color: #3b1f0e;
+  border-left-color: var(--c);
+}
+.roster-row.has-bomb {
+  color: #ffe9b0;
+  text-shadow: 0 1px 0 #000;
+  background: linear-gradient(90deg, #3a404d, #1b1f27);
+  border-color: #ff8a2a;
+  box-shadow: 0 0 10px rgba(255, 120, 30, 0.6);
+  border-left-color: var(--c);
+  transform: translateX(-8px);
+}
+.roster-row.has-bomb .icon {
+  color: #ffb347;
+  animation: biMedal 0.35s ease-in-out infinite alternate;
+}
+.roster-row.is-out {
+  opacity: 0.45;
+  filter: grayscale(0.8);
+}
+.roster-row.is-out .roster-name {
+  text-decoration: line-through;
+}
+@media (max-width: 760px) {
+  .roster {
+    display: none;
+  }
+}
+
 /* off-screen bomb holder: a brass medallion with their face, a lit bomb on the rim and a brass pointer */
 .bomb-indicator {
   --pulse: 0.9s;
+  z-index: 5;
   width: 58px;
   height: 58px;
   background: none;

@@ -278,7 +278,6 @@ export function GameView({ session, onRematch, onMenu }: Props) {
           <Scene />
         </Canvas>
 
-        <NameTags session={session} />
 
         <Hud session={session} />
 
@@ -329,24 +328,58 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   );
 }
 
+/**
+ * Name tags over each head, filled in the player's colour with their headshot, so everyone reads apart at a glance.
+ * Yours is a big gold "You" sign with a pointer; the bomb holder's turns red and pulses. Scene.tsx moves them.
+ */
 function NameTags({ session }: { session: SessionLike }) {
+  const s = session.state;
   return (
     <div className="name-layer">
-      {session.state.players.map((p) => (
-        <div
-          key={p.id}
-          className={`name-tag ${p.id === session.localId ? 'is-local' : ''}`}
-          ref={(el) => {
-            if (el) overlay.tags.set(p.id, el);
-            else overlay.tags.delete(p.id);
-          }}
-        >
-          <span style={{ borderColor: characterDef(p.character).color }}>
-            {p.id === session.localId ? 'you' : p.name}
-            {p.isBot && <em>BOT</em>}
-          </span>
-        </div>
-      ))}
+      {s.players.map((p, seat) => {
+        const local = p.id === session.localId;
+        const bomb = s.bomb.holderId === p.id;
+        return (
+          <div
+            key={p.id}
+            className={`name-tag ${local ? 'is-local' : ''} ${bomb ? 'has-bomb' : ''}`}
+            ref={(el) => {
+              if (el) overlay.tags.set(p.id, el);
+              else overlay.tags.delete(p.id);
+            }}
+          >
+            <span className="nt-pill" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
+              <Portrait id={p.character} bot={p.isBot} seat={seat} size={local ? 26 : 22} />
+              <b>{local ? 'You' : p.name}</b>
+              {bomb && <Icon name="bomb" size={15} />}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Everyone in the match down the right edge: colour, face, who holds the bomb, who is out. */
+function Roster({ session }: { session: SessionLike }) {
+  const s = session.state;
+  return (
+    <div className="roster" aria-label="Players">
+      {s.players.map((p, seat) => {
+        const local = p.id === session.localId;
+        const bomb = s.bomb.holderId === p.id && p.alive;
+        return (
+          <div
+            key={p.id}
+            className={`roster-row ${local ? 'is-local' : ''} ${bomb ? 'has-bomb' : ''} ${p.alive ? '' : 'is-out'}`}
+            style={{ '--c': characterDef(p.character).color } as React.CSSProperties}
+          >
+            <Portrait id={p.character} bot={p.isBot} seat={seat} size={26} />
+            <span className="roster-name">{local ? 'You' : p.name}</span>
+            {bomb ? <Icon name="bomb" size={16} title="Holding the bomb" /> : !p.alive ? <Icon name="skull" size={15} title="Out" /> : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -500,7 +533,9 @@ function Hud({ session }: { session: SessionLike }) {
 
   return (
     <>
+      <NameTags session={session} />
       <BombIndicator session={session} />
+      <Roster session={session} />
       <div className="hud-top">
         <div className="hud-chip">
           ROUND <b>{Math.max(1, s.round)}</b>/{totalRounds}
