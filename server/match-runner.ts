@@ -66,6 +66,8 @@ const MATCH_TIMEOUT_MS = 8 * 60_000;
 const RANDOMNESS_RETRY_MS = 3_500;
 /** Slightly above the on-chain TAKEOVER_GRACE_MS (5 s) so the check passes first time. */
 const TAKEOVER_AFTER_MS = 6_000;
+/** A player who has not sent any input yet gets this long after the match goes live. */
+const FIRST_INPUT_GRACE_MS = 15_000;
 
 const shuffle = <T,>(a: T[]) => {
   const r = [...a];
@@ -122,6 +124,7 @@ export class MatchRunner {
   private lastTickAt = 0;
   private lastTakeoverCheck = 0;
   private takeoverPending = new Set<number>();
+  private liveSince = Date.now();
   readonly events: string[] = [];
 
   constructor(
@@ -323,6 +326,7 @@ export class MatchRunner {
     const r = await sendTx(er, [await this.ix.startMatch(this.authority.publicKey, this.match)], [], this.authority, { confirm: true });
     if (r.err) throw new Error(`start_match failed: ${r.err}`);
     this.status = 'live';
+    this.liveSince = Date.now();
     this.note('started');
 
     this.lastTickAt = performance.now();
@@ -409,8 +413,10 @@ export class MatchRunner {
     for (const [i, p] of this.chainPlayers) {
       if (this.bots.has(i) || this.takeoverPending.has(i)) continue;
       if (!(m.aliveMask & (1 << i))) continue;
-      const silentMs = p.lastInputSlot ? (clock.now() - p.lastInputSlot) * m.slotMs : Date.now() - this.createdAt;
-      if (silentMs < TAKEOVER_AFTER_MS) continue;
+      // Never-sent players get a longer grace from when the match went live
+      // (a real browser still has to load the scene); setup time doesn't count.
+      const silentMs = p.lastInputSlot ? (clock.now() - p.lastInputSlot) * m.slotMs : Date.now() - this.liveSince;
+      if (silentMs < (p.lastInputSlot ? TAKEOVER_AFTER_MS : FIRST_INPUT_GRACE_MS)) continue;
       this.takeoverPending.add(i);
       const session = Keypair.generate();
       void (async () => {

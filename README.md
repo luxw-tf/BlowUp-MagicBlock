@@ -66,23 +66,29 @@ cd chain && npm install && npm run feasibility    # then: npx tsx verify-draws.t
 ```
 Keys (`.keys/authority.json` = upgrade authority, `.keys/blowup-program.json` = program keypair backup) are gitignored. Don't lose them, or the program can't be upgraded.
 
-## Phase 03 — online play (milestone 1: one human vs on-chain bots)
+## Phase 03 — online play
 
-**Play online (devnet)** on the landing page runs a real match on a MagicBlock Ephemeral Rollup. No wallet and no SOL are needed:
+**Play online (devnet)** and **Private room** on the landing page run real matches on a MagicBlock Ephemeral Rollup. No wallet and no SOL are needed:
 
 ```
-server/                lobby service (local Node): sponsored setup, bots, elimination crank, settlement
-  index.ts             POST /api/quickplay, GET /api/matches/:id   (Vite proxies /api in dev)
-  match-runner.ts      one match end to end; bots = BotBrain over a ChainMirror, acting via transactions
+server/                  lobby service (local Node): matchmaking, sponsored setup, bots, takeover, crank, settlement
+  index.ts               HTTP API (queue, tickets, rooms, matches; Vite proxies /api in dev)
+  lobby.ts               quick-play queue + private rooms
+  match-runner.ts        one match end to end; bots = BotBrain over a ChainMirror, acting via transactions
+  test-multiplayer.ts    scripted multi-client test (real OnlineSessions, no rendering)
 src/chain/
-  program.ts           shared program client: PDAs, decoding, instruction builders, watchAccount, SlotClock
-  mirror.ts            on-chain accounts → the client's MatchState + derived game events
-  online-session.ts    browser session: predicted own movement, mirrored others, tag/throw → transfer
-src/ui/OnlineLobby.tsx join flow (shows the real setup steps)
+  program.ts             shared program client: PDAs, decoding, instruction builders, watchAccount, SlotClock
+  mirror.ts              on-chain accounts → the client's MatchState + derived game events
+  online-session.ts      browser session: predicted own movement, mirrored others, tag/throw → transfer, reclaim
+src/ui/                  OnlineLobby (queue), RoomScreen (private rooms), onlineFlow (API + rejoin)
 ```
+
+**Matchmaking (milestone 2).** Quick play groups humans first. When 6 are waiting, or the oldest has waited 8 s (`QUEUE_WINDOW_MS`), the match starts and bots fill the empty seats. Private rooms have a 5-letter code and an invite link (`?room=CODE`), per-player ready states, and host-controlled bot fill. Without bots a room needs 2–6 humans. Names are made unique per match.
+
+**Disconnects (milestone 2).** If a player sends no input for 6 s (15 s for a first input after the match goes live), the lobby calls the on-chain `takeover`, which only succeeds after 5 s of silence, and a bot plays the seat. When the player is active again, their client automatically re-keys the seat with `renew_session`, signed by the guest identity, and the bot steps aside. After a reload, the landing page offers **Rejoin your match**.
 
 How a match flows:
-1. The lobby creates and joins the match for the guest's identity and session keys plus 5 bot keys.
+1. The lobby creates and joins the match for each guest's identity and session keys, plus bot keys for any filled seats.
 2. It delegates the accounts to the closest ER and starts the match, which draws the holder by VRF.
 3. Clients and bots stream absolute positions at 10 Hz. Passes are `transfer` transactions, range-checked on-chain.
 4. The lobby cranks each elimination as soon as the fuse slot passes (~0.2 s measured).
@@ -92,17 +98,18 @@ Verified on devnet in a headless browser:
 - lobby → live match → 5 VRF rounds → results → settled
 - server-only matches with 15–19 bot transfers
 
-Known gaps in this milestone:
+Known gaps:
 - No pickups/abilities online (offline only for now).
-- One human per match. Quick play with several humans and private rooms are milestone 2.
 - Other players' throws aren't animated; you see the pass land.
+- The lobby API is polled (0.4–1 s). Fine for local dev; a websocket channel would cut lobby latency.
+- On-chain, a player who never sent an input can be taken over immediately. The lobby applies the 15 s first-input grace.
 - Bots run on the lobby, so the lobby must stay up for a match to finish. If it dies mid-match, `abort_match` and the 8-minute timeout are the only recovery.
 - The lobby holds the devnet authority key locally (`.keys/`). Public hosting needs a proper key store.
 
 ## Not done yet / next steps
 
-- **Phase 03 milestone 2**: several humans per match (quick-play queue with bot fill after a window), private rooms with codes, disconnect → bot takeover and reconnect.
 - On-chain gaps: throw line-of-sight/obstacles, pickups and abilities.
+- Hosting: deploy the lobby somewhere reachable, with the authority key in a proper secret store, so remote players can join.
 - Offline matches still use `LocalDevRandomness` (labelled not verifiable); online matches use MagicBlock VRF.
 - Final art/audio: creatures and the dock are primitive blockouts, and the sound is synthesized.
 - Balance: bot-only matches currently last ~1–2 min (PRD target 2–4 min with humans). Tune in `config.ts`.
