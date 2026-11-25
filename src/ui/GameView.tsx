@@ -15,6 +15,7 @@ import { Results } from './Results';
 import { SettingsPanel } from './SettingsPanel';
 import { VerificationPanel } from './VerificationPanel';
 import { Icon, type IconName } from './Icon';
+import { Portrait } from './Portrait';
 
 interface FeedItem {
   id: number;
@@ -278,10 +279,6 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         </Canvas>
 
         <NameTags session={session} />
-        <div className="bomb-indicator" ref={(el) => (overlay.indicator = el)}>
-          <div className="bomb-indicator-arrow"><Icon name="arrow" size={20} fill="#ff6b35" /></div>
-          <span><Icon name="bomb" size={22} /></span>
-        </div>
 
         <Hud session={session} />
 
@@ -354,6 +351,66 @@ function NameTags({ session }: { session: SessionLike }) {
   );
 }
 
+/** A painted iron bomb with a brass cap and a sparking fuse, for the off-screen badge. */
+function BombBadge() {
+  return (
+    <svg className="bi-bomb" viewBox="0 0 40 40" aria-hidden>
+      <defs>
+        <radialGradient id="bi-iron" cx="0.36" cy="0.32" r="0.75">
+          <stop offset="0" stopColor="#6a7789" />
+          <stop offset="0.5" stopColor="#2c3442" />
+          <stop offset="1" stopColor="#12161e" />
+        </radialGradient>
+        <linearGradient id="bi-brass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffe7a0" />
+          <stop offset="1" stopColor="#c8801a" />
+        </linearGradient>
+      </defs>
+      <path d="M26 12 C 28 6, 33 5, 35 3" fill="none" stroke="#3b1f0e" strokeWidth="4.4" strokeLinecap="round" />
+      <path d="M26 12 C 28 6, 33 5, 35 3" fill="none" stroke="#b07a40" strokeWidth="2" strokeLinecap="round" />
+      <rect x="20" y="10" width="10" height="7" rx="1.5" fill="url(#bi-brass)" stroke="#3b1f0e" strokeWidth="1.6" transform="rotate(32 25 13.5)" />
+      <circle cx="18" cy="24" r="13" fill="url(#bi-iron)" stroke="#2a1408" strokeWidth="2.4" />
+      <path d="M10.5 20 A 8.5 8.5 0 0 1 16 14.6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" opacity="0.45" />
+      <g className="bi-spark">
+        <circle cx="35" cy="3" r="5" fill="#ffb347" opacity="0.55" />
+        <path d="M35 -2 L36.4 1.6 L40 3 L36.4 4.4 L35 8 L33.6 4.4 L30 3 L33.6 1.6 Z" fill="#fff1a8" />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Off-screen bomb holder: their headshot in a brass medallion with a lit bomb on the rim and a pointer aiming at
+ * them. Scene.tsx moves the root and rotates its first child (the pointer ring) every frame.
+ */
+function BombIndicator({ session }: { session: SessionLike }) {
+  const s = session.state;
+  const holder = getPlayer(s, s.bomb.holderId);
+  return (
+    <div className="bomb-indicator" ref={(el) => (overlay.indicator = el)}>
+      <div className="bomb-indicator-arrow">
+        <svg className="bi-pointer" viewBox="0 0 30 34" aria-hidden>
+          <defs>
+            <linearGradient id="bi-pointer-brass" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffe9a6" />
+              <stop offset="0.5" stopColor="#f2b234" />
+              <stop offset="1" stopColor="#b86a14" />
+            </linearGradient>
+          </defs>
+          <path d="M3 4 Q 2 1 5 2 L 27 15 Q 30 17 27 19 L 5 32 Q 2 33 3 30 L 8 17 Z" fill="url(#bi-pointer-brass)" stroke="#3b1f0e" strokeWidth="2.6" strokeLinejoin="round" />
+          <path d="M8 7 L 22 15.5" stroke="#fff6d0" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+        </svg>
+      </div>
+      <div className="bi-halo" aria-hidden />
+      <div className="bi-medal">
+        {holder && <Portrait id={holder.character} bot={holder.isBot} seat={s.players.indexOf(holder)} size={46} />}
+      </div>
+      <BombBadge />
+      {holder && <span className="bi-name">{holder.name}</span>}
+    </div>
+  );
+}
+
 /** HUD: high-frequency values are written to refs from a rAF loop. */
 function Hud({ session }: { session: SessionLike }) {
   const fuseText = useRef<HTMLDivElement>(null);
@@ -380,6 +437,8 @@ function Hud({ session }: { session: SessionLike }) {
           const pct = s.bomb.fuseDuration > 0 ? Math.min(1, fuse / s.bomb.fuseDuration) : 0;
           fuseBar.current.style.transform = `scaleX(${pct})`;
           fuseBox.current.dataset.state = fuse < 1 ? 'critical' : fuse < 2.5 ? 'warn' : 'ok';
+          // the off-screen badge pulses faster as the fuse runs down
+          overlay.indicator?.style.setProperty('--pulse', `${Math.max(0.16, Math.min(0.9, fuse / 5)).toFixed(2)}s`);
           // Ticking: per second normally, faster when critical.
           const interval = fuse < 1 ? 0.125 : fuse < 2 ? 0.25 : fuse < 4 ? 0.5 : 1;
           const slot = Math.floor(fuse / interval);
@@ -441,6 +500,7 @@ function Hud({ session }: { session: SessionLike }) {
 
   return (
     <>
+      <BombIndicator session={session} />
       <div className="hud-top">
         <div className="hud-chip">
           ROUND <b>{Math.max(1, s.round)}</b>/{totalRounds}
