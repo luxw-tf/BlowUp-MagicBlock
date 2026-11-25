@@ -118,9 +118,10 @@ Known gaps:
 
 All third-party assets are CC0 (public domain), credited anyway:
 
-- 3D models: [Kenney](https://kenney.nl) (Watercraft, Pirate, Nature and Food kits) and [Quaternius](https://quaternius.com) (Pirate Kit, including the six pirates). See `public/models/CREDITS.md`.
+- Characters: [KayKit](https://kaylousberg.itch.io) Adventurers (the heroes, recoloured) and Skeletons (the bots), with KayKit Character Animations, by Kay Lousberg.
+- 3D models: [Kenney](https://kenney.nl) (Watercraft, Pirate, Nature and Food kits) and [Quaternius](https://quaternius.com) (Pirate Kit props). See `public/models/CREDITS.md`.
 - Sound effects and jingles: [Kenney](https://kenney.nl) audio packs. See `public/audio/CREDITS.md`.
-- Fonts: Lilita One and Nunito (SIL Open Font License), via Fontsource.
+- Fonts: Cinzel and Inter (SIL Open Font License), via Fontsource.
 
 ## Not done yet / next steps
 

@@ -10,34 +10,35 @@ export interface CharacterDef {
 }
 
 export const CHARACTERS: CharacterDef[] = [
-  { id: 'frog', name: 'Sharky', color: '#5fbf4a', accent: '#f2e9c9' },
-  { id: 'cat', name: 'Anne', color: '#f08a3c', accent: '#fff2e0' },
-  { id: 'blob', name: 'Mako', color: '#a678ff', accent: '#e8dcff' },
-  { id: 'rat', name: 'Henry', color: '#9aa1ad', accent: '#f4a7b9' },
-  { id: 'duck', name: 'Barbarossa', color: '#ffd23f', accent: '#ff8c1a' },
-  { id: 'creature', name: 'Bones', color: '#2f3b4f', accent: '#7cf9e0' },
+  { id: 'frog', name: 'Ranger', color: '#5fbf4a', accent: '#f2e9c9' },
+  { id: 'cat', name: 'Barbarian', color: '#f08a3c', accent: '#fff2e0' },
+  { id: 'blob', name: 'Mage', color: '#d2475b', accent: '#e8dcff' },
+  { id: 'rat', name: 'Knight', color: '#e7c873', accent: '#e6eefc' },
+  { id: 'duck', name: 'Rogue', color: '#6f8fe0', accent: '#ff8c1a' },
+  { id: 'creature', name: 'Shade', color: '#3fd0c9', accent: '#d8fffb' },
 ];
 
 export const characterDef = (id: CharacterId): CharacterDef => CHARACTERS.find((c) => c.id === id)!;
 
+/** Bots are the undead crew. */
 export const BOT_NAMES = [
-  'Salty Pete',
-  'One-Eyed Mo',
-  'Barnacle Bea',
-  "Cap'n Crumbs",
-  'Long Gary',
-  'Mad Maud',
-  'Pickles',
-  'Squid Vicious',
-  'Old Tom',
-  'Rusty Kate',
-  'Bilge',
-  'Lucky Nell',
-  'Peg-Leg Ted',
-  'Dread Doris',
-  'Gully',
-  'Marlow',
-  'Tidewater Jo',
+  'Rattlebones',
+  'Old Marrow',
+  'Grimjaw',
+  'Hollow Jack',
+  'Mortimer',
+  'Wormwood',
+  'Ashgrin',
+  'Knucklebones',
+  'Sorrowbone',
+  'Creak',
+  'Gravesend',
+  'Dustjaw',
+  'Sir Ribcage',
+  'Cinder',
+  'Thimbleskull',
+  'Marrowmere',
+  'Lantern Lou',
 ];
 
 export interface AbilityDef {

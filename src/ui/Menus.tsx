@@ -63,7 +63,7 @@ export function Landing({
     onCharacter(next);
   };
 
-  // ← / → switch pirate (unless you're typing your name)
+  // ← / → switch hero (unless you're typing your name)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -130,7 +130,7 @@ export function Landing({
       </div>
 
       <div className="picker" style={{ '--c': hero.color } as React.CSSProperties}>
-        <button className="picker-arrow" onClick={() => cycle(-1)} aria-label="Previous pirate">
+        <button className="picker-arrow" onClick={() => cycle(-1)} aria-label="Previous hero">
           <Icon name="prev" size={26} fill="#fff" />
         </button>
         <div className="picker-mid">
@@ -150,7 +150,7 @@ export function Landing({
             ))}
           </div>
         </div>
-        <button className="picker-arrow" onClick={() => cycle(1)} aria-label="Next pirate">
+        <button className="picker-arrow" onClick={() => cycle(1)} aria-label="Next hero">
           <Icon name="next" size={26} fill="#fff" />
         </button>
       </div>
@@ -200,7 +200,7 @@ export function Lobby({ participants, onStart, onCancel }: { participants: Parti
               <div key={p.id} className={`slot-row ${on ? 'on' : ''}`}>
                 {on ? (
                   <>
-                    <Portrait id={p.character} size={38} />
+                    <Portrait id={p.character} bot={p.isBot} seat={participants.indexOf(p)} size={38} />
                     <span className="slot-name">{p.name}</span>
                     {p.isBot ? <span className="bot-badge">BOT</span> : <span className="you-badge">YOU</span>}
                     <span className="ready"><Icon name="check" size={16} /></span>

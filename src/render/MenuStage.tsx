@@ -9,8 +9,8 @@ import { CHARACTERS } from '../game/content';
 import { LAYOUTS, MOODS, OBSTACLES, selectLayout, selectMood } from '../game/arena';
 import type { CharacterId } from '../game/types';
 import { Arena, lightNow } from './Arena';
-import { OUTFIT } from './Creature';
-import { Rig, type RigDrive } from './models';
+import type { RigDrive } from './models';
+import { CrewMember } from './crew';
 
 const IDS = CHARACTERS.map((c) => c.id);
 /**
@@ -18,12 +18,12 @@ const IDS = CHARACTERS.map((c) => c.id);
  * edge, the right-hand yard, the near quay, the left-hand yard. All are outside the bay, clear of the dressing.
  */
 const SPOTS: Record<CharacterId, [number, number]> = {
-  frog: [3.2, -11.5], // Sharky, on the harbour edge by the cannons
-  cat: [19.4, -5], // Anne, by Barbarossa's chest in the right-hand yard
-  blob: [12, 11.4], // Mako, on the near quay
-  rat: [-1.8, 11.4], // Henry, between the bollards
-  duck: [-19.5, 5.2], // Barbarossa, under the palm
-  creature: [-10.2, -11.4], // Bones, by the old anchor
+  frog: [3.2, -11.5], // Ranger, on the harbour edge by the cannons
+  cat: [19.4, -5], // Barbarian, by the chest in the right-hand yard
+  blob: [12, 11.4], // Mage, on the near quay
+  rat: [-1.8, 11.4], // Knight, between the bollards
+  duck: [-19.5, 5.2], // Rogue, under the palm
+  creature: [-10.2, -11.4], // Shade, by the old anchor
 };
 /** camera distance from the pirate, eye height, and how far right of centre the pirate sits (the menu is on the left) */
 const DIST = 6.4;
@@ -56,7 +56,7 @@ function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
   }, [active]);
   return (
     <group position={[x, 0, z]} rotation={[0, Math.atan2(cam.x - x, cam.z - z), 0]}>
-      <Rig id={id} drive={drive} outfit={OUTFIT[id]} />
+      <CrewMember id={id} drive={drive} />
     </group>
   );
 }

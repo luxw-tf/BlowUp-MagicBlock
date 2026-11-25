@@ -46,7 +46,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
         <div className="results-kicker">{localWon ? 'Victory' : 'Match over'}</div>
         <div className="results-title">{localWon ? 'Last one standing' : `${winner.name} takes it`}</div>
         <div className="results-sub">
-          {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last pirate standing'} · {Math.round(s.time)}s
+          {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last one standing'} · {Math.round(s.time)}s
         </div>
 
         <div className="podium">
@@ -55,7 +55,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
               <div key={p.id} className={`step ${place[i]} ${p.id === session.localId ? 'is-local' : ''}`}>
                 <div className="step-who">
                   {i === 1 && <Icon name="crown" size={26} fill="rgba(212,174,98,0.25)" style={{ color: "#d4ae62", marginBottom: -4 }} />}
-                  <Portrait id={p.character} size={i === 1 ? 84 : 64} className="step-badge" />
+                  <Portrait id={p.character} bot={p.isBot} seat={s.players.indexOf(p)} size={i === 1 ? 84 : 64} className="step-badge" />
                   <span className="step-name">{p.name}</span>
                 </div>
                 <div className="step-block">{num[i]}</div>

@@ -5,7 +5,8 @@
  */
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useEffect, useRef } from 'react';
-import { Rig, type Outfit, type RigDrive } from './models';
+import type { RigDrive } from './models';
+import { CrewMember } from './crew';
 import * as THREE from 'three';
 import { characterDef } from '../game/content';
 import { fuseRemaining } from '../game/sim';
@@ -196,14 +197,6 @@ function Model({ id }: { id: CharacterId }) {
 }
 
 /** Each seat's wardrobe: the coat takes the seat's colour (as in the HUD), the hat or hair a colour of its own. */
-export const OUTFIT: Record<string, Outfit> = {
-  frog: { coat: '#5fbf4a', hat: '#f2e9c9', keepBody: true },
-  cat: { coat: '#f08a3c', hat: '#5a3a24' },
-  blob: { coat: '#a678ff', hat: '#2f2a3a', keepBody: true },
-  rat: { coat: '#9aa1ad', hat: '#d94a6a' },
-  duck: { coat: '#ffd23f', hat: '#2a2f45' },
-  creature: { coat: '#2f3b4f', hat: '#7cf9e0' },
-};
 
 export function Creature({ id }: { id: PlayerId }) {
   const { session, renderPos } = useGame();
@@ -217,7 +210,7 @@ export function Creature({ id }: { id: PlayerId }) {
   /** what the rigged model should be doing, set every frame below */
   const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
   const ring = characterDef(player.character).color;
-  const outfit = OUTFIT[player.character] ?? { coat: ring, hat: '#2b2a33' };
+  const seat = session.state.players.findIndex((p) => p.id === id);
 
   useEffect(
     () =>
@@ -225,7 +218,8 @@ export function Creature({ id }: { id: PlayerId }) {
         for (const e of events) {
           if ((e.type === 'transfer' && e.to === id) || (e.type === 'holderAssigned' && e.holder === id)) { anim.current.pop = 1; drive.current.hitAt = performance.now(); }
           // the tagger or thrower swings
-          if ((e.type === 'throw' && e.from === id) || (e.type === 'transfer' && e.from === id && e.method === 'tag')) drive.current.actAt = performance.now();
+          if (e.type === 'throw' && e.from === id) { drive.current.actAt = performance.now(); drive.current.actKind = 'throw'; }
+          if (e.type === 'transfer' && e.from === id && e.method === 'tag') { drive.current.actAt = performance.now(); drive.current.actKind = 'tag'; }
           if (e.type === 'elimination' && e.id === id) anim.current.launchT = 0;
           if (e.type === 'swap' && (e.a === id || e.b === id)) {
             const p = session.state.players.find((q) => q.id === id)!;
@@ -314,9 +308,10 @@ export function Creature({ id }: { id: PlayerId }) {
     drive.current.state = s.phase === 'finished' && s.winnerId === id ? 'win' : dashing ? 'dash' : speed > 0.6 ? 'run' : 'idle';
 
     if (s.phase === 'finished' && s.winnerId === id) {
-      const j = Math.abs(Math.sin(performance.now() * 0.006));
-      body.current.position.y = j * 0.8;
-      body.current.rotation.y += dt * 4;
+      // the cheer is in the animation; just turn to face the camera
+      body.current.position.set(0, 0, 0);
+      body.current.rotation.x = 0;
+      root.current.rotation.y = THREE.MathUtils.lerp(root.current.rotation.y, 0, Math.min(1, dt * 5));
     } else {
       body.current.position.set(shakeX, bob, 0);
       body.current.rotation.x = moving * 0.18 + (dashing ? 0.25 : 0);
@@ -345,7 +340,7 @@ export function Creature({ id }: { id: PlayerId }) {
     <group ref={root}>
       <group ref={body}>
         <Suspense fallback={<group scale={1.2}><Model id={player.character} /></group>}>
-          <Rig id={player.character} drive={drive} outfit={outfit} />
+          <CrewMember id={player.character} bot={player.isBot} seat={seat} drive={drive} />
         </Suspense>
       </group>
       <mesh ref={shield} position={[0, 0.6, 0]} visible={false}>
