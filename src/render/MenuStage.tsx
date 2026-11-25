@@ -1,62 +1,81 @@
 /**
- * The live backdrop behind the menus: the dock at a random time of day with the whole crew about the place, each
- * pirate at a spot of their own round the bay. Picking a pirate sweeps the camera round the dock to them (they wave).
+ * The live backdrop behind the menus: the dock at a random time of day, and the picked hero centre stage on a
+ * pedestal at the harbour edge (they wave as they pop in).
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CHARACTERS } from '../game/content';
 import { LAYOUTS, MOODS, OBSTACLES, WEATHERS, selectLayout, selectMood, selectWeather, weatherFor } from '../game/arena';
 import type { CharacterId } from '../game/types';
 import { Arena, lightNow } from './Arena';
 import type { RigDrive } from './models';
 import { CrewMember } from './crew';
 
-const IDS = CHARACTERS.map((c) => c.id);
 /**
- * Each pirate's spot on the dock, in picker order going clockwise round the bay (seen from above): the harbour
- * edge, the right-hand yard, the near quay, the left-hand yard. All are outside the bay, clear of the dressing.
+ * The lobby: one fixed, composed shot. The picked hero stands centre stage on a wooden pedestal at the harbour
+ * edge, looking back at the camera, with the sea, boats and sky behind (not whatever part of the dock they idle in).
  */
-const SPOTS: Record<CharacterId, [number, number]> = {
-  frog: [3.2, -11.5], // Ranger, on the harbour edge by the cannons
-  cat: [19.4, -5], // Barbarian, by the chest in the right-hand yard
-  blob: [12, 11.4], // Mage, on the near quay
-  rat: [-1.8, 11.4], // Knight, between the bollards
-  duck: [-19.5, 5.2], // Rogue, under the palm
-  creature: [-10.2, -11.4], // Shade, by the old anchor
-};
-/** camera distance from the pirate, eye height, and how far right of centre the pirate sits (the menu is on the left) */
-const DIST = 6.4;
-const EYE = 1.8;
-const SIDE = 1.9;
+const STAGE = new THREE.Vector3(7.2, 0, -11.2);
+/** the camera: a little below head height and back, looking slightly up so the hero stands tall */
+const CAM = new THREE.Vector3(7.2, 1.5, -4.9);
+const LOOK = new THREE.Vector3(7.2, 1.3, -11.2);
+const PEDESTAL_H = 0.42;
 
-/** θ = 0 looks north at the harbour; increasing θ turns right (clockwise from above). */
-const dir = (a: number) => new THREE.Vector3(Math.sin(a), 0, -Math.cos(a));
-const polar = (id: CharacterId) => {
-  const [x, z] = SPOTS[id];
-  return { a: Math.atan2(x, -z), r: Math.hypot(x, z) };
-};
-const camFor = (id: CharacterId) => {
-  const { a, r } = polar(id);
-  return dir(a).multiplyScalar(r - DIST).setY(EYE);
-};
+/** A round timber pedestal: planked top, a brass rim, a coil of rope round the foot. */
+function Pedestal() {
+  const wood = useMemo(() => new THREE.MeshStandardMaterial({ color: '#8a5530', roughness: 0.85 }), []);
+  const side = useMemo(() => new THREE.MeshStandardMaterial({ color: '#6b3d1f', roughness: 0.9 }), []);
+  const brass = useMemo(() => new THREE.MeshStandardMaterial({ color: '#d9a441', metalness: 0.8, roughness: 0.3 }), []);
+  const rope = useMemo(() => new THREE.MeshStandardMaterial({ color: '#c9a26b', roughness: 1 }), []);
+  return (
+    <group position={[STAGE.x, 0, STAGE.z]}>
+      <mesh position={[0, PEDESTAL_H / 2, 0]} castShadow receiveShadow material={side}>
+        <cylinderGeometry args={[1.15, 1.25, PEDESTAL_H, 40]} />
+      </mesh>
+      <mesh position={[0, PEDESTAL_H + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={wood}>
+        <circleGeometry args={[1.12, 40]} />
+      </mesh>
+      <mesh position={[0, PEDESTAL_H - 0.02, 0]} rotation={[Math.PI / 2, 0, 0]} material={brass}>
+        <torusGeometry args={[1.14, 0.045, 10, 48]} />
+      </mesh>
+      {[0.06, 0.15].map((y) => (
+        <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={rope}>
+          <torusGeometry args={[1.3, 0.055, 8, 48]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
 
-function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
+/** Which way the last switch went (the menu sets it): the next hero spins in from that side. */
+export const heroTurn = { dir: 1 };
+
+/** The picked hero on the pedestal: pops in when you switch, waves once. */
+function Hero({ id }: { id: CharacterId }) {
   const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
-  const [x, z] = SPOTS[id];
-  const cam = camFor(id);
+  const g = useRef<THREE.Group>(null);
+  const born = useRef(performance.now());
+  const spin = useRef(heroTurn.dir);
   useEffect(() => {
-    if (!active) return;
-    // one wave hello as the camera comes round to them, then back to idle (the rig plays it through)
-    const t = setTimeout(() => (drive.current.state = 'pose'), 450);
+    born.current = performance.now();
+    spin.current = heroTurn.dir;
+    const t = setTimeout(() => (drive.current.state = 'pose'), 350);
     return () => {
       clearTimeout(t);
       drive.current.state = 'idle';
     };
-  }, [active]);
+  }, [id]);
+  useFrame(() => {
+    if (!g.current) return;
+    const k = Math.min(1, (performance.now() - born.current) / 380);
+    const e = 1 - Math.pow(1 - k, 3);
+    const s = 1.15 * (0.6 + 0.4 * e + Math.sin(e * Math.PI) * 0.12);
+    g.current.scale.setScalar(s);
+    g.current.rotation.y = Math.atan2(CAM.x - STAGE.x, CAM.z - STAGE.z) + (1 - e) * 2.4 * spin.current;
+  });
   return (
-    <group position={[x, 0, z]} rotation={[0, Math.atan2(cam.x - x, cam.z - z), 0]}>
-      <CrewMember id={id} drive={drive} />
+    <group ref={g} position={[STAGE.x, PEDESTAL_H, STAGE.z]}>
+      <CrewMember key={id} id={id} drive={drive} />
     </group>
   );
 }
@@ -67,37 +86,22 @@ function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
  */
 export const titleView = { on: false };
 
-/**
- * The camera lives in polar coordinates round the middle of the bay and eases its angle and distance towards the
- * picked pirate, so moving between them sweeps round the dock (always the short way) instead of cutting across it.
- */
-function Orbit({ hero }: { hero: CharacterId }) {
+/** The lobby camera: fixed on the stage (a slow breath), or flying the title circle while the title card is up. */
+function Orbit() {
   const { camera } = useThree();
-  const cur = useRef(polar(hero));
   const look = useMemo(() => new THREE.Vector3(), []);
-  // title fly-around: how much of it is in the shot (0..1), and where it has got to
   const fly = useRef({ w: titleView.on ? 1 : 0, a: 0.5 });
   const flyPos = useMemo(() => new THREE.Vector3(), []);
   const flyLook = useMemo(() => new THREE.Vector3(), []);
   const key = useRef<THREE.SpotLight>(null);
+  const rim = useRef<THREE.SpotLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
-  // a key light that travels with the camera, so the picked pirate's face always reads (stronger after dark)
   const L = lightNow();
-  const keyI = L.sunI < 1 ? 95 : L.lamps ? 55 : 32;
+  const keyI = L.sunI < 1 ? 100 : L.lamps ? 60 : 34; // scaled by time of day, like the old key light
   useFrame(({ clock }, dt) => {
-    const g = polar(hero);
-    let goal = g.a;
-    goal += Math.round((cur.current.a - goal) / (Math.PI * 2)) * Math.PI * 2;
-    const k = 1 - Math.exp(-Math.min(dt, 0.05) * 2.4);
-    cur.current.a += (goal - cur.current.a) * k;
-    cur.current.r += (g.r - cur.current.r) * k;
     const t = clock.elapsedTime;
-    const a = cur.current.a + Math.sin(t * 0.15) * 0.02; // a slow breath while you decide
-    const f = dir(a);
-    const right = new THREE.Vector3(-f.z, 0, f.x);
-    camera.position.copy(f).multiplyScalar(cur.current.r - DIST).setY(EYE + Math.sin(t * 0.2) * 0.05);
-    look.copy(f).multiplyScalar(cur.current.r).addScaledVector(right, -SIDE).setY(1.45);
-    // the title's fly-around: a slow, high circle round the harbour, looking in over the bay and out to sea
+    camera.position.set(CAM.x + Math.sin(t * 0.15) * 0.08, CAM.y + Math.sin(t * 0.2) * 0.03, CAM.z);
+    look.copy(LOOK);
     const fl = fly.current;
     fl.w += ((titleView.on ? 1 : 0) - fl.w) * (1 - Math.exp(-Math.min(dt, 0.05) * (titleView.on ? 6 : 1.4)));
     if (fl.w > 0.001) {
@@ -105,21 +109,20 @@ function Orbit({ hero }: { hero: CharacterId }) {
       const fa = fl.a;
       flyPos.set(Math.sin(fa) * 30, 9.5 + Math.sin(t * 0.13) * 1.2, -6 + Math.cos(fa) * 26);
       flyLook.set(Math.sin(fa + 2.2) * 6, 1.5, -9 + Math.cos(fa + 2.2) * 5);
-      const w = fl.w * fl.w * (3 - 2 * fl.w); // smoothstep, so the glide down to the hero eases in and out
+      const w = fl.w * fl.w * (3 - 2 * fl.w);
       camera.position.lerp(flyPos, w);
       look.lerp(flyLook, w);
     }
     camera.lookAt(look);
-    if (key.current) {
-      key.current.position.copy(camera.position).addScaledVector(right, 1.6).setY(EYE + 2.2);
-      target.position.copy(f).multiplyScalar(cur.current.r).setY(1.1);
-      target.updateMatrixWorld();
-    }
+    target.position.set(STAGE.x, 1.2, STAGE.z);
+    target.updateMatrixWorld();
   });
   return (
     <>
       <primitive object={target} />
-      <spotLight ref={key} target={target} intensity={keyI} color="#fff1dc" angle={0.42} penumbra={0.8} distance={22} decay={1.6} />
+      {/* a spotlight on the hero from above the camera, and a warm rim from behind so they lift off the sea */}
+      <spotLight ref={key} target={target} position={[CAM.x + 1.2, 6, CAM.z + 1]} intensity={keyI} color="#fff1dc" angle={0.36} penumbra={0.7} distance={24} decay={1.4} castShadow />
+      <spotLight ref={rim} target={target} position={[STAGE.x - 2, 4.5, STAGE.z - 3.5]} intensity={keyI * 0.6} color="#ffc27a" angle={0.5} penumbra={0.9} distance={14} decay={1.5} />
     </>
   );
 }
@@ -154,17 +157,16 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
         shadows="soft"
         dpr={[1, 1.25]}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
-        camera={{ fov: 40, near: 0.3, far: 400, position: camFor(hero).toArray() }}
+        camera={{ fov: 38, near: 0.3, far: 400, position: CAM.toArray() }}
       >
         <color attach="background" args={[L.sky]} />
         <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
         <Exposure />
-        <Orbit hero={hero} />
+        <Orbit />
         <Suspense fallback={null}>
           <Arena key={mood} shadows town />
-          {IDS.map((id) => (
-            <Pirate key={id} id={id} active={id === hero} />
-          ))}
+          <Pedestal />
+          <Hero id={hero} />
         </Suspense>
       </Canvas>
     </div>

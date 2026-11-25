@@ -103,7 +103,24 @@ function identity(base: THREE.Material, color: string, recolour: boolean): THREE
   return m;
 }
 
-const BOMB_URL = modelUrl('kaykit/props/smokebomb.gltf');
+/**
+ * The game's own bomb, small and unlit, to hang on a hero's hip: black iron, a brass cap, a stub of fuse.
+ * Built in world units (radius 0.13), so the caller scales it into the rig's units.
+ */
+const HIP_IRON = new THREE.MeshStandardMaterial({ color: '#1b1d22', roughness: 0.35, metalness: 0.4 });
+const HIP_CAP = new THREE.MeshStandardMaterial({ color: '#c9973e', roughness: 0.4, metalness: 0.7 });
+const HIP_FUSE = new THREE.MeshStandardMaterial({ color: '#c9a46b', roughness: 1 });
+function hipBomb(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 14), HIP_IRON);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.06, 10), HIP_CAP);
+  cap.position.y = 0.13;
+  const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.09, 5), HIP_FUSE);
+  fuse.position.set(0.025, 0.19, 0);
+  fuse.rotation.z = -0.5;
+  for (const m of [body, cap, fuse]) { m.castShadow = true; g.add(m); }
+  return g;
+}
 
 const ANIMS = ['general', 'move', 'dodge', 'social', 'melee', 'skeleton'].map((n) => modelUrl(`kaykit/anim_${n}.glb`));
 
@@ -132,7 +149,6 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
   const src = bot ? SKELETONS[seat % SKELETONS.length] : HEROES[id];
   const gltf = useLoader(GLTFLoader, modelUrl(src));
   const anims = useLoader(GLTFLoader, ANIMS);
-  const bomb = useLoader(GLTFLoader, BOMB_URL);
 
   const rig = useMemo(() => {
     const scene = skeletonClone(gltf.scene);
@@ -174,13 +190,12 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       hull.frustumCulled = false;
       m.parent?.add(hull);
     }
-    // every hero carries a smoke bomb on the hip: on theme, and theirs alone
+    // every hero carries one of the game's own bombs on the hip: on theme, and theirs alone
     if (!bot) {
       const hips = scene.getObjectByName('hips');
       if (hips) {
-        const b = bomb.scene.clone(true);
-        b.traverse((o) => { const mm = o as THREE.Mesh; if (mm.isMesh) mm.castShadow = true; });
-        b.position.set(0.32, 0.04, 0.2); b.rotation.set(0.25, 0.6, -0.3); b.scale.setScalar(1.25);
+        const b = hipBomb();
+        b.position.set(0.32, 0.04, 0.2); b.rotation.set(0.15, 0.6, -0.25); b.scale.setScalar(1 / k);
         hips.add(b);
       }
     }
@@ -197,7 +212,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
     }
     const dur = (m: Move) => (actions.get(m)?.getClip().duration ?? 1) * 1000;
     return { scene, k, minY: box.min.y, mixer, actions, dur, stride: build.stride, current: null as Move | null, hitUntil: 0, actUntil: 0, actKind: 'throw' as 'throw' | 'tag', helloUntil: 0, helloOn: false };
-  }, [gltf, anims, bomb, bot, tint]);
+  }, [gltf, anims, bot, tint]);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);

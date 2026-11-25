@@ -6,7 +6,7 @@ import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
-import { titleView } from '../render/MenuStage';
+import { heroTurn, titleView } from '../render/MenuStage';
 
 
 /** The title sign: carved driftwood letters with the bomb as the O, its fuse spark animated. */
@@ -92,6 +92,7 @@ export function Landing({
   const clean = name.trim().slice(0, 18);
   const idx = CHARACTERS.findIndex((c) => c.id === character);
   const cycle = (d: number) => {
+    heroTurn.dir = d < 0 ? -1 : 1; // the left arrow spins the hero in the other way
     const next = CHARACTERS[(idx + d + CHARACTERS.length) % CHARACTERS.length].id;
     setCharacter(next);
     onCharacter(next);
@@ -114,6 +115,8 @@ export function Landing({
     fn({ name: clean, character });
   };
   const hero = characterDef(character);
+  const [mode, setMode] = useState<'bots' | 'online' | 'private'>('bots');
+  const [howOpen, setHowOpen] = useState(false);
 
   if (title)
     return (
@@ -127,78 +130,92 @@ export function Landing({
       </div>
     );
 
+  const MODES = [
+    { id: 'bots', label: 'Bots', sub: 'vs bots', go: onPlay },
+    { id: 'online', label: 'Online', sub: 'online match', go: onPlayOnline },
+    { id: 'private', label: 'Private', sub: 'with friends', go: onPrivateRoom },
+  ] as const;
+  const current = MODES.find((m) => m.id === mode) ?? MODES[0];
+
   return (
-    <div className="screen landing menu-in">
-      <div className="menu-shade" />
+    <div className="screen landing lobby-menu menu-in">
+      <div className="menu-vignette" aria-hidden />
 
-      <label className="name-chip" title="Your name">
-        <Portrait id={hero.id} size={34} />
-        <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} spellCheck={false} aria-label="Your name" />
-        <Icon name="pencil" size={18} />
-      </label>
+      <div className="lobby-top">
+        <Wordmark className="lobby-logo" />
+      </div>
 
-      <div className="menu-left">
-        <Wordmark />
-        <p className="tagline">Pass the bomb. Nobody knows how long the fuse is.</p>
+      <button className="picker-arrow prev hero-prev" onClick={() => cycle(-1)} aria-label="Previous hero" />
+      <button className="picker-arrow next hero-next" onClick={() => cycle(1)} aria-label="Next hero" />
 
-        <nav className="menu-list">
-          {onRejoin && (
-            <button className="mbtn hot" onClick={onRejoin}>
-              Rejoin match
-            </button>
-          )}
-          {pendingRoom && (
-            <button className="mbtn hot" onClick={go(onPrivateRoom)} disabled={!clean}>
-              Join room {pendingRoom}
-            </button>
-          )}
-          <button className="mbtn primary" onClick={go(onPlay)} disabled={!clean} autoFocus>
-            Play
-            <small>vs bots</small>
+      <div className="hero-plaque" key={hero.id}>
+        <span>{hero.name}</span>
+      </div>
+
+      <div className="hero-row" role="radiogroup" aria-label="Hero">
+        {CHARACTERS.map((c) => (
+          <button
+            key={c.id}
+            className={`hero-chip ${c.id === character ? 'on' : ''}`}
+            style={{ '--c': c.color } as React.CSSProperties}
+            onClick={() => {
+              heroTurn.dir = CHARACTERS.findIndex((x) => x.id === c.id) < idx ? -1 : 1;
+              setCharacter(c.id);
+              onCharacter(c.id);
+            }}
+            role="radio"
+            aria-checked={c.id === character}
+            aria-label={c.name}
+          >
+            <Portrait id={c.id} size={50} />
           </button>
-          <button className="mbtn" onClick={go(onPlayOnline)} disabled={!clean} title="A live match on a MagicBlock rollup (Solana devnet)">
-            Online
-            <small>devnet</small>
-          </button>
-          {!pendingRoom && (
-            <button className="mbtn" onClick={go(onPrivateRoom)} disabled={!clean}>
-              Private room
-              <small>with friends</small>
-            </button>
-          )}
-        </nav>
+        ))}
+      </div>
+
+      <div className="play-dock">
         {notice && <p className="verify-status warn">{notice}</p>}
-      </div>
-
-      <div className="picker" style={{ '--c': hero.color } as React.CSSProperties}>
-        <button className="picker-arrow prev" onClick={() => cycle(-1)} aria-label="Previous hero" />
-        <div className="picker-mid">
-          <div className="picker-name" key={hero.id}>{hero.name}</div>
-          <div className="picker-dots">
-            {CHARACTERS.map((c) => (
-              <button
-                key={c.id}
-                className={c.id === character ? 'on' : ''}
-                style={{ background: c.color }}
-                onClick={() => {
-                  setCharacter(c.id);
-                  onCharacter(c.id);
-                }}
-                aria-label={c.name}
-              />
-            ))}
-          </div>
+        {onRejoin && (
+          <button className="btn danger" onClick={onRejoin}>
+            Rejoin match
+          </button>
+        )}
+        {pendingRoom && (
+          <button className="btn danger" onClick={go(onPrivateRoom)} disabled={!clean}>
+            Join room {pendingRoom}
+          </button>
+        )}
+        <label className="play-name" title="Your name">
+          <span>Playing as</span>
+          <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} spellCheck={false} aria-label="Your name" />
+          <Icon name="pencil" size={16} />
+        </label>
+        <div className="mode-switch" role="tablist" aria-label="Mode">
+          {MODES.map((m) => (
+            <button key={m.id} role="tab" aria-selected={m.id === mode} className={m.id === mode ? 'on' : ''} onClick={() => setMode(m.id)}>
+              {m.label}
+            </button>
+          ))}
         </div>
-        <button className="picker-arrow next" onClick={() => cycle(1)} aria-label="Next hero" />
+        <button className="play-btn" onClick={go(current.go)} disabled={!clean} autoFocus>
+          Play
+          <small>{current.sub}</small>
+        </button>
       </div>
 
-      <div className="how">
-        <span><kbd>WASD</kbd> move</span>
-        <span><kbd>Left click</kbd> throw</span>
-        <span><kbd>Right click</kbd> tag</span>
-        <span><kbd>Space</kbd> dash</span>
-        <span><kbd>E</kbd> item</span>
-        <span className="how-free">No wallet needed. Same stats for everyone.</span>
+      <div className={`how ${howOpen ? 'open' : ''}`}>
+        <button className="btn plank how-btn" onClick={() => setHowOpen((v) => !v)}>
+          How to play
+        </button>
+        {howOpen && (
+          <div className="how-card">
+            <p>Pass the bomb before it blows. Nobody knows how long the fuse is.</p>
+            <span><kbd>WASD</kbd> move</span>
+            <span><kbd>Left click</kbd> throw</span>
+            <span><kbd>Right click</kbd> tag</span>
+            <span><kbd>Space</kbd> dash</span>
+            <span><kbd>E</kbd> item</span>
+          </div>
+        )}
       </div>
     </div>
   );
