@@ -33,7 +33,9 @@ Key rules implemented as specified:
 - Inputs carry sequence numbers. Stale or duplicate frames are rejected, and move vectors are clamped.
 - Transfer protection (0.35s) blocks tag-backs. Return to Sender ignores it, since it is an explicit reflection.
 
-## Phase 00 — MagicBlock feasibility (in progress, not yet compiled)
+## Phase 00 — MagicBlock feasibility (in progress)
+
+Deployed to **devnet**: program `915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob` (IDL committed at `chain/idl/blowup.json`).
 
 ```
 programs/blowup/       Anchor 1.0.2 program, ephemeral-rollups-sdk =0.18.0 (anchor + vrf features)

@@ -51,7 +51,7 @@ function loadOrCreateKeypair(path: string): Keypair {
   return kp;
 }
 
-const idlPath = join(ROOT, 'target/idl/blowup.json');
+const idlPath = [join(ROOT, 'target/idl/blowup.json'), join(ROOT, 'chain/idl/blowup.json')].find(existsSync) ?? 'target/idl/blowup.json';
 if (!existsSync(idlPath)) throw new Error(`IDL not found at ${idlPath} — run \`anchor build\` first`);
 const idl = JSON.parse(readFileSync(idlPath, 'utf8')) as anchor.Idl;
 const PROGRAM_ID = new PublicKey((idl as { address: string }).address);
