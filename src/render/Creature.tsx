@@ -199,7 +199,8 @@ function Model({ id }: { id: CharacterId }) {
 /** Each seat's wardrobe: the coat takes the seat's colour (as in the HUD), the hat or hair a colour of its own. */
 
 export function Creature({ id }: { id: PlayerId }) {
-  const { session, renderPos } = useGame();
+  const { session, renderPos, focus } = useGame();
+  const marker = useRef<THREE.Mesh>(null);
   const player = session.state.players.find((p) => p.id === id)!;
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
@@ -234,6 +235,12 @@ export function Creature({ id }: { id: PlayerId }) {
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
     const s = session.state;
+    if (marker.current) {
+      const me = s.players.find((q) => q.id === session.localId);
+      const on = !!me && !me.alive && s.phase !== 'finished' && focus.id === id && !focus.overview;
+      marker.current.visible = on;
+      if (on) marker.current.scale.setScalar(1 + Math.sin(performance.now() * 0.006) * 0.08);
+    }
     const p = s.players.find((q) => q.id === id)!;
     const a = anim.current;
     if (!root.current || !body.current) return;
@@ -352,6 +359,11 @@ export function Creature({ id }: { id: PlayerId }) {
         <meshBasicMaterial color="#ffb347" transparent opacity={0.8} />
       </mesh>
       {/* the player's colour, as a ring on the ground, so every pirate reads as its seat from above */}
+      {/* while spectating: a slow pulse under whoever the camera is following */}
+      <mesh ref={marker} position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+        <ringGeometry args={[0.78, 0.9, 40]} />
+        <meshBasicMaterial color="#f0d391" transparent opacity={0.8} depthWrite={false} />
+      </mesh>
       <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.5, 0.64, 32]} />
         <meshBasicMaterial color={ring} transparent opacity={0.9} depthWrite={false} />

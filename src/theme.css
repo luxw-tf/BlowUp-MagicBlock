@@ -1102,3 +1102,28 @@ kbd {
   font-size: 0.76rem;
   margin-top: 2px;
 }
+
+.spectating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+  justify-content: center;
+}
+.spectating small {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.spectator-bar .spectate-mode {
+  width: auto;
+  height: auto;
+  padding: 5px 10px;
+  border-radius: 2px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

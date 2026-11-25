@@ -88,6 +88,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
       if (me && !me.alive && session.state.phase !== 'finished' && (e.code === 'ArrowRight' || e.code === 'ArrowLeft' || e.code === 'KeyD' || e.code === 'KeyA')) {
         cycleSpectate(e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : -1);
       }
+      if (me && !me.alive && session.state.phase !== 'finished' && e.code === 'Space') {
+        e.preventDefault();
+        toggleOverview();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -99,6 +103,11 @@ export function GameView({ session, onRematch, onMenu }: Props) {
     if (!alive.length) return;
     const i = alive.findIndex((p) => p.id === ctx.focus.id);
     ctx.focus.id = alive[(i + dir + alive.length) % alive.length].id;
+    ctx.focus.overview = false; // picking someone means you want to watch them
+    force((n) => n + 1);
+  };
+  const toggleOverview = () => {
+    ctx.focus.overview = !ctx.focus.overview;
     force((n) => n + 1);
   };
 
@@ -293,10 +302,15 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         {spectating && (
           <div className="spectator-bar">
             <button onClick={() => cycleSpectate(-1)} aria-label="Previous player"><Icon name="prev" size={16} fill="#f6efe1" /></button>
-            <span>
-              spectating <Name s={session.state} id={ctx.focus.id} />
+            <span className="spectating">
+              <small>{ctx.focus.overview ? 'Overview' : 'Following'}</small>
+              <Name s={session.state} id={ctx.focus.id} />
+              {session.state.bomb.holderId === ctx.focus.id && <Icon name="bomb" size={16} title="Holding the bomb" />}
             </span>
             <button onClick={() => cycleSpectate(1)} aria-label="Next player"><Icon name="next" size={16} fill="#f6efe1" /></button>
+            <button className="spectate-mode" onClick={toggleOverview} title="Space">
+              {ctx.focus.overview ? 'Follow' : 'Overview'}
+            </button>
           </div>
         )}
 

@@ -25,7 +25,7 @@ const CAM_DIST = VIEW_HEIGHT / 2 / Math.tan((FOV * Math.PI) / 360);
 function CameraRig() {
   const { camera, size } = useThree();
   const { session, input, focus, renderPos, shake } = useGame();
-  const state = useRef({ x: 0, bob: 0 });
+  const state = useRef({ x: 0, bob: 0, z: -2.6, zoom: 0 });
   const ray = useMemo(() => new THREE.Raycaster(), []);
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const hit = useMemo(() => new THREE.Vector3(), []);
@@ -41,14 +41,21 @@ function CameraRig() {
 
     const f = renderPos.get(focus.id) ?? getPlayer(session.state, focus.id)?.pos ?? { x: 0, z: 0 };
     const st = state.current;
-    const dead = Math.min(2.2, halfW * 0.18);
+    // spectating: glide in on whoever you're following (both axes), or stay wide in overview
+    const me = getPlayer(session.state, session.localId);
+    const spectating = !!me && !me.alive && session.state.phase !== 'finished' && !focus.overview;
+    st.zoom += ((spectating ? 1 : 0) - st.zoom) * (1 - Math.exp(-3 * dt));
+    const dead = Math.min(2.2, halfW * 0.18) * (1 - st.zoom);
     let goal = st.x;
     if (f.x > st.x + dead) goal = f.x - dead;
     if (f.x < st.x - dead) goal = f.x + dead;
     const margin = 1.6;
-    const maxX = Math.max(0, ARENA.halfWidth + margin - halfW);
+    const viewHalfW = halfW * (1 - 0.45 * st.zoom);
+    const maxX = Math.max(0, ARENA.halfWidth + margin - viewHalfW);
     goal = THREE.MathUtils.clamp(goal, -maxX, maxX);
     st.x += (goal - st.x) * (1 - Math.exp(-5 * dt));
+    const zGoal = THREE.MathUtils.lerp(-2.6, THREE.MathUtils.clamp(f.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2), st.zoom);
+    st.z += (zGoal - st.z) * (1 - Math.exp(-5 * dt));
 
     shake.amount = Math.max(0, shake.amount - dt * 2.5);
     const sMul = getSettings().reducedShake ? 0.2 : 1;
@@ -58,8 +65,10 @@ function CameraRig() {
     // a slow, tiny drift so the harbour never looks frozen (kept well under a degree)
     const drift = getSettings().reducedShake ? 0 : Math.sin(clock.elapsedTime * 0.25) * 0.18;
 
-    const tz = -2.6; // aim a little toward the sea, so the quay and harbour show along the top of the screen
-    cam.position.set(st.x + ox + drift, Math.sin(ELEVATION) * CAM_DIST + oy, tz + Math.cos(ELEVATION) * CAM_DIST);
+    // normally aim a little toward the sea, so the quay and harbour show along the top; spectating aims at the player
+    const tz = st.z;
+    const dist = CAM_DIST * (1 - 0.45 * st.zoom);
+    cam.position.set(st.x + ox + drift, Math.sin(ELEVATION) * dist + oy, tz + Math.cos(ELEVATION) * dist);
     cam.lookAt(st.x + ox, oy, tz);
     cam.updateProjectionMatrix();
 

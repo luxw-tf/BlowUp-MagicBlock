@@ -6,8 +6,11 @@ import type { PlayerId } from '../game/types';
 export interface GameCtx {
   session: SessionLike;
   input: InputController;
-  /** Who the camera follows (local player, or a survivor while spectating). */
-  focus: { id: PlayerId };
+  /**
+   * Who the camera follows (local player, or a survivor while spectating). While spectating the camera moves in on
+   * them, unless `overview` is set (the whole yard).
+   */
+  focus: { id: PlayerId; overview?: boolean };
   /** Shared smoothed render positions, written by creatures each frame. */
   renderPos: Map<PlayerId, { x: number; z: number }>;
   shake: { amount: number };
