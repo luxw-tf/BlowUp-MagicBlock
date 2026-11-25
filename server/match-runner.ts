@@ -310,8 +310,11 @@ export class MatchRunner {
     if (m.phase === PHASE.ACTIVE && m.holder !== 255 && clock.now() >= deadline - 2 && nowMs - this.lastCrankAt > 150) {
       this.lastCrankAt = nowMs;
       const slotMs = m.slotMs;
+      const sentLag = (clock.now() - deadline) * slotMs;
       void this.er_([this.ix.eliminate(this.authority.publicKey, this.match)], this.authority).then((r) => {
-        if (r && !r.err) this.crankLagMs.push(Math.max(0, (this.clock!.now() - deadline) * slotMs));
+        const lag = (this.clock!.now() - deadline) * slotMs;
+        if (process.env.CRANK_DEBUG) this.log(`crank sent @${Math.round(sentLag)}ms → ${r?.err ?? 'ok'} after ${Math.round(r?.ms ?? -1)}ms (now @${Math.round(lag)}ms)`);
+        if (r && !r.err) this.crankLagMs.push(Math.max(0, lag));
       });
     }
     // Bounded pending randomness.
