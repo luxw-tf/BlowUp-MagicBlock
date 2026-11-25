@@ -1,10 +1,11 @@
 # BlowUp (working title)
 
-Browser party game from `BlowUp-PRD-v0.1.docx`: six creatures, one bomb, a randomized public fuse. This build covers **PRD Phase 01 (playable foundation)** and most of **Phase 02 (gameplay depth)** as a local match: one human + five bots.
+Browser party game from `BlowUp-PRD-v0.1.docx`: six creatures, one bomb, a randomized public fuse. This build covers **PRD Phase 01 (playable foundation)**, most of **Phase 02 (gameplay depth)** offline, **Phase 00 (MagicBlock feasibility)**, and **Phase 03 milestone 1: playing online against on-chain bots**.
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173  (add ?quick to skip menus)
+npm run server     # lobby service for "Play online" (needs .keys/authority.json with devnet SOL)
 npm test           # simulation unit tests + full bot-match runs
 npm run build
 ```
@@ -65,11 +66,44 @@ cd chain && npm install && npm run feasibility    # then: npx tsx verify-draws.t
 ```
 Keys (`.keys/authority.json` = upgrade authority, `.keys/blowup-program.json` = program keypair backup) are gitignored. Don't lose them, or the program can't be upgraded.
 
+## Phase 03 — online play (milestone 1: one human vs on-chain bots)
+
+**Play online (devnet)** on the landing page runs a real match on a MagicBlock Ephemeral Rollup. No wallet and no SOL are needed:
+
+```
+server/                lobby service (local Node): sponsored setup, bots, elimination crank, settlement
+  index.ts             POST /api/quickplay, GET /api/matches/:id   (Vite proxies /api in dev)
+  match-runner.ts      one match end to end; bots = BotBrain over a ChainMirror, acting via transactions
+src/chain/
+  program.ts           shared program client: PDAs, decoding, instruction builders, watchAccount, SlotClock
+  mirror.ts            on-chain accounts → the client's MatchState + derived game events
+  online-session.ts    browser session: predicted own movement, mirrored others, tag/throw → transfer
+src/ui/OnlineLobby.tsx join flow (shows the real setup steps)
+```
+
+How a match flows:
+1. The lobby creates and joins the match for the guest's identity and session keys plus 5 bot keys.
+2. It delegates the accounts to the closest ER and starts the match, which draws the holder by VRF.
+3. Clients and bots stream absolute positions at 10 Hz. Passes are `transfer` transactions, range-checked on-chain.
+4. The lobby cranks each elimination as soon as the fuse slot passes (~0.2 s measured).
+5. The lobby finalizes (commit + undelegate) and records `MatchResult` on Solana. The match-details panel links it.
+
+Verified on devnet in a headless browser:
+- lobby → live match → 5 VRF rounds → results → settled
+- server-only matches with 15–19 bot transfers
+
+Known gaps in this milestone:
+- No pickups/abilities online (offline only for now).
+- One human per match. Quick play with several humans and private rooms are milestone 2.
+- Other players' throws aren't animated; you see the pass land.
+- Bots run on the lobby, so the lobby must stay up for a match to finish. If it dies mid-match, `abort_match` and the 8-minute timeout are the only recovery.
+- The lobby holds the devnet authority key locally (`.keys/`). Public hosting needs a proper key store.
+
 ## Not done yet / next steps
 
-- **Phase 03 (live multiplayer)**: connect the browser client to the deployed program. The game client still uses `LocalDevRandomness`, and its match-details panel says results are **not verifiable**. Swap in an ER-backed session plus VRF-backed randomness. Design around the measured latency (see findings).
-- On-chain gaps: throw line-of-sight/obstacles, pickups and abilities, disconnect/bot takeover.
-- Live multiplayer, private rooms, reconnect/bot takeover. The lobby always fills with bots.
+- **Phase 03 milestone 2**: several humans per match (quick-play queue with bot fill after a window), private rooms with codes, disconnect → bot takeover and reconnect.
+- On-chain gaps: throw line-of-sight/obstacles, pickups and abilities.
+- Offline matches still use `LocalDevRandomness` (labelled not verifiable); online matches use MagicBlock VRF.
 - Final art/audio: creatures and the dock are primitive blockouts, and the sound is synthesized.
 - Balance: bot-only matches currently last ~1–2 min (PRD target 2–4 min with humans). Tune in `config.ts`.
 - Camera: the PRD asks for the full arena depth on screen at 50° *and* 60–70% visible width. With an orthographic camera those conflict at 16:9, so full depth wins (~80% width visible). `VIEW_HEIGHT` in `render/Scene.tsx` controls this.
