@@ -1,0 +1,185 @@
+{
+  "startedAt": "2026-11-25T17:19:08.080Z",
+  "solanaRpc": "https://rpc.magicblock.app/devnet",
+  "router": "https://devnet-router.magicblock.app",
+  "programId": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob",
+  "players": 6,
+  "checks": [
+    {
+      "name": "delegation visible via router",
+      "pass": true,
+      "detail": "167ms after confirmation"
+    },
+    {
+      "name": "unfunded guest key can pay its own ER transactions",
+      "pass": true,
+      "detail": "249ms"
+    },
+    {
+      "name": "ER input confirmation p95 < 100ms (PRD target)",
+      "pass": false,
+      "detail": "{\"n\":568,\"p50\":242,\"p95\":518,\"p99\":744,\"max\":783}"
+    },
+    {
+      "name": "no input errors other than reordering",
+      "pass": true,
+      "detail": "0 unexpected {\"StaleSequence\":32}"
+    },
+    {
+      "name": "rejects duplicate sequence",
+      "pass": true,
+      "detail": "got StaleSequence"
+    },
+    {
+      "name": "rejects teleport after idling",
+      "pass": true,
+      "detail": "got ImpossibleMovement"
+    },
+    {
+      "name": "rejects out of bounds",
+      "pass": true,
+      "detail": "got OutOfBounds"
+    },
+    {
+      "name": "rejects foreign signer",
+      "pass": true,
+      "detail": "got NotSessionKey"
+    },
+    {
+      "name": "rejects expired session",
+      "pass": true,
+      "detail": "got SessionExpired"
+    },
+    {
+      "name": "guest renews its own session",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "renewed session accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "rejects transfer by non-holder",
+      "pass": true,
+      "detail": "got NotHolder"
+    },
+    {
+      "name": "immediate tag-back rejected",
+      "pass": true,
+      "detail": "got TargetProtected"
+    },
+    {
+      "name": "rejects transfer after fuse expiry (expiration precedence)",
+      "pass": true,
+      "detail": "got FuseExpired"
+    },
+    {
+      "name": "match finished with a winner",
+      "pass": true,
+      "detail": "winner index 5"
+    },
+    {
+      "name": "match undelegated back to program on Solana",
+      "pass": true,
+      "detail": "2628ms"
+    },
+    {
+      "name": "result recorded on Solana",
+      "pass": true,
+      "detail": "4v8utTgywA1oQAoWB4Z7GSM8XUMCnoY85hTPuAxQuDxs5etGK33UZ5NvgV6TpPowe4UNtddNkpba6GLAifDxGAGR"
+    },
+    {
+      "name": "on-chain winner matches ER state",
+      "pass": true,
+      "detail": "32wpm6v7UkEQoNZ6Z2QZku63azn1w68uie1TDpymVV5d"
+    },
+    {
+      "name": "settlement is idempotent (second record rejected)",
+      "pass": true,
+      "detail": "Custom(0)"
+    }
+  ],
+  "validator": {
+    "identity": "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57",
+    "fqdn": "https://devnet-as.magicblock.app/",
+    "nominalBlockTimeMs": 10
+  },
+  "match": {
+    "id": "1795627149411",
+    "pda": "HNwGysSfTpqLy9wfoGMw6mkuatB4mGTtKGErzwHH6gLg"
+  },
+  "baseSetupMs": 2101,
+  "delegation": {
+    "baseConfirmMs": 3802,
+    "routerVisibleMs": 167
+  },
+  "erVersion": {
+    "core": "2.0.5",
+    "solana-core": "4.2.2",
+    "feature-set": 565236538,
+    "git-commit": "380360a"
+  },
+  "sponsorship": {
+    "unfundedGuestCanPay": true
+  },
+  "inputs": {
+    "sent": 600,
+    "errors": 32,
+    "errorReasons": {
+      "StaleSequence": 32
+    },
+    "confirm": {
+      "n": 568,
+      "p50": 242,
+      "p95": 518,
+      "p99": 744,
+      "max": 783
+    },
+    "subscriptionVisible": {
+      "n": 96,
+      "p50": 154,
+      "p95": 187,
+      "p99": 260,
+      "max": 260
+    },
+    "reorderedDroppedPct": 5.3
+  },
+  "slotTiming": {
+    "nominalMs": 10,
+    "measuredMs": 10
+  },
+  "erClockSkewS": -52,
+  "vrf": {
+    "holder": {
+      "n": 5,
+      "p50": 816,
+      "p95": 1372,
+      "p99": 1372,
+      "max": 1372
+    },
+    "fuse": {
+      "n": 9,
+      "p50": 532,
+      "p95": 1836,
+      "p99": 1836,
+      "max": 1836
+    },
+    "retries": 0
+  },
+  "settlement": {
+    "finalizeToBaseMs": 2628,
+    "commitSig": "58RgUtARfMwxrZuZjgZPpmdRy7Y6sMi4mbn6pmFvZhuSHMQhYHgM2vUDc4AcKuHYK8RM3TvsiJUQNS4jvqAeD74k",
+    "resultPda": "C5WTht1UasDrE5Rsftpz4tTBByPmJ9gHj4QH6ucYCTrA",
+    "placements": [
+      4,
+      3,
+      6,
+      2,
+      5,
+      1
+    ]
+  },
+  "finishedAt": "2026-11-25T17:22:07.743Z"
+}
