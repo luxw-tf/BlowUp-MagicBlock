@@ -828,6 +828,11 @@ export function Arena({ shadows }: { shadows: boolean }) {
         <planeGeometry args={[90, 32.6]} />
         <meshStandardMaterial map={quayTex} roughness={0.95} />
       </mesh>
+      {/* the ground the town stands on, behind the near quay */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 32]} receiveShadow>
+        <planeGeometry args={[90, 26]} />
+        <meshStandardMaterial map={quayTex} roughness={0.95} />
+      </mesh>
       {/* quay wall face down to the water, its lip painted in hazard stripes */}
       <mesh position={[0, -0.5, QUAY_Z - 0.05]} receiveShadow>
         <boxGeometry args={[90, 1, 0.3]} />
@@ -930,6 +935,13 @@ export function Arena({ shadows }: { shadows: boolean }) {
         <Prop src={MODEL.anchor} position={[-11.2, 0, -12.3]} size={1.6} rotation={0.2} />
         <Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} />
         <Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} />
+        {/* the harbour town behind the near quay: only the menu's camera ever turns round to see it */}
+        {([[-27, 2, 0.1], [-14.5, 0, -0.05], [-4, 1, 0], [3.5, 2, 0.06], [16, 0, 0.04], [27.5, 1, -0.1]] as const).map(([x, k, r], i) => (
+          <Prop key={`h${i}`} src={MODEL.house[k]} position={[x, 0, 25.5 + (i % 2) * 1.2]} rotation={Math.PI + r} />
+        ))}
+        <Prop src={MODEL.palm3} position={[-8.6, 0, 22.4]} size={4} rotation={0.5} />
+        <Prop src={MODEL.palm1} position={[10.2, 0, 22.8]} size={4.4} rotation={2.1} />
+        <Prop src={MODEL.palm2} position={[22, 0, 22]} size={4} rotation={1.2} />
         <Prop src={MODEL.rock} position={[-29, -0.5, -13.4]} size={3} />
         <Prop src={MODEL.rock} position={[30, -0.5, -13.6]} size={3.4} rotation={2} />
       </Suspense>
@@ -966,7 +978,7 @@ export function Arena({ shadows }: { shadows: boolean }) {
       <Plant position={[20.4, 0, -0.6]} s={1.1} seed={1} />
       <Plant position={[-20.2, 0, -2.8]} seed={2} />
       <Plant position={[19.8, 0, -9.6]} s={0.9} seed={3} />
-      <Plant position={[-3.4, 0, 11.6]} s={0.8} seed={4} />
+      <Plant position={[-6.4, 0, 11.9]} s={0.8} seed={4} />
       <Plant position={[10.8, 0, -11.6]} s={0.8} seed={5} />
     </group>
   );

@@ -1,0 +1,147 @@
+/**
+ * The live backdrop behind the menus: the dock at a random time of day with the whole crew about the place, each
+ * pirate at a spot of their own round the bay. Picking a pirate sweeps the camera round the dock to them (they wave).
+ */
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { CHARACTERS } from '../game/content';
+import { LAYOUTS, MOODS, OBSTACLES, selectLayout, selectMood } from '../game/arena';
+import type { CharacterId } from '../game/types';
+import { Arena, lightNow } from './Arena';
+import { OUTFIT } from './Creature';
+import { Rig, type RigDrive } from './models';
+
+const IDS = CHARACTERS.map((c) => c.id);
+/**
+ * Each pirate's spot on the dock, in picker order going clockwise round the bay (seen from above): the harbour
+ * edge, the right-hand yard, the near quay, the left-hand yard. All are outside the bay, clear of the dressing.
+ */
+const SPOTS: Record<CharacterId, [number, number]> = {
+  frog: [3.2, -11.5], // Sharky, on the harbour edge by the cannons
+  cat: [19.4, -5], // Anne, by Barbarossa's chest in the right-hand yard
+  blob: [12, 11.4], // Mako, on the near quay
+  rat: [-1.8, 11.4], // Henry, between the bollards
+  duck: [-19.5, 5.2], // Barbarossa, under the palm
+  creature: [-10.2, -11.4], // Bones, by the old anchor
+};
+/** camera distance from the pirate, eye height, and how far right of centre the pirate sits (the menu is on the left) */
+const DIST = 6.4;
+const EYE = 1.8;
+const SIDE = 1.9;
+
+/** θ = 0 looks north at the harbour; increasing θ turns right (clockwise from above). */
+const dir = (a: number) => new THREE.Vector3(Math.sin(a), 0, -Math.cos(a));
+const polar = (id: CharacterId) => {
+  const [x, z] = SPOTS[id];
+  return { a: Math.atan2(x, -z), r: Math.hypot(x, z) };
+};
+const camFor = (id: CharacterId) => {
+  const { a, r } = polar(id);
+  return dir(a).multiplyScalar(r - DIST).setY(EYE);
+};
+
+function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
+  const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
+  const [x, z] = SPOTS[id];
+  const cam = camFor(id);
+  useEffect(() => {
+    if (!active) return;
+    // wave as the camera comes round to them
+    const t1 = setTimeout(() => (drive.current.state = 'win'), 500);
+    const t2 = setTimeout(() => (drive.current.state = 'idle'), 2700);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      drive.current.state = 'idle';
+    };
+  }, [active]);
+  return (
+    <group position={[x, 0, z]} rotation={[0, Math.atan2(cam.x - x, cam.z - z), 0]}>
+      <Rig id={id} drive={drive} outfit={OUTFIT[id]} />
+    </group>
+  );
+}
+
+/**
+ * The camera lives in polar coordinates round the middle of the bay and eases its angle and distance towards the
+ * picked pirate, so moving between them sweeps round the dock (always the short way) instead of cutting across it.
+ */
+function Orbit({ hero }: { hero: CharacterId }) {
+  const { camera } = useThree();
+  const cur = useRef(polar(hero));
+  const look = useMemo(() => new THREE.Vector3(), []);
+  const key = useRef<THREE.SpotLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+  // a key light that travels with the camera, so the picked pirate's face always reads (stronger after dark)
+  const L = lightNow();
+  const keyI = L.sunI < 1 ? 95 : L.lamps ? 55 : 32;
+  useFrame(({ clock }, dt) => {
+    const g = polar(hero);
+    let goal = g.a;
+    goal += Math.round((cur.current.a - goal) / (Math.PI * 2)) * Math.PI * 2;
+    const k = 1 - Math.exp(-Math.min(dt, 0.05) * 2.4);
+    cur.current.a += (goal - cur.current.a) * k;
+    cur.current.r += (g.r - cur.current.r) * k;
+    const t = clock.elapsedTime;
+    const a = cur.current.a + Math.sin(t * 0.15) * 0.02; // a slow breath while you decide
+    const f = dir(a);
+    const right = new THREE.Vector3(-f.z, 0, f.x);
+    camera.position.copy(f).multiplyScalar(cur.current.r - DIST).setY(EYE + Math.sin(t * 0.2) * 0.05);
+    look.copy(f).multiplyScalar(cur.current.r).addScaledVector(right, -SIDE).setY(1.45);
+    camera.lookAt(look);
+    if (key.current) {
+      key.current.position.copy(camera.position).addScaledVector(right, 1.6).setY(EYE + 2.2);
+      target.position.copy(f).multiplyScalar(cur.current.r).setY(1.1);
+      target.updateMatrixWorld();
+    }
+  });
+  return (
+    <>
+      <primitive object={target} />
+      <spotLight ref={key} target={target} intensity={keyI} color="#fff1dc" angle={0.42} penumbra={0.8} distance={22} decay={1.6} />
+    </>
+  );
+}
+
+function Exposure() {
+  const { gl } = useThree();
+  const L = lightNow();
+  useEffect(() => {
+    gl.toneMappingExposure = L.exposure;
+  }, [gl, L.exposure]);
+  return null;
+}
+
+export function MenuStage({ hero }: { hero: CharacterId }) {
+  // a fresh time of day each visit; the bay is cleared so the camera's sweep never clips a container
+  const mood = useMemo(() => {
+    selectLayout(Math.floor(Math.random() * LAYOUTS.length));
+    OBSTACLES.splice(0, OBSTACLES.length); // a match picks its own layout again when it starts
+    const pinned = MOODS.indexOf(new URLSearchParams(location.search).get('mood') as (typeof MOODS)[number]); // ?mood=night
+    return selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
+  }, []);
+  const L = lightNow();
+
+  return (
+    <div className="menu-stage" aria-hidden>
+      <Canvas
+        shadows="soft"
+        dpr={[1, 1.5]}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
+        camera={{ fov: 40, near: 0.3, far: 400, position: camFor(hero).toArray() }}
+      >
+        <color attach="background" args={[L.sky]} />
+        <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
+        <Exposure />
+        <Orbit hero={hero} />
+        <Suspense fallback={null}>
+          <Arena key={mood} shadows />
+          {IDS.map((id) => (
+            <Pirate key={id} id={id} active={id === hero} />
+          ))}
+        </Suspense>
+      </Canvas>
+    </div>
+  );
+}

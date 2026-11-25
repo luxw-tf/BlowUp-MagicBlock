@@ -8,7 +8,7 @@ const INK = '#1b1a22';
 
 export type IconName =
   | 'bomb' | 'boom' | 'arrow' | 'gear' | 'info' | 'dash' | 'check' | 'prev' | 'next'
-  | 'reflect' | 'shield' | 'sprint' | 'swap' | 'slow' | 'clock' | 'crown' | 'skull';
+  | 'reflect' | 'shield' | 'sprint' | 'swap' | 'slow' | 'clock' | 'crown' | 'skull' | 'pencil';
 
 export function Icon({ name, size = 22, fill = 'currentColor', style, title }: { name: IconName; size?: number; fill?: string; style?: CSSProperties; title?: string }) {
   const o = { stroke: INK, strokeWidth: 2.2, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
@@ -30,6 +30,15 @@ export function Icon({ name, size = 22, fill = 'currentColor', style, title }: {
         <>
           <path d="M12 1.8 L14.4 7.4 L20.6 5.2 L17.4 10.6 L22.6 13.4 L16.6 14.8 L18.2 21 L12.6 17.4 L8.2 22 L8 16 L1.8 15.6 L6.6 11.6 L3 6.4 L9.2 7.6 Z" fill={fill === 'currentColor' ? '#ff6b35' : fill} {...o} />
           <path d="M12 7.6 L13.4 11 L16.8 10.4 L14.6 13 L16 15.8 L12.6 14.6 L10.4 17.2 L10.2 13.8 L7 13 L9.8 11.2 Z" fill="#ffd23f" stroke="none" />
+        </>
+      );
+      break;
+    case 'pencil':
+      body = (
+        <>
+          <path d="M4 20 L5 15 L16 4 L20 8 L9 19 Z" fill={fill === 'currentColor' ? '#ffc832' : fill} {...o} />
+          <path d="M14 6 L18 10" fill="none" {...o} />
+          <path d="M4 20 L5 15 L9 19 Z" fill="#f1e5c6" {...o} />
         </>
       );
       break;

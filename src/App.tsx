@@ -9,6 +9,8 @@ import { OnlineLobby } from './ui/OnlineLobby';
 import { rejoinMatch } from './ui/onlineFlow';
 import { RoomScreen } from './ui/RoomScreen';
 import { loadProfile, saveProfile, type Profile } from './state/settings';
+import { MenuStage } from './render/MenuStage';
+import type { CharacterId } from './game/types';
 
 type Screen =
   | { kind: 'landing' }
@@ -26,6 +28,8 @@ export default function App() {
   const [pendingRoom, setPendingRoom] = useState<string | null>(inviteCode);
   const [rejoinId, setRejoinId] = useState<string | null>(activeMatchId);
   const [notice, setNotice] = useState<string | null>(null);
+  /** the pirate standing on the menu's dock */
+  const [hero, setHero] = useState<CharacterId>(() => loadProfile()?.character ?? 'frog');
   const [screen, setScreen] = useState<Screen>(() =>
     // Dev shortcut: ?quick jumps straight into a match.
     params.has('quick')
@@ -94,23 +98,32 @@ export default function App() {
     go({ kind: 'landing' });
   }, [go]);
 
-  if (screen.kind === 'landing')
+  if (screen.kind !== 'match') {
+    let menu;
+    if (screen.kind === 'landing')
+      menu = (
+        <Landing
+          initial={profile}
+          onPlay={quickPlay}
+          onPlayOnline={playOnline}
+          onPrivateRoom={(p) => privateRoom(p, pendingRoom)}
+          pendingRoom={pendingRoom}
+          onRejoin={rejoinId ? rejoin : null}
+          notice={notice}
+          onCharacter={setHero}
+        />
+      );
+    else if (screen.kind === 'lobby')
+      menu = <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
+    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} onReady={toMatch} onCancel={toLanding} />;
+    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
     return (
-      <Landing
-        initial={profile}
-        onPlay={quickPlay}
-        onPlayOnline={playOnline}
-        onPrivateRoom={(p) => privateRoom(p, pendingRoom)}
-        pendingRoom={pendingRoom}
-        onRejoin={rejoinId ? rejoin : null}
-        notice={notice}
-      />
+      <>
+        <MenuStage hero={hero} />
+        {menu}
+      </>
     );
-  if (screen.kind === 'lobby')
-    return <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
-  if (screen.kind === 'online-lobby') return <OnlineLobby key={screen.attempt} profile={screen.profile} onReady={toMatch} onCancel={toLanding} />;
-  if (screen.kind === 'room')
-    return <RoomScreen key={screen.attempt} profile={screen.profile} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
+  }
 
   const online = screen.session.online !== null;
   return (

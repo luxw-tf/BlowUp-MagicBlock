@@ -1,14 +1,31 @@
 import { useEffect } from 'react';
-import { CALLOUTS, characterDef } from '../game/content';
+import { characterDef } from '../game/content';
 import type { SessionLike } from '../game/sessionTypes';
+import { Icon, type IconName } from './Icon';
 
-const ord = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+type P = SessionLike['state']['players'][number];
+
+/** A few honours from the match stats. Only awarded when someone actually earned them. */
+function awards(players: P[]): { icon: IconName; title: string; who: string; detail: string }[] {
+  const best = (f: (p: P) => number) => players.reduce((a, b) => (f(b) > f(a) ? b : a));
+  const out: { icon: IconName; title: string; who: string; detail: string }[] = [];
+  const tagger = best((p) => p.stats.tags);
+  if (tagger.stats.tags > 0) out.push({ icon: 'dash', title: 'Quickest hands', who: tagger.name, detail: `${tagger.stats.tags} tag${tagger.stats.tags === 1 ? '' : 's'}` });
+  const arm = best((p) => p.stats.throwHits);
+  if (arm.stats.throwHits > 0) out.push({ icon: 'arrow', title: 'Best arm', who: arm.name, detail: `${arm.stats.throwHits} of ${arm.stats.throws} throws landed` });
+  const holder = best((p) => p.stats.timeHolding);
+  if (holder.stats.timeHolding > 0.5) out.push({ icon: 'bomb', title: 'Held it longest', who: holder.name, detail: `${holder.stats.timeHolding.toFixed(1)}s with the bomb` });
+  const clutch = best((p) => p.stats.closeCalls);
+  if (clutch.stats.closeCalls > 0) out.push({ icon: 'clock', title: 'Closest shave', who: clutch.name, detail: `${clutch.stats.closeCalls} pass${clutch.stats.closeCalls === 1 ? '' : 'es'} with the fuse nearly out` });
+  return out;
+}
 
 export function Results({ session, onRematch, onMenu, onVerify }: { session: SessionLike; onRematch: () => void; onMenu: () => void; onVerify: () => void }) {
   const s = session.state;
   const ranked = [...s.players].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99));
   const winner = ranked[0];
   const localWon = winner.id === session.localId;
+  const local = s.players.find((p) => p.id === session.localId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -18,45 +35,64 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
     return () => window.removeEventListener('keydown', onKey);
   }, [onRematch]);
 
+  // podium order on screen: 2nd, 1st, 3rd
+  const podium = [ranked[1], ranked[0], ranked[2]];
+  const place = ['second', 'first', 'third'];
+  const num = ['2', '1', '3'];
+
   return (
     <div className="modal-backdrop">
       <div className="panel results">
-        <div className="results-title">{localWon ? CALLOUTS.victory : `${winner.name} cooked`}</div>
-        <div className="results-sub">match lasted {Math.round(s.time)}s</div>
-        <table className="results-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>player</th>
-              <th title="Successful tags">tags</th>
-              <th title="Throws landed / thrown">throws</th>
-              <th title="Seconds holding the bomb">held</th>
-              <th title="Passed with under 0.6s left">clutch</th>
-              <th title="Abilities used">items</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranked.map((p) => (
-              <tr key={p.id} className={p.id === session.localId ? 'is-local' : ''}>
-                <td>{ord(p.placement ?? 6)}</td>
-                <td>
-                  <span className="dot" style={{ background: characterDef(p.character).color }} />
-                  {p.id === session.localId ? `${p.name} (you)` : p.name}
-                  {p.isBot && <span className="bot-badge">BOT</span>}
-                </td>
-                <td>{p.stats.tags}</td>
-                <td>
-                  {p.stats.throwHits}/{p.stats.throws}
-                </td>
-                <td>{p.stats.timeHolding.toFixed(1)}s</td>
-                <td>{p.stats.closeCalls}</td>
-                <td>{p.stats.abilitiesUsed}</td>
-              </tr>
+        <div className="results-title">{localWon ? 'You win!' : `${winner.name} wins`}</div>
+        <div className="results-sub">
+          {localWon ? 'Last pirate standing' : local?.placement ? `You came ${ordinal(local.placement)}` : 'Last pirate standing'} · {Math.round(s.time)}s
+        </div>
+
+        <div className="podium">
+          {podium.map((p, i) =>
+            p ? (
+              <div key={p.id} className={`step ${place[i]} ${p.id === session.localId ? 'is-local' : ''}`}>
+                <div className="step-who">
+                  {i === 1 && <Icon name="crown" size={30} fill="#ffc832" style={{ marginBottom: -6 }} />}
+                  <span className="step-badge" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
+                    {characterDef(p.character).name.slice(0, 2)}
+                  </span>
+                  <span className="step-name">{p.name}</span>
+                </div>
+                <div className="step-block">{num[i]}</div>
+              </div>
+            ) : (
+              <div key={i} />
+            ),
+          )}
+        </div>
+
+        {ranked.length > 3 && (
+          <div className="rest">
+            {ranked.slice(3).map((p) => (
+              <span key={p.id} className={p.id === session.localId ? 'is-local' : ''}>
+                {ordinal(p.placement ?? 6)} {p.name}
+              </span>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
+
+        <div className="awards">
+          {awards(s.players).map((a) => (
+            <div className="award" key={a.title}>
+              <Icon name={a.icon} size={26} />
+              <div>
+                <b>{a.title}</b>
+                <small>
+                  {a.who}, {a.detail}
+                </small>
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div className="row">
-          <button className="btn primary" onClick={onRematch}>
+          <button className="btn primary big" onClick={onRematch}>
             Rematch <kbd>R</kbd>
           </button>
           <button className="btn" onClick={onVerify}>
@@ -69,4 +105,8 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
       </div>
     </div>
   );
+}
+
+function ordinal(n: number) {
+  return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 }

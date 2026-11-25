@@ -29,6 +29,8 @@ export const MODEL = {
   chest: 'pirate/Prop_Chest_Closed.gltf',
   bomb: 'pirate/Prop_Bomb.gltf',
   chestGold: 'pirate/Prop_Chest_Gold.gltf',
+  house: ['pirate/Environment_House1.gltf', 'pirate/Environment_House2.gltf', 'pirate/Environment_House3.gltf'],
+  palm3: 'pirate/Environment_PalmTree_3.gltf',
   cannon: 'pirate/Prop_Cannon.gltf',
   mackerel: 'pirate/Prop_Fish_Mackerel.gltf',
   crate: 'kpirate/crate.glb',
@@ -120,7 +122,11 @@ export type RigState = 'idle' | 'run' | 'dash' | 'hit' | 'death' | 'win';
 /** Written by the creature every frame, read by its rig. */
 export interface RigDrive { state: RigState; speed: number; hitAt: number; actAt: number; }
 /** A seat's wardrobe: coat in the player's colour, a hat/hair colour of its own, trousers a deeper shade. */
-export interface Outfit { coat: string; hat: string; }
+export interface Outfit {
+  coat: string; hat: string;
+  /** the body is not human skin (a shark): keep the swatch that covers most of the model as it is */
+  keepBody?: boolean;
+}
 
 /** Characters are scaled to this height (world units), so all six stand the same size. */
 const RIG_HEIGHT = 1.9;
@@ -152,7 +158,7 @@ function dress(scene: THREE.Object3D, outfit: Outfit) {
   const px = g.getImageData(0, 0, W, H);
 
   // per swatch: how many vertices sample it, and their average height
-  const stat = new Map<number, { n: number; y: number }>();
+  const stat = new Map<number, { n: number; y: number; lo: number; hi: number }>();
   let lo = Infinity, hi = -Infinity;
   const v = new THREE.Vector3();
   const samples: [number, number][] = [];
@@ -166,10 +172,14 @@ function dress(scene: THREE.Object3D, outfit: Outfit) {
       samples.push([y * W + x, v.y]); lo = Math.min(lo, v.y); hi = Math.max(hi, v.y);
     }
   }
-  for (const [k, y] of samples) { const t = stat.get(k) ?? { n: 0, y: 0 }; t.n++; t.y += y; stat.set(k, t); }
+  for (const [k, y] of samples) { const t = stat.get(k) ?? { n: 0, y: 0, lo: y, hi: y }; t.n++; t.y += y; t.lo = Math.min(t.lo, y); t.hi = Math.max(t.hi, y); stat.set(k, t); }
+  // a non-human body (the shark's hide): a colour that runs from head to feet is skin, never clothes
+  const body = new Set<number>();
+  if (outfit.keepBody) for (const [k, t] of stat) if ((t.hi - t.lo) / (hi - lo || 1) > 0.55) body.add(k);
   const pick = (from: number, to: number) => {
     let best = -1, bn = 0;
     for (const [k, t] of stat) {
+      if (body.has(k)) continue;
       const h = (t.y / t.n - lo) / (hi - lo || 1);
       const r = px.data[k * 4], gg = px.data[k * 4 + 1], b = px.data[k * 4 + 2];
       if (h < from || h >= to || isSkin(r, gg, b) || isNeutral(r, gg, b) || t.n <= bn) continue;
@@ -211,7 +221,7 @@ export function Rig({ id, drive, outfit }: { id: string; drive: { current: RigDr
       if (a) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
     }
     return { scene, k, minY: box.min.y, mixer, actions, current: '', hitUntil: 0, actUntil: 0, winSince: 0 };
-  }, [gltf, outfit?.coat, outfit?.hat]);
+  }, [gltf, outfit?.coat, outfit?.hat, outfit?.keepBody]);
 
   useFrame((_, dt) => {
     const d = drive.current;

@@ -138,7 +138,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.transfer();
             push(
               <>
-                <Name s={s} id={e.from} /> {e.method === 'tag' ? 'tagged' : e.method === 'throw' ? 'beaned' : 'reflected onto'}{' '}
+                <Name s={s} id={e.from} /> {e.method === 'tag' ? 'tagged' : e.method === 'throw' ? 'lobbed it to' : 'bounced it back to'}{' '}
                 <Name s={s} id={e.to} />
               </>,
             );
@@ -238,7 +238,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
               audio.victory();
               shout(CALLOUTS.victory, 'good', true);
             } else {
-              shout(`${getPlayer(s, e.winner)?.name} cooked`, 'neutral', true);
+              shout(`${getPlayer(s, e.winner)?.name} wins`, 'neutral', true);
             }
             ctx.focus.id = e.winner;
             setTimeout(() => setShowResults(true), 2600);
@@ -305,10 +305,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             {session.online ? 'online · devnet rollup' : `local sim · ${CONFIG.tickRate} tps`}
           </span>
           <button className="icon-btn" title="Match details" onClick={() => setShowVerify(true)}>
-            <Icon name="info" size={20} fill="#f6efe1" />
+            <Icon name="info" size={20} fill="#ffffff" />
           </button>
           <button className="icon-btn" title="Settings (Esc)" onClick={() => setShowSettings(true)}>
-            <Icon name="gear" size={20} fill="#f6efe1" />
+            <Icon name="gear" size={20} fill="#ffffff" />
           </button>
         </div>
 

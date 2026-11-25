@@ -196,10 +196,10 @@ function Model({ id }: { id: CharacterId }) {
 }
 
 /** Each seat's wardrobe: the coat takes the seat's colour (as in the HUD), the hat or hair a colour of its own. */
-const OUTFIT: Record<string, Outfit> = {
-  frog: { coat: '#5fbf4a', hat: '#f2e9c9' },
+export const OUTFIT: Record<string, Outfit> = {
+  frog: { coat: '#5fbf4a', hat: '#f2e9c9', keepBody: true },
   cat: { coat: '#f08a3c', hat: '#5a3a24' },
-  blob: { coat: '#a678ff', hat: '#2f2a3a' },
+  blob: { coat: '#a678ff', hat: '#2f2a3a', keepBody: true },
   rat: { coat: '#9aa1ad', hat: '#d94a6a' },
   duck: { coat: '#ffd23f', hat: '#2a2f45' },
   creature: { coat: '#2f3b4f', hat: '#7cf9e0' },
