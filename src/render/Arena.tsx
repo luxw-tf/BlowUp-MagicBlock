@@ -373,24 +373,15 @@ function Bollard({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Plant({ position, s = 1 }: { position: [number, number, number]; s?: number }) {
+/** A planter with a bush in it (Kenney Nature Kit). */
+function Plant({ position, s = 1, seed = 0 }: { position: [number, number, number]; s?: number; seed?: number }) {
   return (
     <group position={position} scale={s}>
-      <mesh castShadow position={[0, 0.25, 0]}>
-        <cylinderGeometry args={[0.38, 0.3, 0.5, 12]} />
-        <meshStandardMaterial color="#c96a42" roughness={0.8} />
-      </mesh>
-      {[
-        [0, 0.75, 0, 0.45, P.leafDark],
-        [0.28, 0.65, 0.12, 0.32, P.leaf],
-        [-0.25, 0.7, -0.05, 0.34, P.leaf],
-        [0.05, 1.0, 0.1, 0.28, P.leaf],
-      ].map(([x, y, z, r, c], i) => (
-        <mesh key={i} castShadow position={[x as number, y as number, z as number]}>
-          <icosahedronGeometry args={[r as number, 1]} />
-          <meshStandardMaterial color={c as string} roughness={0.85} flatShading />
-        </mesh>
-      ))}
+      <Suspense fallback={null}>
+        <Prop src={MODEL.pot} size={1.3} rotation={seed} />
+        <Prop src={MODEL.bush[seed % 2]} position={[0, 0.38, 0]} size={1.25} rotation={seed * 2.1} />
+        {seed % 3 === 0 && <Prop src={MODEL.flower[seed % 3]} position={[0.22, 0.3, 0.12]} size={0.3} />}
+      </Suspense>
     </group>
   );
 }
@@ -563,27 +554,28 @@ function RopeCoil({ position }: { position: [number, number, number] }) {
   );
 }
 
-/** Weeds and ivy pushing up through the cracks and round the bottoms of things. */
+/** Grass and the odd flower pushing up through the cracks and round the bottoms of things. */
 function Weeds({ position, s = 1, seed = 1 }: { position: [number, number, number]; s?: number; seed?: number }) {
-  const leaves = useMemo(() => {
+  const tufts = useMemo(() => {
     const r = rng(seed * 97 + 13);
-    return Array.from({ length: 6 }, () => ({ x: (r() - 0.5) * 0.9, z: (r() - 0.5) * 0.6, y: 0.08 + r() * 0.18, k: 0.14 + r() * 0.16, c: r() < 0.5 ? P.leaf : P.leafDark }));
+    return Array.from({ length: 5 }, (_, i) => {
+      const kind = i === 0 && r() < 0.6 ? 'flower' : 'grass';
+      const list = kind === 'flower' ? MODEL.flower : MODEL.grass;
+      return { src: list[Math.floor(r() * list.length)], x: (r() - 0.5) * 1.1, z: (r() - 0.5) * 0.7, k: kind === 'flower' ? 0.32 : 0.45 + r() * 0.35, rot: r() * 6.28 };
+    });
   }, [seed]);
   return (
     <group position={position} scale={s}>
-      {leaves.map((l, i) => (
-        <mesh key={i} castShadow position={[l.x, l.y, l.z]}>
-          <icosahedronGeometry args={[l.k, 0]} />
-          <meshStandardMaterial color={l.c} roughness={0.9} flatShading />
-        </mesh>
-      ))}
+      <Suspense fallback={null}>
+        {tufts.map((t, i) => <Prop key={i} src={t.src} position={[t.x, 0, t.z]} size={t.k} rotation={t.rot} />)}
+      </Suspense>
     </group>
   );
 }
 
 // ───────────────────────────── in-play obstacles (exact footprints) ─────────────────────────────
 
-/** A strapped stack of crates on the crate's square footprint. */
+/** A strapped stack of crates on the crate's square footprint (code-built: the stand-in while the models load). */
 function CrateStack({ hw, hd, tex, seed }: { hw: number; hd: number; tex: THREE.Texture; seed: number }) {
   const turn = ((seed * 37) % 7) * 0.05 - 0.15;
   return (
@@ -592,18 +584,59 @@ function CrateStack({ hw, hd, tex, seed }: { hw: number; hd: number; tex: THREE.
         <boxGeometry args={[hw * 2, 1.4, hd * 2]} />
         <meshStandardMaterial map={tex} roughness={0.85} />
       </mesh>
-      {/* straps */}
-      {[-0.45, 0.45].map((k) => (
-        <mesh key={k} position={[hw * k, 0.7, 0]}>
-          <boxGeometry args={[0.1, 1.42, hd * 2 + 0.02]} />
-          <meshStandardMaterial color={P.orange} roughness={0.6} />
-        </mesh>
-      ))}
       <mesh castShadow position={[hw * 0.18, 1.72, -hd * 0.12]} rotation={[0, turn, 0]}>
         <boxGeometry args={[hw * 1.15, 0.64, hd * 1.15]} />
         <meshStandardMaterial map={tex} roughness={0.85} />
       </mesh>
-      {seed % 2 === 0 && <Plant position={[-hw * 0.55, 1.4, hd * 0.55]} s={0.45} />}
+    </group>
+  );
+}
+
+/**
+ * Pirate crates (Kenney Pirate Kit) filling the footprint exactly: a long footprint gets a row of crates, each
+ * stretched to its cell. Something sits on top: a smaller crate of bottles, a sack, or (on a stall) the catch.
+ */
+function Crates({ hw, hd, seed, top = 'crate' }: { hw: number; hd: number; seed: number; top?: 'crate' | 'catch' }) {
+  const w = hw * 2, d = hd * 2;
+  const alongX = w >= d;
+  const n = Math.max(1, Math.round(Math.max(w, d) / Math.min(w, d)));
+  const cell = Math.max(w, d) / n;
+  const H = top === 'catch' ? 1.05 : 1.3;
+  const r = rng(seed * 31 + 7);
+  return (
+    <group>
+      {Array.from({ length: n }, (_, k) => {
+        const off = -Math.max(w, d) / 2 + cell * (k + 0.5);
+        const pos: [number, number, number] = alongX ? [off, 0, 0] : [0, 0, off];
+        const fit: [number, number, number] = alongX ? [cell - 0.02, H, d] : [w, H, cell - 0.02];
+        return (
+          <group key={k}>
+            <Prop src={MODEL.crate} position={pos} fit={fit} stretch />
+            <mesh position={[pos[0], H * 0.78, pos[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[fit[0] * 0.86, fit[2] * 0.86]} />
+              <meshStandardMaterial color={top === 'catch' ? '#e6f4f6' : '#d9b46a'} roughness={top === 'catch' ? 0.35 : 1} />
+            </mesh>
+          </group>
+        );
+      })}
+      {top === 'crate' && (
+        <>
+          <Prop src={r() < 0.5 ? MODEL.crateBottles : MODEL.crate} position={[hw * 0.12, H, -hd * 0.1]} rotation={(r() - 0.5) * 0.5} fit={[Math.min(w, d) * 0.62, 0, Math.min(w, d) * 0.62]} />
+          {r() < 0.5 && <Prop src={MODEL.sack} position={[-hw * 0.45, H, hd * 0.4]} size={Math.min(w, d) * 0.32} rotation={r() * 6} />}
+        </>
+      )}
+      {top === 'catch' && (
+        <>
+          {/* fish laid in rows on the ice, a few mussels between them */}
+          {Array.from({ length: 6 }, (_, k) => (
+            <Prop key={k} src={MODEL.mackerel} tilt={Math.PI / 2} position={[((k % 3) - 1) * (w / 3.4) - w * 0.04, H * 0.78, (Math.floor(k / 3) - 0.5) * d * 0.36]} size={0.62} rotation={(r() - 0.5) * 0.5} />
+          ))}
+          {Array.from({ length: 4 }, (_, k) => (
+            <Prop key={`m${k}`} src={MODEL.mussel} position={[(r() - 0.5) * w * 0.7, H * 0.8, (r() - 0.5) * d * 0.6]} size={0.2} rotation={r() * 6} />
+          ))}
+          <Prop src={MODEL.fishBucket} position={[alongX ? w * 0.42 : 0, H, alongX ? 0 : d * 0.42]} size={0.55} rotation={seed} />
+        </>
+      )}
     </group>
   );
 }
@@ -719,16 +752,17 @@ function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number
     );
   }
   const w = o.hw * 2, d = o.hd * 2;
-  if (o.tag === 'crate') return <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />;
+  if (o.tag === 'crate') return (
+    <Suspense fallback={<CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />}>
+      <Crates hw={o.hw} hd={o.hd} seed={i} />
+    </Suspense>
+  );
   if (o.tag === 'stall') {
-    // a fish stall: a crate counter under a striped awning
+    // a fish stall: a counter of crates with the morning's catch laid out on top
     return (
-      <group>
-        <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i + 7} />
-        <Suspense fallback={null}>
-          <Prop src={MODEL.fishBucket} position={[o.hw * 0.45, 1.4, 0]} size={0.7} rotation={i} />
-        </Suspense>
-      </group>
+      <Suspense fallback={<CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i + 7} />}>
+        <Crates hw={o.hw} hd={o.hd} seed={i + 7} top="catch" />
+      </Suspense>
     );
   }
   if (o.tag === 'stack') {
@@ -870,6 +904,14 @@ export function Arena({ shadows }: { shadows: boolean }) {
         <Bob phase={1.7} position={[-22, -0.9, -24]}><Prop src={MODEL.fishing} size={7} rotation={0.3} /></Bob>
         <Bob phase={3.1} amp={0.06} position={[32, -0.9, -40]}><Prop src={MODEL.cargoShip} size={26} rotation={-0.15} /></Bob>
         <Bob phase={2.4} position={[-4, -0.9, -30]}><Prop src={MODEL.sailboat} size={6} rotation={1.2} /></Bob>
+        <Bob phase={4.2} amp={0.09} position={[-34, -0.9, -31]}><Prop src={MODEL.pirateShip} size={14} rotation={0.5} /></Bob>
+
+        {/* flags along the quay, cannons pointing out to sea */}
+        <Prop src={MODEL.flagPirate} position={[-23.2, 0, -12.4]} size={2.2} rotation={-0.3} />
+        <Prop src={MODEL.flagPennant} position={[23.4, 0, -12.2]} size={2.2} rotation={0.4} />
+        <Prop src={MODEL.flagPennant} position={[-23.4, 0, 10.8]} size={2} rotation={2.6} />
+        <Prop src={MODEL.cannon} position={[1.2, 0, -12.1]} size={1.5} rotation={Math.PI / 2} />
+        <Prop src={MODEL.cannon} position={[13.2, 0, -12.1]} size={1.5} rotation={Math.PI / 2 - 0.15} />
         <Bob phase={0.6} amp={0.15} position={[3, -0.9, -17.5]}><Prop src={MODEL.buoyFlag} size={1.1} /></Bob>
         <Bob phase={1.9} amp={0.15} position={[-13, -0.9, -19]}><Prop src={MODEL.buoy} size={1} /></Bob>
         <Bob phase={2.8} amp={0.15} position={[24, -0.9, -17]}><Prop src={MODEL.buoy} size={1} /></Bob>
@@ -881,6 +923,10 @@ export function Arena({ shadows }: { shadows: boolean }) {
         <Prop src={MODEL.fishBucket} position={[-19.8, 0, 9.4]} size={1} rotation={0.4} />
         <Prop src={MODEL.fishBucket} position={[6.6, 0, -12.2]} size={0.9} rotation={-0.3} />
         <Prop src={MODEL.chest} position={[21.2, 0, -2.4]} size={1.3} rotation={-Math.PI / 2 + 0.2} />
+        <Prop src={MODEL.crateBottles} position={[-21.3, 0, 1.4]} size={1.2} rotation={0.3} />
+        <Prop src={MODEL.crate} position={[21.4, 0, 1.2]} size={1.2} rotation={-0.2} />
+        <Prop src={MODEL.sack} position={[20.6, 0, 2.6]} size={0.7} rotation={1} />
+        <Prop src={MODEL.fishBones} position={[-9.4, 0, 11.2]} size={0.6} rotation={0.8} />
         <Prop src={MODEL.anchor} position={[-11.2, 0, -12.3]} size={1.6} rotation={0.2} />
         <Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} />
         <Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} />
@@ -916,10 +962,12 @@ export function Arena({ shadows }: { shadows: boolean }) {
       <Lamp position={[7.4, 0, 11.8]} />
       <LifeRing position={[-8.5, 0.62, QUAY_Z + 0.76]} />
       <LifeRing position={[9.5, 0.62, QUAY_Z + 0.76]} />
-      <Plant position={[-20.6, 0, 6.6]} s={1.2} />
-      <Plant position={[20.4, 0, -0.6]} s={1.1} />
-      <Plant position={[-20.2, 0, -2.8]} />
-      <Plant position={[19.8, 0, -9.6]} s={0.9} />
+      <Plant position={[-20.6, 0, 6.6]} s={1.2} seed={0} />
+      <Plant position={[20.4, 0, -0.6]} s={1.1} seed={1} />
+      <Plant position={[-20.2, 0, -2.8]} seed={2} />
+      <Plant position={[19.8, 0, -9.6]} s={0.9} seed={3} />
+      <Plant position={[-3.4, 0, 11.6]} s={0.8} seed={4} />
+      <Plant position={[10.8, 0, -11.6]} s={0.8} seed={5} />
     </group>
   );
 }

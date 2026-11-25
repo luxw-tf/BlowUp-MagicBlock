@@ -28,6 +28,23 @@ export const MODEL = {
   rock: 'pirate/Environment_Rock_2.gltf',
   chest: 'pirate/Prop_Chest_Closed.gltf',
   bomb: 'pirate/Prop_Bomb.gltf',
+  chestGold: 'pirate/Prop_Chest_Gold.gltf',
+  cannon: 'pirate/Prop_Cannon.gltf',
+  mackerel: 'pirate/Prop_Fish_Mackerel.gltf',
+  crate: 'kpirate/crate.glb',
+  crateBottles: 'kpirate/crate-bottles.glb',
+  flagPirate: 'kpirate/flag-pirate-high-pennant.glb',
+  flagPennant: 'kpirate/flag-high-pennant.glb',
+  pirateShip: 'kpirate/ship-pirate-medium.glb',
+  pot: 'nature/pot_large.glb',
+  potSmall: 'nature/pot_small.glb',
+  bush: ['nature/plant_bushDetailed.glb', 'nature/plant_bush.glb', 'nature/plant_bushSmall.glb'],
+  grass: ['nature/grass_leafs.glb', 'nature/grass_large.glb'],
+  flower: ['nature/flower_yellowA.glb', 'nature/flower_redA.glb', 'nature/flower_purpleA.glb'],
+  fish: 'food/fish.glb',
+  mussel: 'food/mussel.glb',
+  fishBones: 'food/fish-bones.glb',
+  sack: 'food/bag.glb',
 };
 
 const base = `${import.meta.env.BASE_URL}models/`;
@@ -41,9 +58,10 @@ type V3 = [number, number, number];
  *   pass 0 to ignore), centred on x/z and stood on y = 0. Use it for obstacles, so the footprint stays exact.
  * - `size`: scale uniformly so the model's largest horizontal side is this long (for decoration).
  * - otherwise `scale` is used as given.
+ * - `tilt`: roll the model over first (radians about x), e.g. to lay a fish flat.
  */
-export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale = 1, stretch = false }: {
-  src: string; position?: V3; rotation?: number; fit?: V3; size?: number; scale?: number; stretch?: boolean;
+export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale = 1, stretch = false, tilt = 0 }: {
+  src: string; position?: V3; rotation?: number; fit?: V3; size?: number; scale?: number; stretch?: boolean; tilt?: number;
 }) {
   const gltf = useLoader(GLTFLoader, modelUrl(src));
   const { object, s, offset } = useMemo(() => {
@@ -52,8 +70,10 @@ export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale
       const m = o as THREE.Mesh;
       if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; }
     });
+    object.rotation.order = 'YXZ'; // tilt first, then any quarter turn
+    object.rotation.x = tilt;
     // a footprint that is long the other way from the model: turn the model a quarter so its long side follows
-    const raw = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+    const raw = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
     const turn = fit && (raw.x - raw.z) * (fit[0] - fit[2]) < 0;
     if (turn) object.rotation.y = Math.PI / 2;
     const box = new THREE.Box3().setFromObject(object);
@@ -73,7 +93,7 @@ export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale
     const c = box.getCenter(new THREE.Vector3());
     const offset = new THREE.Vector3(-c.x * s.x, -box.min.y * s.y, -c.z * s.z);
     return { object, s, offset };
-  }, [gltf, fit?.[0], fit?.[1], fit?.[2], size, scale, stretch]);
+  }, [gltf, fit?.[0], fit?.[1], fit?.[2], size, scale, stretch, tilt]);
 
   return (
     <group position={position} rotation={[0, rotation, 0]}>

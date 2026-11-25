@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { ARENA } from '../game/arena';
 import { CONFIG, TICK_DT } from '../game/config';
@@ -9,6 +9,7 @@ import { getSettings, useSettings } from '../state/settings';
 import { Arena, lightNow } from './Arena';
 import { currentLayout, currentMood } from '../game/arena';
 import { Creature } from './Creature';
+import { MODEL, Prop } from './models';
 import { overlay, useGame } from './context';
 
 const ELEVATION = (54 * Math.PI) / 180;
@@ -256,16 +257,21 @@ function AimGuide() {
 
 // ───────────────────────────── pickups ─────────────────────────────
 
+/** An item pickup: a small open chest of gold that bobs, turns slowly and glints. */
 function PickupBox({ index }: { index: number }) {
   const { session } = useGame();
   const g = useRef<THREE.Group>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const glint = useRef<THREE.Mesh>(null);
   const spawnT = useRef(1);
   const spot = session.state.pickups[index];
 
   useFrame((_, dt) => {
     const sp = session.state.pickups[index];
     if (!g.current) return;
-    if (!sp.available) {
+    const on = sp.available;
+    if (ring.current) ring.current.visible = on;
+    if (!on) {
       g.current.visible = false;
       spawnT.current = 0;
       return;
@@ -273,35 +279,65 @@ function PickupBox({ index }: { index: number }) {
     g.current.visible = true;
     spawnT.current = Math.min(1, spawnT.current + dt * 3);
     const e = spawnT.current;
-    const pop = e < 1 ? 1 + Math.sin(e * Math.PI) * 0.4 : 1;
+    const pop = e < 1 ? 1 + Math.sin(e * Math.PI) * 0.35 : 1;
+    const t = performance.now() * 0.001;
     g.current.scale.setScalar(e * pop);
-    g.current.rotation.y += dt * 1.6;
-    g.current.position.y = 0.55 + Math.sin(performance.now() * 0.003 + index) * 0.08;
+    g.current.rotation.y += dt * 0.7;
+    g.current.position.y = 0.12 + Math.sin(t * 2.4 + index) * 0.07;
+    if (ring.current) {
+      const k = (t * 0.8 + index * 0.3) % 1;
+      ring.current.scale.setScalar(0.7 + k * 0.6);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.6;
+    }
+    if (glint.current) {
+      // a star glint that pops every couple of seconds
+      const p = (t * 0.45 + index * 0.37) % 1;
+      const s = p < 0.12 ? Math.sin((p / 0.12) * Math.PI) : 0;
+      glint.current.scale.setScalar(s * 0.5 + 0.0001);
+      glint.current.rotation.z = t * 2;
+    }
   });
 
   return (
     <group position={[spot.pos.x, 0, spot.pos.z]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <ringGeometry args={[0.55, 0.68, 32]} />
-        <meshBasicMaterial color="#ffd35c" transparent opacity={0.45} depthWrite={false} />
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[0.62, 0.72, 40]} />
+        <meshBasicMaterial color="#ffd35c" transparent opacity={0.5} depthWrite={false} />
       </mesh>
       <group ref={g}>
-        <mesh castShadow>
-          <boxGeometry args={[0.6, 0.6, 0.6]} />
-          <meshStandardMaterial color="#8a5cff" emissive="#6a3cff" emissiveIntensity={0.5} roughness={0.35} />
-        </mesh>
-        <mesh>
-          <boxGeometry args={[0.64, 0.12, 0.64]} />
-          <meshStandardMaterial color="#ffd35c" emissive="#ffb800" emissiveIntensity={0.6} />
-        </mesh>
-        <mesh>
-          <boxGeometry args={[0.12, 0.64, 0.64]} />
-          <meshStandardMaterial color="#ffd35c" emissive="#ffb800" emissiveIntensity={0.6} />
+        <Suspense fallback={null}>
+          <Prop src={MODEL.chestGold} size={1.15} rotation={0.4} />
+        </Suspense>
+        <mesh ref={glint} position={[0.18, 0.85, 0.2]}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial map={GLINT} transparent depthWrite={false} toneMapped={false} />
         </mesh>
       </group>
     </group>
   );
 }
+
+/** A four-pointed star for the chest's glint, drawn once. */
+const GLINT = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,240,1)');
+  grad.addColorStop(0.25, 'rgba(255,230,150,0.6)');
+  grad.addColorStop(1, 'rgba(255,220,120,0)');
+  g.fillStyle = grad;
+  g.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2, r = i % 2 ? 6 : 32;
+    g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
+  }
+  g.closePath();
+  g.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
 
 // ───────────────────────────── particles ─────────────────────────────
 
