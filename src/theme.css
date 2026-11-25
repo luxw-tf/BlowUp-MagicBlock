@@ -721,47 +721,6 @@ kbd {
   opacity: 0;
   transform: scale(1.04);
 }
-/* painted key art, sized like background-size: cover so the spark glow stays on the fuse */
-.title-art {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: max(100vw, 177.7vh);
-  height: max(100vh, 56.28vw);
-  background: #e9a96a url('/ui/title-art.webp') center / 100% 100% no-repeat;
-  transform: translate(-50%, -50%);
-  animation: titleDrift 24s ease-in-out infinite alternate;
-}
-@keyframes titleDrift {
-  from {
-    transform: translate(-50%, -50%) scale(1.02);
-  }
-  to {
-    transform: translate(-51%, -50.5%) scale(1.07);
-  }
-}
-.title-spark {
-  position: absolute;
-  left: 78.6%;
-  top: 47.4%;
-  width: 7%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(255, 250, 210, 0.95) 0%, rgba(255, 196, 90, 0.6) 22%, rgba(255, 140, 40, 0) 65%);
-  mix-blend-mode: screen;
-  animation: titleSpark 0.14s ease-in-out infinite alternate;
-}
-@keyframes titleSpark {
-  from {
-    opacity: 0.55;
-    transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.15) rotate(20deg);
-  }
-}
 .title-shade {
   position: absolute;
   inset: 0;
@@ -834,15 +793,7 @@ kbd {
 .menu-in .name-chip {
   animation: fade 0.5s ease-out backwards;
 }
-/* tall screens: frame the bomb rather than the middle of the bay */
-@media (max-aspect-ratio: 1/1) {
-  .title-art {
-    left: calc(50vw - 30vh);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .title-art,
-  .title-spark,
   .title-start {
     animation: none;
   }

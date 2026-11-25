@@ -55,6 +55,11 @@ export const CONFIG = {
   slowFactor: 0.35,
   slowDuration: 1.5,
   timeTheftSeconds: 2,
+
+  // Weather (arena.ts WEATHER_FX). On: offline/practice matches feel the weather: wind drifts people and bends
+  // throws, rain and snow make the deck slippery, snow is slower going. Never applied online (the on-chain program
+  // has no weather, so it would desync); there weather is looks only. `?weatherfx=0` turns it off for one match.
+  weatherGameplay: true as boolean,
 } as const;
 
 export const TICK_DT = 1 / CONFIG.tickRate;

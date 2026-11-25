@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { CHARACTERS } from '../game/content';
-import { LAYOUTS, MOODS, OBSTACLES, selectLayout, selectMood } from '../game/arena';
+import { LAYOUTS, MOODS, OBSTACLES, WEATHERS, selectLayout, selectMood, selectWeather, weatherFor } from '../game/arena';
 import type { CharacterId } from '../game/types';
 import { Arena, lightNow } from './Arena';
 import type { RigDrive } from './models';
@@ -62,6 +62,12 @@ function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
 }
 
 /**
+ * While the title card is up the camera flies a slow, wide circle round the whole harbour instead (the title screen
+ * sets this); when it goes, the camera glides down to the picked hero.
+ */
+export const titleView = { on: false };
+
+/**
  * The camera lives in polar coordinates round the middle of the bay and eases its angle and distance towards the
  * picked pirate, so moving between them sweeps round the dock (always the short way) instead of cutting across it.
  */
@@ -69,6 +75,10 @@ function Orbit({ hero }: { hero: CharacterId }) {
   const { camera } = useThree();
   const cur = useRef(polar(hero));
   const look = useMemo(() => new THREE.Vector3(), []);
+  // title fly-around: how much of it is in the shot (0..1), and where it has got to
+  const fly = useRef({ w: titleView.on ? 1 : 0, a: 0.5 });
+  const flyPos = useMemo(() => new THREE.Vector3(), []);
+  const flyLook = useMemo(() => new THREE.Vector3(), []);
   const key = useRef<THREE.SpotLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   // a key light that travels with the camera, so the picked pirate's face always reads (stronger after dark)
@@ -87,6 +97,18 @@ function Orbit({ hero }: { hero: CharacterId }) {
     const right = new THREE.Vector3(-f.z, 0, f.x);
     camera.position.copy(f).multiplyScalar(cur.current.r - DIST).setY(EYE + Math.sin(t * 0.2) * 0.05);
     look.copy(f).multiplyScalar(cur.current.r).addScaledVector(right, -SIDE).setY(1.45);
+    // the title's fly-around: a slow, high circle round the harbour, looking in over the bay and out to sea
+    const fl = fly.current;
+    fl.w += ((titleView.on ? 1 : 0) - fl.w) * (1 - Math.exp(-Math.min(dt, 0.05) * (titleView.on ? 6 : 1.4)));
+    if (fl.w > 0.001) {
+      fl.a += Math.min(dt, 0.05) * 0.045;
+      const fa = fl.a;
+      flyPos.set(Math.sin(fa) * 30, 9.5 + Math.sin(t * 0.13) * 1.2, -6 + Math.cos(fa) * 26);
+      flyLook.set(Math.sin(fa + 2.2) * 6, 1.5, -9 + Math.cos(fa + 2.2) * 5);
+      const w = fl.w * fl.w * (3 - 2 * fl.w); // smoothstep, so the glide down to the hero eases in and out
+      camera.position.lerp(flyPos, w);
+      look.lerp(flyLook, w);
+    }
     camera.lookAt(look);
     if (key.current) {
       key.current.position.copy(camera.position).addScaledVector(right, 1.6).setY(EYE + 2.2);
@@ -116,8 +138,13 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
   const mood = useMemo(() => {
     selectLayout(Math.floor(Math.random() * LAYOUTS.length));
     OBSTACLES.splice(0, OBSTACLES.length); // a match picks its own layout again when it starts
-    const pinned = MOODS.indexOf(new URLSearchParams(location.search).get('mood') as (typeof MOODS)[number]); // ?mood=night
-    return selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
+    const q = new URLSearchParams(location.search);
+    const pinned = MOODS.indexOf(q.get('mood') as (typeof MOODS)[number]); // ?mood=night
+    let mood = selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
+    // and weather to go with it (?weather=fog); a storm brings the night with it unless the mood is pinned
+    const pw = WEATHERS.find((w) => w === q.get('weather'));
+    if (pw === 'storm' && pinned < 0) mood = selectMood(MOODS.indexOf('night'));
+    return `${mood}-${selectWeather(pw ?? weatherFor(mood, Math.floor(Math.random() * 1e9)))}`;
   }, []);
   const L = lightNow();
 

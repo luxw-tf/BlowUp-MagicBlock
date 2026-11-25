@@ -56,6 +56,7 @@ class AudioEngine {
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     this.applyVolumes();
     void this.load();
+    this.applyWeather(); // a weather that started before the first click
   }
 
   private async load() {
@@ -185,6 +186,117 @@ class AudioEngine {
     e.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
     e.src.stop(t + 0.7);
     this.engine = null;
+  }
+
+  // ───────────── weather: synthesized from filtered noise (no extra files), plus the low boom under thunder ─────────────
+
+  private weatherWant: { rain: number; wind: number; gain: number } | null = null;
+  private weatherNodes: { out: GainNode; stop: (t: number) => void } | null = null;
+  private noiseBuf: { white: AudioBuffer; brown: AudioBuffer } | null = null;
+
+  private noise() {
+    const ctx = this.ctx!;
+    if (this.noiseBuf) return this.noiseBuf;
+    const len = ctx.sampleRate * 3;
+    const white = ctx.createBuffer(1, len, ctx.sampleRate), brown = ctx.createBuffer(1, len, ctx.sampleRate);
+    const w = white.getChannelData(0), b = brown.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      w[i] = Math.random() * 2 - 1;
+      last = (last + 0.02 * w[i]) / 1.02;
+      b[i] = last * 3.5;
+    }
+    return (this.noiseBuf = { white, brown });
+  }
+
+  /** Start the weather's sound bed (rain hiss, wind gusts). Waits for the first click if audio isn't unlocked yet. */
+  startWeather(want: { rain: number; wind: number; gain: number }) {
+    this.weatherWant = want;
+    this.applyWeather();
+  }
+  stopWeather() {
+    this.weatherWant = null;
+    const n = this.weatherNodes, ctx = this.ctx;
+    this.weatherNodes = null;
+    if (!n || !ctx) return;
+    const t = ctx.currentTime;
+    n.out.gain.cancelScheduledValues(t);
+    n.out.gain.setValueAtTime(Math.max(0.0001, n.out.gain.value), t);
+    n.out.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    n.stop(t + 0.9);
+  }
+  private applyWeather() {
+    const ctx = this.ctx, want = this.weatherWant;
+    if (!ctx || !this.sfxBus || !want || this.weatherNodes) return;
+    const { white } = this.noise();
+    const t = ctx.currentTime;
+    const out = ctx.createGain();
+    out.gain.value = 0.0001;
+    out.gain.exponentialRampToValueAtTime(want.gain, t + 2);
+    out.connect(this.sfxBus);
+    const stops: AudioScheduledSourceNode[] = [];
+    const loop = (offset: number) => {
+      const s = ctx.createBufferSource();
+      s.buffer = white; s.loop = true; s.start(t, offset);
+      stops.push(s);
+      return s;
+    };
+    if (want.rain > 0) {
+      // the hiss of rain on concrete, and its softer roar out on the water
+      const hi = ctx.createBiquadFilter(); hi.type = 'highpass'; hi.frequency.value = 500;
+      const lo = ctx.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = 5200 + want.rain * 1200;
+      const g = ctx.createGain(); g.gain.value = 0.16 * Math.min(want.rain, 1.5);
+      loop(0).connect(hi).connect(lo).connect(g).connect(out);
+      const roar = ctx.createBiquadFilter(); roar.type = 'lowpass'; roar.frequency.value = 700;
+      const g2 = ctx.createGain(); g2.gain.value = 0.22 * Math.min(want.rain, 1.5);
+      loop(1.3).connect(roar).connect(g2).connect(out);
+    }
+    if (want.wind >= 0.9) {
+      // wind: a band of noise whose pitch and level rise and fall in slow gusts
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 380; bp.Q.value = 0.9;
+      const g = ctx.createGain(); g.gain.value = 0.05 * want.wind;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.11;
+      const lfoF = ctx.createGain(); lfoF.gain.value = 160;
+      const lfoG = ctx.createGain(); lfoG.gain.value = 0.03 * want.wind;
+      lfo.connect(lfoF).connect(bp.frequency);
+      lfo.connect(lfoG).connect(g.gain);
+      lfo.start(t);
+      stops.push(lfo);
+      loop(2.1).connect(bp).connect(g).connect(out);
+    }
+    this.weatherNodes = { out, stop: (at) => stops.forEach((s) => s.stop(at)) };
+  }
+
+  /** Thunder after a lightning flash: `near` 0 (far: late, low, soft) → 1 (close: soon, with a crack). */
+  thunder(near: number) {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfxBus) return;
+    const { brown, white } = this.noise();
+    const t = ctx.currentTime + 0.35 + (1 - near) * 2.2;
+    const dur = 3.5 + (1 - near) * 2;
+    const rumble = ctx.createBufferSource(); rumble.buffer = brown; rumble.playbackRate.value = 0.6;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 160 + near * 420;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5 + near * 0.6, t + 0.08 + (1 - near) * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.25, t + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    rumble.connect(lp).connect(g).connect(this.sfxBus);
+    rumble.start(t, Math.random() * 1.5);
+    rumble.stop(t + dur + 0.1);
+    if (near > 0.55) {
+      // a close strike cracks first
+      const crack = ctx.createBufferSource(); crack.buffer = white;
+      const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 1800; hp.Q.value = 0.6;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.0001, t);
+      cg.gain.exponentialRampToValueAtTime(0.35 * near, t + 0.01);
+      cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+      crack.connect(hp).connect(cg).connect(this.sfxBus);
+      crack.start(t, Math.random());
+      crack.stop(t + 0.5);
+    }
+    this.play('boom', { gain: 0.35 + near * 0.4, rate: 0.42 + near * 0.12, delay: t - ctx.currentTime + 0.05, jitter: 0.05 });
   }
 }
 

@@ -43,6 +43,31 @@ function outlineMaterial(width: number) {
   return m;
 }
 
+/** A skeleton's clothes and armour (separate meshes in KayKit's rigs); bone, eyes and jaw keep their own look. */
+const OUTFIT = /(Cloak|Cape|Hood|Hat|Helmet)$/;
+
+/**
+ * Recolour a textured mesh in a player's colour, keeping its shading: the texture's brightness drives the shade,
+ * the hue and saturation come from the player. One material per figure, so each seat can have its own colour.
+ */
+function tinted(base: THREE.Material, color: string): THREE.Material {
+  const m = base.clone() as THREE.MeshStandardMaterial;
+  const tint = { value: new THREE.Color(color) };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTint = tint;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uTint;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float tl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        diffuseColor.rgb = uTint * clamp(0.45 + tl * 2.4, 0.0, 1.25);`,
+      );
+  };
+  m.customProgramCacheKey = () => 'crew-tint';
+  return m;
+}
+
 const BOMB_URL = modelUrl('kaykit/props/smokebomb.gltf');
 
 const ANIMS = ['general', 'move', 'dodge', 'social', 'melee', 'skeleton'].map((n) => modelUrl(`kaykit/anim_${n}.glb`));
@@ -64,7 +89,11 @@ const HEIGHT = 1.9;
  * One crew member. `bot` swaps the hero for a skeleton; `seat` picks which skeleton.
  * The parent group stands it on the ground facing +z.
  */
-export function CrewMember({ id, bot = false, seat = 0, drive }: { id: CharacterId; bot?: boolean; seat?: number; drive: { current: RigDrive } }) {
+export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
+  id: CharacterId; bot?: boolean; seat?: number; drive: { current: RigDrive };
+  /** the player's colour: a skeleton's clothes and armour take it (heroes are already painted in their seat's colour) */
+  tint?: string;
+}) {
   const src = bot ? SKELETONS[seat % SKELETONS.length] : HEROES[id];
   const gltf = useLoader(GLTFLoader, modelUrl(src));
   const anims = useLoader(GLTFLoader, ANIMS);
@@ -72,9 +101,12 @@ export function CrewMember({ id, bot = false, seat = 0, drive }: { id: Character
 
   const rig = useMemo(() => {
     const scene = skeletonClone(gltf.scene);
+    let outfit: THREE.Material | null = null;
     scene.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false; }
+      if (!m.isMesh) return;
+      m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;
+      if (bot && tint && OUTFIT.test(m.name) && !Array.isArray(m.material)) m.material = outfit ??= tinted(m.material, tint);
     });
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const k = HEIGHT / Math.max(0.001, box.max.y - box.min.y);
@@ -117,7 +149,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive }: { id: Character
     }
     const dur = (m: Move) => (actions.get(m)?.getClip().duration ?? 1) * 1000;
     return { scene, k, minY: box.min.y, mixer, actions, dur, current: null as Move | null, hitUntil: 0, actUntil: 0, actKind: 'throw' as 'throw' | 'tag', helloUntil: 0, helloOn: false };
-  }, [gltf, anims, bomb, bot]);
+  }, [gltf, anims, bomb, bot, tint]);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);

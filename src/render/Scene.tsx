@@ -6,8 +6,9 @@ import { CONFIG, TICK_DT } from '../game/config';
 import { ABILITY_DEFS, characterDef } from '../game/content';
 import { fuseRemaining, getPlayer, holderCanAct } from '../game/sim';
 import { getSettings, useSettings } from '../state/settings';
-import { Arena, lightNow } from './Arena';
-import { currentLayout, currentMood } from '../game/arena';
+import { Arena, lightNow, lookNow } from './Arena';
+import { commitTracks, refillTracks, stampTrack } from './snowTracks';
+import { currentLayout, currentMood, currentWeather } from '../game/arena';
 import { Creature } from './Creature';
 import { MODEL, Prop } from './models';
 import { overlay, useGame } from './context';
@@ -713,6 +714,21 @@ function Effects() {
   );
 }
 
+/** In the snow: everyone on their feet treads a track that slowly fills back in (snowTracks.ts). */
+function SnowTracks() {
+  const { session, renderPos } = useGame();
+  useFrame((_, dt) => {
+    refillTracks(Math.min(dt, 0.1));
+    for (const p of session.state.players) {
+      if (!p.alive) continue;
+      const rp = renderPos.get(p.id) ?? p.pos;
+      stampTrack(rp.x, rp.z);
+    }
+    commitTracks();
+  });
+  return null;
+}
+
 // ───────────────────────────── root ─────────────────────────────
 
 export function Scene() {
@@ -735,7 +751,7 @@ export function Scene() {
       <color attach="background" args={[L.sky]} />
       <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
       <CameraRig />
-      <Arena key={`${currentLayout().id}-${currentMood()}`} shadows={settings.shadows} />
+      <Arena key={`${currentLayout().id}-${currentMood()}-${currentWeather()}`} shadows={settings.shadows} />
       {session.state.players.map((p) => (
         <Creature key={p.id} id={p.id} />
       ))}
@@ -745,6 +761,7 @@ export function Scene() {
       <Bomb />
       <AimGuide />
       <Effects />
+      {lookNow().snow > 0 && <SnowTracks />}
       <OverlayProjector />
     </>
   );
