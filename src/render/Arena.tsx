@@ -5,7 +5,8 @@
  * their exact footprints; only their look lives here. Everything that moves is decoration.
  */
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { Suspense, useMemo, useRef, type ReactNode } from 'react';
+import { MODEL, Prop } from './models';
 import * as THREE from 'three';
 import { ARENA, OBSTACLES } from '../game/arena';
 
@@ -281,26 +282,6 @@ function Container({ position, rotation = 0, color, len = 6 }: { position: [numb
   );
 }
 
-function Barrel({ position, color = P.blue }: { position: [number, number, number]; color?: string }) {
-  return (
-    <group position={[position[0], 0, position[2]]}>
-      <mesh castShadow position={[0, 0.55, 0]}>
-        <cylinderGeometry args={[0.42, 0.42, 1.1, 16]} />
-        <meshStandardMaterial color={color} roughness={0.45} metalness={0.2} />
-      </mesh>
-      {[0.25, 0.85].map((y) => (
-        <mesh key={y} position={[0, y, 0]}>
-          <torusGeometry args={[0.43, 0.035, 6, 20]} />
-          <meshStandardMaterial color="#2e3038" />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.11, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.4, 16]} />
-        <meshStandardMaterial color={color} roughness={0.4} />
-      </mesh>
-    </group>
-  );
-}
 
 function Bollard({ position }: { position: [number, number, number] }) {
   return (
@@ -362,28 +343,6 @@ function Lamp({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Pallet({ position, rotation = 0, load }: { position: [number, number, number]; rotation?: number; load?: string }) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      {[-0.5, 0, 0.5].map((x) => (
-        <mesh key={x} castShadow position={[x, 0.08, 0]}>
-          <boxGeometry args={[0.18, 0.16, 1.3]} />
-          <meshStandardMaterial color={P.woodDark} roughness={0.9} />
-        </mesh>
-      ))}
-      <mesh castShadow position={[0, 0.2, 0]}>
-        <boxGeometry args={[1.3, 0.08, 1.3]} />
-        <meshStandardMaterial color={P.wood} roughness={0.9} />
-      </mesh>
-      {load && (
-        <mesh castShadow position={[0, 0.62, 0]}>
-          <boxGeometry args={[1.1, 0.8, 1.1]} />
-          <meshStandardMaterial color={load} roughness={0.8} />
-        </mesh>
-      )}
-    </group>
-  );
-}
 
 function LifeRing({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
   return (
@@ -452,78 +411,7 @@ function Crane({ position }: { position: [number, number, number] }) {
   );
 }
 
-/** Boats bob and roll on the swell. */
-function Boat({ position, rotation = 0, hull = '#2f4a6b', cabin = P.cream, phase = 0 }: { position: [number, number, number]; rotation?: number; hull?: string; cabin?: string; phase?: number }) {
-  const g = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime + phase;
-    if (g.current) { g.current.position.y = position[1] + Math.sin(t * 1.1) * 0.12; g.current.rotation.z = Math.sin(t * 0.9) * 0.04; g.current.rotation.x = Math.cos(t * 0.7) * 0.03; }
-  });
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <group ref={g}>
-        <mesh castShadow position={[0, 0.4, 0]}>
-          <boxGeometry args={[8, 1.2, 2.8]} />
-          <meshStandardMaterial color={hull} roughness={0.6} />
-        </mesh>
-        <mesh castShadow position={[4.4, 0.45, 0]} rotation={[0, Math.PI / 4, 0]}>
-          <boxGeometry args={[1.95, 1.1, 1.95]} />
-          <meshStandardMaterial color={hull} roughness={0.6} />
-        </mesh>
-        <mesh position={[0.2, 1.05, 0]}>
-          <boxGeometry args={[8.4, 0.16, 2.95]} />
-          <meshStandardMaterial color={P.red} roughness={0.6} />
-        </mesh>
-        <mesh castShadow position={[-2, 1.8, 0]}>
-          <boxGeometry args={[2.6, 1.4, 2]} />
-          <meshStandardMaterial color={cabin} roughness={0.6} />
-        </mesh>
-        <mesh position={[-2, 1.95, 1.01]}>
-          <planeGeometry args={[2, 0.45]} />
-          <meshStandardMaterial color="#5fb8de" emissive="#2d86b0" emissiveIntensity={0.25} />
-        </mesh>
-        <mesh castShadow position={[-2, 2.8, 0]}>
-          <boxGeometry args={[1.5, 0.6, 1.5]} />
-          <meshStandardMaterial color={cabin} roughness={0.6} />
-        </mesh>
-        <mesh castShadow position={[-2.3, 3.6, 0]}>
-          <cylinderGeometry args={[0.18, 0.22, 1.2, 10]} />
-          <meshStandardMaterial color={P.orange} />
-        </mesh>
-        {[1.2, 2.4].map((x) => (
-          <mesh key={x} castShadow position={[x, 1.45, 0]}>
-            <boxGeometry args={[1, 0.7, 1.6]} />
-            <meshStandardMaterial color={x > 2 ? P.yellow : P.teal} roughness={0.7} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  );
-}
 
-function Buoy({ position, color = P.red, phase = 0 }: { position: [number, number, number]; color?: string; phase?: number }) {
-  const g = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime * 1.4 + phase;
-    if (g.current) { g.current.position.y = position[1] + Math.sin(t) * 0.15; g.current.rotation.z = Math.sin(t * 0.8) * 0.15; }
-  });
-  return (
-    <group ref={g} position={position}>
-      <mesh castShadow>
-        <cylinderGeometry args={[0.35, 0.55, 0.9, 12]} />
-        <meshStandardMaterial color={color} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.25, 0]}>
-        <cylinderGeometry args={[0.37, 0.37, 0.2, 12]} />
-        <meshStandardMaterial color={P.cream} />
-      </mesh>
-      <mesh position={[0, 0.8, 0]}>
-        <coneGeometry args={[0.18, 0.6, 8]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-    </group>
-  );
-}
 
 /** Gulls circle lazily over the water, wings flapping now and then. */
 function Gulls() {
@@ -564,6 +452,16 @@ function Gulls() {
       ))}
     </>
   );
+}
+
+/** Bobs and rolls whatever it wraps on the swell (boats, buoys). */
+function Bob({ children, position, phase = 0, amp = 0.12 }: { children: ReactNode; position: [number, number, number]; phase?: number; amp?: number }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime + phase;
+    if (g.current) { g.current.position.y = Math.sin(t * 1.1) * amp; g.current.rotation.z = Math.sin(t * 0.9) * amp * 0.3; g.current.rotation.x = Math.cos(t * 0.7) * amp * 0.25; }
+  });
+  return <group position={position}><group ref={g}>{children}</group></group>;
 }
 
 // ───────────────────────────── in-play obstacles (exact footprints) ─────────────────────────────
@@ -794,7 +692,7 @@ export function Arena({ shadows }: { shadows: boolean }) {
         </mesh>
       ))}
 
-      {/* obstacles: exact footprints from the authoritative arena */}
+      {/* obstacles: exact footprints from the authoritative arena, dressed with the model packs */}
       {OBSTACLES.map((o, i) =>
         o.kind === 'circle' ? (
           <group key={i} position={[o.x, 0, o.z]}>
@@ -802,44 +700,53 @@ export function Arena({ shadows }: { shadows: boolean }) {
           </group>
         ) : (
           <group key={i} position={[o.x, 0, o.z]}>
-            {o.hd > o.hw * 1.5 ? <MiniContainer hw={o.hw} hd={o.hd} color={sideColors[i % 2]} /> : <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />}
+            <Suspense fallback={o.hd > o.hw * 1.5 ? <MiniContainer hw={o.hw} hd={o.hd} color={sideColors[i % 2]} /> : <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />}>
+              {o.hd > o.hw * 1.5 ? (
+                <Prop src={MODEL.container[i % 3]} fit={[o.hw * 2, 0, o.hd * 2]} stretch />
+              ) : (
+                <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />
+              )}
+            </Suspense>
           </group>
         ),
       )}
 
-      {/* container yards either side */}
-      <Container position={[-24.5, 0, -7]} rotation={Math.PI / 2} color={P.orange} />
-      <Container position={[-24.5, 0, 0]} rotation={Math.PI / 2} color={P.blue} />
-      <Container position={[-24.5, 2.6, -3.5]} rotation={Math.PI / 2} color={P.yellow} />
-      <Container position={[-27.5, 0, -3.5]} rotation={Math.PI / 2} color={P.teal} />
-      <Container position={[-24.5, 0, 7]} rotation={Math.PI / 2} color={P.red} />
-      <Container position={[24.5, 0, -6]} rotation={Math.PI / 2} color={P.blue} />
-      <Container position={[24.5, 2.6, -6]} rotation={Math.PI / 2} color={P.orange} />
-      <Container position={[24.5, 0, 1.5]} rotation={Math.PI / 2} color={P.teal} />
-      <Container position={[27.5, 0, 5]} rotation={Math.PI / 2} color={P.yellow} />
-      <Container position={[-16, 0, -11.4]} color={P.blue} len={5} />
-      <Container position={[17, 0, -11.4]} color={P.orange} len={5} />
+      <Suspense fallback={null}>
+        {/* container yards either side */}
+        {[
+          [-24.5, 0, -7, 0], [-24.5, 0, 0, 1], [-24.5, 2.5, -3.5, 2], [-27.6, 0, -3.5, 1], [-24.5, 0, 7, 2],
+          [24.5, 0, -6, 1], [24.5, 2.5, -6, 0], [24.5, 0, 1.5, 2], [27.6, 0, 5, 0],
+        ].map(([x, y, z, k], i) => (
+          <Prop key={i} src={MODEL.container[k]} position={[x, y, z]} fit={[2.5, 0, 6]} stretch />
+        ))}
+        <Prop src={MODEL.container[0]} position={[-16, 0, -11.4]} fit={[5, 0, 2.4]} stretch />
+        <Prop src={MODEL.container[2]} position={[17, 0, -11.4]} fit={[5, 0, 2.4]} stretch />
 
+        {/* the harbour: a wooden pier, real boats bobbing, buoys */}
+        <Prop src={MODEL.dock} position={[12.5, -0.15, -15.6]} size={7} rotation={Math.PI / 2} />
+        <Bob phase={0} position={[15, -0.9, -20.5]}><Prop src={MODEL.tug} size={8} rotation={-Math.PI / 2 + 0.1} /></Bob>
+        <Bob phase={1.7} position={[-22, -0.9, -24]}><Prop src={MODEL.fishing} size={7} rotation={0.3} /></Bob>
+        <Bob phase={3.1} amp={0.06} position={[32, -0.9, -40]}><Prop src={MODEL.cargoShip} size={26} rotation={-0.15} /></Bob>
+        <Bob phase={2.4} position={[-4, -0.9, -30]}><Prop src={MODEL.sailboat} size={6} rotation={1.2} /></Bob>
+        <Bob phase={0.6} amp={0.15} position={[3, -0.9, -17.5]}><Prop src={MODEL.buoyFlag} size={1.1} /></Bob>
+        <Bob phase={1.9} amp={0.15} position={[-13, -0.9, -19]}><Prop src={MODEL.buoy} size={1} /></Bob>
+        <Bob phase={2.8} amp={0.15} position={[24, -0.9, -17]}><Prop src={MODEL.buoy} size={1} /></Bob>
+
+        {/* dressing on the quay (outside the bay) */}
+        {[[-21, -11.6], [-20.1, -12.2], [-21.2, -10.5], [20.4, 10.4], [21.3, 9.7], [20.6, -11.4]].map(([x, z], i) => (
+          <Prop key={i} src={MODEL.barrel} position={[x, 0, z]} size={0.95} rotation={i * 0.9} />
+        ))}
+        <Prop src={MODEL.fishBucket} position={[-19.8, 0, 9.4]} size={1} rotation={0.4} />
+        <Prop src={MODEL.fishBucket} position={[6.6, 0, -12.2]} size={0.9} rotation={-0.3} />
+        <Prop src={MODEL.chest} position={[21.2, 0, -2.4]} size={1.3} rotation={-Math.PI / 2 + 0.2} />
+        <Prop src={MODEL.anchor} position={[-11.2, 0, -12.3]} size={1.6} rotation={0.2} />
+        <Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} />
+        <Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} />
+        <Prop src={MODEL.rock} position={[-29, -0.5, -13.4]} size={3} />
+        <Prop src={MODEL.rock} position={[30, -0.5, -13.6]} size={3.4} rotation={2} />
+      </Suspense>
       <Crane position={[-6, 0, -16.5]} />
-
-      {/* the harbour */}
-      <Boat position={[12, -0.9, -21]} rotation={0.08} phase={0} />
-      <Boat position={[-24, -0.9, -27]} rotation={-0.25} hull="#b8453a" cabin={P.cream} phase={1.7} />
-      <Boat position={[30, -0.9, -33]} rotation={0.4} hull="#2f7a6e" cabin="#fff3d6" phase={3.1} />
-      <Buoy position={[2, -0.7, -17]} phase={0} />
-      <Buoy position={[-14, -0.7, -19]} color={P.yellow} phase={1.3} />
-      <Buoy position={[22, -0.7, -16.5]} phase={2.2} />
       <Gulls />
-
-      {/* dressing on the quay (outside the bay) */}
-      {[
-        [-21, -11.6, P.blue], [-20.2, -12.2, P.red], [-21.2, -10.6, P.blue],
-        [20.4, 10.4, P.orange], [21.2, 9.6, P.blue], [20.6, -11.4, P.red],
-      ].map(([x, z, c], i) => (
-        <Barrel key={i} position={[x as number, 0, z as number]} color={c as string} />
-      ))}
-      <Pallet position={[-20.8, 0, 9.6]} rotation={0.3} load={P.teal} />
-      <Pallet position={[21.4, 0, -2.4]} rotation={-0.2} />
       {[-15, -9, -3, 3, 9, 15].map((x) => (
         <Bollard key={x} position={[x, 0, ARENA.halfDepth + 1.3]} />
       ))}
