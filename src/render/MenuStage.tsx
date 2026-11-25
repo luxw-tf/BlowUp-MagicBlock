@@ -139,7 +139,7 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
     selectLayout(Math.floor(Math.random() * LAYOUTS.length));
     OBSTACLES.splice(0, OBSTACLES.length); // a match picks its own layout again when it starts
     const q = new URLSearchParams(location.search);
-    const pinned = MOODS.indexOf(q.get('mood') as (typeof MOODS)[number]); // ?mood=night
+    const pinned = MOODS.indexOf((q.get('mood') ?? q.get('weather')) as (typeof MOODS)[number]); // ?mood=night (or ?weather=night)
     let mood = selectMood(pinned >= 0 ? pinned : Math.floor(Math.random() * MOODS.length));
     // and weather to go with it (?weather=fog); a storm brings the night with it unless the mood is pinned
     const pw = WEATHERS.find((w) => w === q.get('weather'));

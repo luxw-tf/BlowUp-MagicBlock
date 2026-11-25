@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import { Suspense, useMemo, useRef, type ReactNode } from 'react';
 import { MODEL, Prop } from './models';
 import * as THREE from 'three';
-import { ARENA, OBSTACLES, currentMood, type Mood } from '../game/arena';
+import { ARENA, OBSTACLES, currentMood, type Mood, type Obstacle as ObstacleDef } from '../game/arena';
 import { AMBIENT, resolveWeather, type Light } from './weatherLook';
 import { AmbientClock, Motes, Smoke, Windy, groundMaterial } from './ambient';
 import { WeatherLayer } from './Weather';
@@ -38,23 +38,111 @@ const P = {
 
 const rng = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
-/** The playable deck: warm concrete slabs, cracks, stains, painted bay markings. 32 px per world unit. */
-function makeDeckTexture(): THREE.CanvasTexture {
+/**
+ * The playable deck, 32 px per world unit, a working quay that has seen some use: warm concrete slabs of slightly
+ * different pours (and the odd repaired one), timber boardwalk along both long edges, steel hatch plates, grime and
+ * rust gathered round whatever stands on it in this layout, damp patches, forklift skid marks, and painted markings
+ * worn and chipped. All of it mid-toned and low in contrast, so the players and their colours read on top.
+ * The canvas's top edge is the sea side (world z = -halfDepth).
+ */
+function makeDeckTexture(obstacles: readonly ObstacleDef[] = []): THREE.CanvasTexture {
   const U = 32, W = ARENA.halfWidth * 2, D = ARENA.halfDepth * 2;
   const c = document.createElement('canvas');
   c.width = W * U; c.height = D * U;
   const g = c.getContext('2d')!;
   const r = rng(7);
-  g.fillStyle = P.deck; g.fillRect(0, 0, c.width, c.height);
-  // slabs, each a hair different, with soft bevelled seams
+  const px = (x: number) => (x + ARENA.halfWidth) * U, pz = (z: number) => (z + ARENA.halfDepth) * U;
+  g.fillStyle = '#bdb6aa'; g.fillRect(0, 0, c.width, c.height);
+  // slabs from different pours: warm greys, a sandy one here and there, now and then a darker repair
+  const POURS = [[196, 190, 178], [188, 185, 178], [203, 195, 181], [181, 177, 169], [198, 192, 184], [192, 182, 165]];
   const s = 4 * U;
   for (let y = 0; y < c.height; y += s / 2) {
     for (let x = (y / (s / 2)) % 2 ? -s / 2 : 0; x < c.width; x += s) {
-      const v = Math.floor(r() * 14) - 7;
-      g.fillStyle = `rgb(${198 + v},${204 + v},${209 + v})`;
+      const p = POURS[Math.floor(r() * POURS.length)], v = Math.floor(r() * 10) - 5;
+      const repaired = r() < 0.07;
+      g.fillStyle = repaired ? `rgb(${164 + v},${160 + v},${153 + v})` : `rgb(${p[0] + v},${p[1] + v},${p[2] + v})`;
       g.fillRect(x + 2, y + 2, s - 4, s / 2 - 4);
-      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + 2, y + 2, s - 4, 3);
-      g.fillStyle = 'rgba(60,50,40,0.10)'; g.fillRect(x + 2, y + s / 2 - 6, s - 4, 4);
+      g.fillStyle = 'rgba(255,250,240,0.16)'; g.fillRect(x + 2, y + 2, s - 4, 3);
+      g.fillStyle = 'rgba(60,50,40,0.12)'; g.fillRect(x + 2, y + s / 2 - 6, s - 4, 4);
+      if (repaired) { // a patched corner: a smoother square of newer concrete
+        g.fillStyle = `rgba(214,208,196,0.5)`; g.fillRect(x + 10 + r() * 40, y + 8, 30 + r() * 30, 26 + r() * 16);
+      }
+    }
+  }
+  // timber boardwalk along both long edges: weathered planks with staggered joints and nail heads
+  const board = (y0: number, h: number) => {
+    const bw = 11;
+    for (let y = y0; y < y0 + h; y += bw) {
+      let x = 0;
+      while (x < c.width) {
+        const len = 90 + r() * 140, v = Math.floor(r() * 22) - 11;
+        g.fillStyle = `rgb(${150 + v},${118 + v},${86 + v})`;
+        g.fillRect(x, y, len - 2, bw - 2);
+        g.fillStyle = 'rgba(255,230,190,0.12)'; g.fillRect(x, y, len - 2, 2);
+        g.fillStyle = 'rgba(40,25,10,0.5)';
+        g.fillRect(x + 3, y + 3, 2, 2); g.fillRect(x + len - 7, y + 3, 2, 2);
+        for (let k = 0; k < 3; k++) { g.fillStyle = 'rgba(70,45,20,0.18)'; g.fillRect(x + r() * len, y + 2 + r() * 5, 14 + r() * 20, 1); }
+        x += len;
+      }
+    }
+    g.fillStyle = 'rgba(40,28,15,0.35)'; g.fillRect(0, y0 - 3, c.width, 3); g.fillRect(0, y0 + h, c.width, 3);
+  };
+  board(26, 44); board(c.height - 70, 44);
+  // steel hatch plates: diamond tread, a darker rim, rivets and rust bleeding from the corners
+  const plate = (cx: number, cz: number, w: number, h: number) => {
+    const x0 = px(cx) - (w * U) / 2, y0 = pz(cz) - (h * U) / 2, ww = w * U, hh = h * U;
+    g.fillStyle = '#8b9096'; g.fillRect(x0, y0, ww, hh);
+    g.save(); g.beginPath(); g.rect(x0, y0, ww, hh); g.clip();
+    for (let yy = y0; yy < y0 + hh; yy += 8) for (let xx = x0 + ((yy - y0) / 8) % 2 * 6; xx < x0 + ww; xx += 12) {
+      g.fillStyle = 'rgba(230,235,240,0.35)'; g.fillRect(xx, yy, 6, 2);
+      g.fillStyle = 'rgba(40,45,50,0.3)'; g.fillRect(xx, yy + 2, 6, 1);
+    }
+    for (const [ax, ay] of [[x0, y0], [x0 + ww, y0], [x0, y0 + hh], [x0 + ww, y0 + hh]]) {
+      const grd = g.createRadialGradient(ax, ay, 0, ax, ay, 26 + r() * 18);
+      grd.addColorStop(0, 'rgba(150,75,30,0.55)'); grd.addColorStop(1, 'rgba(150,75,30,0)');
+      g.fillStyle = grd; g.fillRect(ax - 50, ay - 50, 100, 100);
+    }
+    g.restore();
+    g.strokeStyle = '#4e5359'; g.lineWidth = 4; g.strokeRect(x0 + 2, y0 + 2, ww - 4, hh - 4);
+    g.fillStyle = '#3d4146';
+    for (const [ax, ay] of [[x0 + 8, y0 + 8], [x0 + ww - 8, y0 + 8], [x0 + 8, y0 + hh - 8], [x0 + ww - 8, y0 + hh - 8]]) { g.beginPath(); g.arc(ax, ay, 3, 0, 7); g.fill(); }
+  };
+  plate(-10.5, -5.6, 2.6, 1.7); plate(10.2, 5.8, 2.6, 1.7); plate(-2.8, 6.4, 1.8, 1.4); plate(4.5, -6.6, 1.8, 1.4);
+  // grime and rust where things stand: whatever this layout put on the deck has stained the concrete round it
+  for (const o of obstacles) {
+    const cx = px(o.x), cy = pz(o.z);
+    const rad = (o.kind === 'circle' ? o.r : Math.max(o.hw, o.hd)) * U + 26;
+    const grd = g.createRadialGradient(cx, cy, rad * 0.4, cx, cy, rad);
+    grd.addColorStop(0, 'rgba(60,48,36,0.3)'); grd.addColorStop(1, 'rgba(60,48,36,0)');
+    g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.fill();
+    if (o.kind === 'box' && (o.tag === 'container' || o.tag === 'stack')) {
+      // rust run-off along the container's long sides
+      for (let k = 0; k < 4; k++) {
+        const sx = cx + (r() - 0.5) * o.hw * 2 * U, sy = cy + (r() < 0.5 ? -1 : 1) * (o.hd * U + 4);
+        const rg = g.createRadialGradient(sx, sy, 0, sx, sy, 22 + r() * 20);
+        rg.addColorStop(0, 'rgba(140,70,30,0.32)'); rg.addColorStop(1, 'rgba(140,70,30,0)');
+        g.fillStyle = rg; g.beginPath(); g.ellipse(sx, sy, 34, 14, 0, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  // damp patches where water stands after the tide or a wash-down
+  for (let i = 0; i < 7; i++) {
+    const gx = r() * c.width, gy = 90 + r() * (c.height - 180), gw = 40 + r() * 80;
+    g.fillStyle = 'rgba(70,80,90,0.11)'; g.beginPath();
+    for (let k = 0; k <= 10; k++) { const a = (k / 10) * Math.PI * 2, rr = gw * (0.6 + r() * 0.5); g.lineTo(gx + Math.cos(a) * rr, gy + Math.sin(a) * rr * 0.55); }
+    g.fill();
+  }
+  // forklift skid marks: pairs of curved rubber arcs
+  g.lineCap = 'round';
+  for (let i = 0; i < 4; i++) {
+    const sx = 120 + r() * (c.width - 240), sy = 110 + r() * (c.height - 220), a = r() * Math.PI * 2, bend = (r() - 0.5) * 0.9;
+    for (const off of [-9, 9]) {
+      g.strokeStyle = 'rgba(35,30,28,0.16)'; g.lineWidth = 5; g.beginPath();
+      for (let k = 0; k <= 12; k++) {
+        const t = k / 12, aa = a + bend * t, d = t * 150;
+        g.lineTo(sx + Math.cos(aa) * d - Math.sin(a) * off, sy + Math.sin(aa) * d + Math.cos(a) * off);
+      }
+      g.stroke();
     }
   }
   // speckle + a few oil stains and hairline cracks
@@ -85,6 +173,23 @@ function makeDeckTexture(): THREE.CanvasTexture {
   };
   hazard(34, 34, 120, 22); hazard(c.width - 154, c.height - 56, 120, 22);
   hazard(c.width - 154, 34, 120, 22); hazard(34, c.height - 56, 120, 22);
+  // years of boots and forklifts: the paint is chipped and scuffed through in places
+  g.globalAlpha = 1;
+  const chip = (x: number, y: number, w: number, h: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      const v = Math.floor(r() * 16) - 8;
+      g.fillStyle = `rgba(${188 + v},${182 + v},${170 + v},${0.55 + r() * 0.4})`;
+      g.beginPath(); g.ellipse(x + r() * w, y + r() * h, 2 + r() * 7, 1.5 + r() * 4, r() * 3, 0, Math.PI * 2); g.fill();
+    }
+  };
+  chip(10, 10, c.width - 20, 9, 160); chip(10, c.height - 19, c.width - 20, 9, 160);
+  chip(10, 10, 9, c.height - 20, 70); chip(c.width - 19, 10, 9, c.height - 20, 70);
+  chip(40, c.height / 2 - 4, c.width - 80, 8, 120);
+  chip(34, 34, 120, 22, 30); chip(c.width - 154, c.height - 56, 120, 22, 30); chip(c.width - 154, 34, 120, 22, 30); chip(34, c.height - 56, 120, 22, 30);
+  // faded bay numbers along the boardwalks
+  g.globalAlpha = 0.4; g.fillStyle = P.cream; g.textAlign = 'center';
+  g.font = `900 ${U * 0.9}px Arial Black, Impact, sans-serif`;
+  ['07', '08', '09'].forEach((t, i) => g.fillText(t, c.width * (0.25 + i * 0.25), 60));
   g.globalAlpha = 0.55; g.fillStyle = P.cream;
   g.font = `900 ${U * 2.2}px Arial Black, Impact, sans-serif`; g.textAlign = 'center';
   // the game's name stencilled at each end, reading the right way up from either side
@@ -281,7 +386,8 @@ export const LIGHT: Record<Mood, Light> = {
   morning: { sky: '#cfe8f4', fogNear: 60, fogFar: 160, sun: '#ffe1b5', sunI: 2.0, sunPos: [30, 20, 14], hemiSky: '#dcefff', hemiGround: '#74706a', hemiI: 0.85, water: [1, 1, 1], lamps: false, exposure: 1.05 },
   noon: { sky: '#bfe6f5', fogNear: 70, fogFar: 170, sun: '#fff0d2', sunI: 2.3, sunPos: [-20, 30, 6], hemiSky: '#cfeaff', hemiGround: '#6a7684', hemiI: 0.8, water: [1, 1, 1], lamps: false, exposure: 1.08 },
   sunset: { sky: '#f4c09a', fogNear: 55, fogFar: 150, sun: '#ffa463', sunI: 2.4, sunPos: [-36, 11, -12], hemiSky: '#ffd0ad', hemiGround: '#574657', hemiI: 0.7, water: [1.05, 0.82, 0.78], lamps: true, exposure: 1.02 },
-  night: { sky: '#0e1a33', fogNear: 40, fogFar: 120, sun: '#9db8ff', sunI: 0.45, sunPos: [14, 30, 10], hemiSky: '#2c4170', hemiGround: '#0e0e16', hemiI: 0.38, water: [0.24, 0.33, 0.52], lamps: true, exposure: 1.0 },
+  // a cold blue moon and not much else: the warm lamp pools carry the scene (players have their own colour and rim)
+  night: { sky: '#0a1430', fogNear: 40, fogFar: 120, sun: '#7f9dff', sunI: 0.3, sunPos: [14, 30, 10], hemiSky: '#1b2a58', hemiGround: '#06070c', hemiI: 0.2, water: [0.2, 0.28, 0.48], lamps: true, exposure: 0.92 },
 };
 /** The light of this match: its time of day under its weather. */
 export const lightNow = (): Light => resolveWeather(LIGHT).light;
@@ -437,18 +543,37 @@ function Lamp({ position, head }: { position: [number, number, number]; head: (m
   );
 }
 
-const LAMPS: [number, number][] = [[-19.6, -9], [19.6, 8], [-6.6, -12.6], [7.4, 11.8]];
+/** The quay lamps. The first four also cast real light after dark; every one pools light on the ground. */
+const LAMPS: [number, number][] = [[-19.6, -9], [19.6, 8], [-6.6, -12.6], [7.4, 11.8], [-19.4, 2.5], [19.4, -2.5]];
+const LIT = 4;
+
+/** A soft warm disc of lamplight, brightest under the lamp: drawn once, shared by every pool. */
+function makePoolTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  grd.addColorStop(0.7, 'rgba(255,255,255,0.16)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
 
 /**
  * The quay lamps and, after dark, their light. Old harbour lamps: each one breathes a little and now and then one
- * stutters (a single useFrame for all four, heads and lights together).
+ * stutters. At night each throws a warm pool on the ground: an additive decal (cheap, no extra light in the shaders),
+ * on top of the real light from the first four. A single useFrame for heads, lights and pools together.
  */
 function Lamps() {
   const L = lightNow();
   const on = L.lamps || lookNow().glow;
+  const dark = L.sunI < 1; // after dark (night, or a storm): the pools show
   const heads = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
   const lights = useRef<(THREE.PointLight | null)[]>([]);
-  const base = L.sunI < 1 ? 110 : 25;
+  const pools = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const poolTex = useMemo(makePoolTexture, []);
+  const base = dark ? 120 : 25;
   useFrame(({ clock }) => {
     if (!on) return;
     const t = clock.elapsedTime;
@@ -462,6 +587,8 @@ function Lamps() {
       if (h) h.emissiveIntensity = 3 * k;
       const l = lights.current[i];
       if (l) l.intensity = base * k;
+      const p = pools.current[i];
+      if (p) p.opacity = 0.42 * k;
     }
   });
   return (
@@ -470,8 +597,15 @@ function Lamps() {
         <Lamp key={`${x}${z}`} position={[x, 0, z]} head={(m) => (heads.current[i] = m)} />
       ))}
       {L.lamps &&
+        LAMPS.slice(0, LIT).map(([x, z], i) => (
+          <pointLight key={`l${x}${z}`} ref={(l) => (lights.current[i] = l)} position={[x + 0.6, 4.2, z]} color="#ffc777" intensity={base} distance={16} decay={2} />
+        ))}
+      {dark &&
         LAMPS.map(([x, z], i) => (
-          <pointLight key={`l${x}${z}`} ref={(l) => (lights.current[i] = l)} position={[x + 0.6, 4.2, z]} color="#ffc777" intensity={base} distance={18} decay={2} />
+          <mesh key={`p${x}${z}`} position={[x + 0.7, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
+            <planeGeometry args={[13, 13]} />
+            <meshBasicMaterial ref={(m) => (pools.current[i] = m)} map={poolTex} color="#ffb35c" transparent opacity={0.42} blending={THREE.AdditiveBlending} depthWrite={false} />
+          </mesh>
         ))}
     </>
   );
@@ -973,7 +1107,7 @@ const SMOKE_FROM: [number, number, number][] = [[17, 4.3, -20.7], [31, 7.5, -33.
 export function Arena({ shadows, town = false }: { shadows: boolean; town?: boolean }) {
   const L = lightNow();
   const look = lookNow();
-  const deckTex = useMemo(makeDeckTexture, []);
+  const deckTex = useMemo(() => makeDeckTexture(OBSTACLES), []);
   const quayTex = useMemo(makeQuayTexture, []);
   const hazardTex = useMemo(makeHazardTexture, []);
   const crateTex = useMemo(makeCrateTexture, []);

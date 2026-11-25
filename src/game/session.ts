@@ -68,7 +68,7 @@ export class GameSession implements SessionLike {
   ) {
     // a different yard and time of day each match; ?layout=alley&mood=night pins them (handy for recording)
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
-    const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout')), mi = MOODS.indexOf((q?.get('mood') ?? '') as (typeof MOODS)[number]);
+    const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout')), mi = MOODS.indexOf((q?.get('mood') ?? q?.get('weather') ?? '') as (typeof MOODS)[number]); // ?weather=night works too
     selectLayout(li >= 0 ? li : Math.floor(Math.random() * LAYOUTS.length));
     const mood = selectMood(mi >= 0 ? mi : Math.floor(Math.random() * MOODS.length));
     // weather too (?weather=rain); a storm needs the dark, so pinning one without a mood makes it night
