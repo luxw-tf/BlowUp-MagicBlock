@@ -41,11 +41,18 @@ interface Pop {
   y: number;
   rot: number;
   size: number;
-  color: string;
+  color: [string, string];
   delay: number;
 }
 /** Loud meme colours for the slammed words. */
-const POP_COLOURS = ['#ffd400', '#ff3d8b', '#22d3ee', '#7ee43a', '#ff7a1a', '#a46bff'];
+/** Caption chips, TikTok style: [background, text]. */
+const POP_COLOURS: [string, string][] = [
+  ['#ffffff', '#111111'],
+  ['#111111', '#ffffff'],
+  ['#fe2c55', '#ffffff'],
+  ['#25f4ee', '#111111'],
+  ['#ffe14a', '#111111'],
+];
 
 interface Props {
   session: SessionLike;
@@ -76,16 +83,21 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   const [pops, setPops] = useState<Pop[]>([]);
   const popId = useRef(0);
   const live = useRef<Pop[]>([]);
-  const slam = (pool: Pool, n: number) => {
+  const lastSlam = useRef(-1e9);
+  /** A few meme words on a big moment; calm by design: a cooldown between bursts, three on screen at most. */
+  const slam = (pool: Pool, n: number, big = false) => {
+    const now = performance.now();
+    if (!big && now - lastSlam.current < 2500) return;
+    lastSlam.current = now;
     const fresh: Pop[] = [];
     const taken = [...live.current];
-    for (let i = 0; i < Math.min(n, 4); i++) {
+    for (let i = 0; i < Math.min(n, 3 - live.current.length); i++) {
       // the margins only, so the action and the main line in the middle stay clear; never on top of another sticker
       let spot: { x: number; y: number } | null = null;
       for (let tries = 0; tries < 14 && !spot; tries++) {
         const left = Math.random() < 0.5;
         const c = { x: left ? 9 + Math.random() * 15 : 76 + Math.random() * 15, y: 34 + Math.random() * 44 };
-        if (taken.every((p) => Math.abs(p.x - c.x) > 22 || Math.abs(p.y - c.y) > 13)) spot = c;
+        if (taken.every((p) => Math.abs(p.x - c.x) > 26 || Math.abs(p.y - c.y) > 17)) spot = c;
       }
       if (!spot) break;
       const id = popId.current++;
@@ -96,7 +108,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         rot: (Math.random() - 0.5) * 22,
         size: 1.5 + Math.random() * 0.8,
         color: POP_COLOURS[Math.floor(Math.random() * POP_COLOURS.length)],
-        delay: i * 0.12,
+        delay: i * 0.25,
       };
       fresh.push(pop);
       taken.push(pop);
@@ -185,7 +197,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         const now = performance.now();
         calloutUntil.current = now + 1000;
         setCallout({ text: line('youCritical'), key: now, tone: 'danger' });
-        slamRef.current('wordsCritical', 2);
+        slamRef.current('wordsCritical', 1);
       }
     }, 100);
     return () => clearInterval(t);
@@ -235,7 +247,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             );
             if (e.holder === local) {
               shout(line('youStart'), 'danger', true);
-              slam('wordsGot', 2);
+              slam('wordsGot', 1);
             }
             else say(e.holder, 'botGot', 0.8);
             break;
@@ -254,13 +266,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
               const late = e.fuseLeft < CONFIG.closeCallThreshold && e.method !== 'reflect';
               if (e.from === local) {
                 shout(line(late ? 'youClutch' : 'youPassed'), 'good', late);
-                slam(late ? 'wordsClutch' : 'wordsPass', late ? 3 : 1);
+                if (late) slam('wordsClutch', 2);
               } else if (e.to === local) {
                 shout(line('youGot'), 'danger', late);
-                slam('wordsGot', late ? 3 : 2);
+                slam('wordsGot', late ? 2 : 1);
               } else if (late) {
                 shout(line('youClutch'), 'good');
-                slam('wordsClutch', 2);
+                slam('wordsClutch', 1);
               }
               say(e.from, late ? 'botClutch' : 'botPassed', late ? 0.95 : 0.6);
               say(e.to, late ? 'botGotLate' : 'botGot', late ? 0.95 : 0.55);
@@ -278,7 +290,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             );
             if (e.from === local) {
               shout(line('youMissed'), 'bad');
-              slam('wordsMiss', 2);
+              slam('wordsMiss', 1);
             }
             else say(e.from, 'botMissed', 0.6);
             break;
@@ -286,7 +298,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.reflect();
             if (e.by === local) {
               shout(line('youReflected'), 'good', true);
-              slam('wordsReflect', 2);
+              slam('wordsReflect', 1);
             }
             else say(e.by, 'botReflected', 0.9);
             break;
@@ -299,7 +311,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             );
             if (e.by === local) {
               shout(line('youBlocked'), 'good', true);
-              slam('wordsReflect', 2);
+              slam('wordsReflect', 1);
             }
             else say(e.by, 'botBlocked', 0.8);
             break;
@@ -369,13 +381,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             } else if (meAlive && e.survivors > 2) {
               setTimeout(() => shout(line('survived'), 'good', true), 1300);
             }
-            slam('wordsBoom', e.id === local ? 3 : 2);
+            slam('wordsBoom', 2, true);
             witness([e.id], 'botWitness', 0.95);
             witness([e.id], 'botWitness', 0.6);
             if (e.survivors === 2) {
               setTimeout(() => {
                 shout(line('finalTwo'), 'danger', true);
-                slam('wordsFinal', 3);
+                slam('wordsFinal', 2, true);
               }, 1500);
               audio.startDrone();
             }
@@ -390,10 +402,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             if (e.winner === local) {
               audio.victory();
               shout(line('youWon'), 'good', true);
-              slam('wordsWin', 4);
+              slam('wordsWin', 3, true);
             } else {
               shout(line('theyWon', { name: getPlayer(s, e.winner)?.name ?? 'someone' }), 'neutral', true);
-              slam('wordsLose', 3);
+              slam('wordsLose', 2, true);
               say(e.winner, 'botWon');
             }
             ctx.focus.id = e.winner;
@@ -446,7 +458,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             <span
               key={p.id}
               className="chaos-word"
-              style={{ left: `${p.x}%`, top: `${p.y}%`, '--rot': `${p.rot}deg`, '--sz': `${p.size}rem`, '--col': p.color, animationDelay: `${p.delay}s` } as React.CSSProperties}
+              style={{ left: `${p.x}%`, top: `${p.y}%`, '--rot': `${p.rot}deg`, '--sz': `${p.size}rem`, '--col': p.color[0], '--fg': p.color[1], animationDelay: `${p.delay}s` } as React.CSSProperties}
             >
               {p.text}
             </span>
