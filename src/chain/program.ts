@@ -317,6 +317,53 @@ export async function sendTx(
   return { sig, ms: performance.now() - t0, err: 'timeout' };
 }
 
+// ───────────────────────── account watching ─────────────────────────
+
+/**
+ * Websocket subscription plus a slow polling fallback, de-duplicated.
+ *
+ * Websocket subscriptions are established asynchronously, so an update that
+ * lands right after subscribing can be missed (seen on devnet: a match
+ * deadlocked after missing its ASSIGNING→ACTIVE change). Polling also covers
+ * socket drops. Returns an unsubscribe function.
+ */
+export function watchAccount(
+  conn: Connection,
+  key: PublicKey,
+  onData: (data: Uint8Array, slot: number) => void,
+  opts: { pollMs?: number } = {},
+): () => void {
+  let last: Uint8Array | null = null;
+  let lastSlot = 0;
+  let stopped = false;
+  const deliver = (data: Uint8Array, slot: number) => {
+    if (stopped || slot < lastSlot) return;
+    if (last && last.length === data.length && last.every((b, i) => b === data[i])) {
+      lastSlot = Math.max(lastSlot, slot);
+      return;
+    }
+    last = Uint8Array.from(data);
+    lastSlot = slot;
+    onData(data, slot);
+  };
+  const subId = conn.onAccountChange(key, (info, ctx) => deliver(info.data, ctx.slot), { commitment: 'processed' });
+  const poll = async () => {
+    try {
+      const r = await conn.getAccountInfoAndContext(key, 'processed');
+      if (r.value) deliver(r.value.data, r.context.slot);
+    } catch {
+      // transient; next poll retries
+    }
+  };
+  void poll();
+  const timer = setInterval(poll, opts.pollMs ?? 750);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    void conn.removeAccountChangeListener(subId).catch(() => {});
+  };
+}
+
 // ───────────────────────── ER slot clock ─────────────────────────
 
 /**
