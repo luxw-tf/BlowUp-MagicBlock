@@ -1,35 +1,78 @@
 /**
- * Procedural placeholder audio built on WebAudio. Every sound is synthesised,
- * so there are no asset dependencies yet; swap in recorded SFX in the
- * production pass (PRD Phase 04).
+ * Game audio: recorded CC0 sound effects (Kenney audio packs, see public/audio/CREDITS.md), played through WebAudio.
+ * Each sound has a few takes; every play picks one at random and nudges its pitch and level, so repeats never sound
+ * identical. Under a round, a distant boat engine idles and revs as the fuse runs down.
  */
 import { getSettings } from '../state/settings';
 
-type Wave = OscillatorType;
+const base = `${import.meta.env.BASE_URL}audio/`;
+
+/** Sound name → its takes (files in public/audio, without .ogg). */
+const BANK = {
+  tick: ['tick_001', 'tick_002', 'tick_004'],
+  count: ['select_001', 'select_002'],
+  go: ['bong_001'],
+  punch: ['impactPunch_medium_000', 'impactPunch_medium_001', 'impactPunch_medium_002'],
+  knock: ['impactWood_light_000', 'impactWood_light_001'],
+  swish: ['cloth1', 'cloth2', 'cloth3', 'cloth4'],
+  thud: ['impactWood_heavy_000', 'impactWood_heavy_001', 'impactPlank_medium_000'],
+  blast: ['explosionCrunch_000', 'explosionCrunch_001', 'explosionCrunch_002'],
+  boom: ['lowFrequency_explosion_000', 'lowFrequency_explosion_001'],
+  coins: ['handleCoins', 'handleCoins2'],
+  reveal: ['maximize_006', 'confirmation_002'],
+  magic: ['glass_002', 'glass_004'],
+  ding: ['impactBell_heavy_000'],
+  shield: ['forceField_000', 'forceField_001'],
+  reset: ['switch_002'],
+  error: ['error_004'],
+  win: ['jingles_STEEL00'],
+  lose: ['jingles_SAX03'],
+  engine: ['engineCircular_000'],
+} as const;
+type SoundName = keyof typeof BANK;
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private sfxBus: GainNode | null = null;
   private musicBus: GainNode | null = null;
-  private noiseBuf: AudioBuffer | null = null;
-  private drone: { stop: () => void; setIntensity: (x: number) => void } | null = null;
+  private buffers = new Map<string, AudioBuffer>();
+  private loading = false;
+  private engine: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
 
-  /** Must be called from a user gesture before sound can play. */
+  /** Must be called from a user gesture before sound can play. Loads the bank the first time. */
   unlock() {
     if (!this.ctx) {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new Ctx();
       this.sfxBus = this.ctx.createGain();
       this.musicBus = this.ctx.createGain();
-      this.sfxBus.connect(this.ctx.destination);
-      this.musicBus.connect(this.ctx.destination);
-      const len = this.ctx.sampleRate;
-      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const d = this.noiseBuf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      // a gentle limiter so a big blast on top of a punch never clips
+      const comp = this.ctx.createDynamicsCompressor();
+      comp.threshold.value = -10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2;
+      this.sfxBus.connect(comp);
+      this.musicBus.connect(comp);
+      comp.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     this.applyVolumes();
+    void this.load();
+  }
+
+  private async load() {
+    if (this.loading || !this.ctx) return;
+    this.loading = true;
+    const ctx = this.ctx;
+    const files = [...new Set(Object.values(BANK).flat())];
+    await Promise.all(
+      files.map(async (f) => {
+        try {
+          const res = await fetch(`${base}${f}.ogg`);
+          this.buffers.set(f, await ctx.decodeAudioData(await res.arrayBuffer()));
+        } catch {
+          /* a missing take just isn't played */
+        }
+      }),
+    );
   }
 
   applyVolumes() {
@@ -39,145 +82,109 @@ class AudioEngine {
     this.musicBus.gain.value = s.master * s.music * 0.6;
   }
 
-  private tone(freq: number, dur: number, opts: { type?: Wave; gain?: number; slideTo?: number; delay?: number } = {}) {
+  /** Play one random take of a sound. rate shifts pitch/speed; jitter adds a little variety. */
+  private play(name: SoundName, o: { gain?: number; rate?: number; delay?: number; jitter?: number; bus?: 'sfx' | 'music' } = {}) {
     const ctx = this.ctx;
-    if (!ctx || !this.sfxBus) return;
-    const t = ctx.currentTime + (opts.delay ?? 0);
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = opts.type ?? 'sine';
-    o.frequency.setValueAtTime(freq, t);
-    if (opts.slideTo) o.frequency.exponentialRampToValueAtTime(opts.slideTo, t + dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(opts.gain ?? 0.2, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.sfxBus);
-    o.start(t);
-    o.stop(t + dur + 0.02);
-  }
-
-  private noise(dur: number, opts: { gain?: number; freq?: number; freqTo?: number; q?: number; type?: BiquadFilterType; delay?: number } = {}) {
-    const ctx = this.ctx;
-    if (!ctx || !this.sfxBus || !this.noiseBuf) return;
-    const t = ctx.currentTime + (opts.delay ?? 0);
+    const bus = o.bus === 'music' ? this.musicBus : this.sfxBus;
+    if (!ctx || !bus) return;
+    const takes = BANK[name];
+    const buf = this.buffers.get(takes[Math.floor(Math.random() * takes.length)]);
+    if (!buf) return;
     const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuf;
-    src.loop = true;
-    const f = ctx.createBiquadFilter();
-    f.type = opts.type ?? 'lowpass';
-    f.frequency.setValueAtTime(opts.freq ?? 1200, t);
-    if (opts.freqTo) f.frequency.exponentialRampToValueAtTime(opts.freqTo, t + dur);
-    f.Q.value = opts.q ?? 0.8;
+    src.buffer = buf;
+    const j = o.jitter ?? 0.06;
+    src.playbackRate.value = (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * j);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(opts.gain ?? 0.3, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(this.sfxBus);
-    src.start(t, Math.random() * 0.5);
-    src.stop(t + dur + 0.05);
+    g.gain.value = (o.gain ?? 1) * (1 + (Math.random() * 2 - 1) * 0.08);
+    src.connect(g).connect(bus);
+    src.start(ctx.currentTime + (o.delay ?? 0));
   }
 
   tick(urgency: number) {
-    // urgency 0 (calm) → 1 (about to blow)
-    this.tone(900 + urgency * 700, 0.05, { type: 'square', gain: 0.05 + urgency * 0.06 });
+    // urgency 0 (calm) → 1 (about to blow): quicker, higher, louder
+    this.play('tick', { gain: 0.35 + urgency * 0.4, rate: 1 + urgency * 0.6, jitter: 0.02 });
   }
   countdown(final: boolean) {
-    this.tone(final ? 880 : 520, final ? 0.35 : 0.15, { type: 'triangle', gain: 0.18 });
+    if (final) this.play('go', { gain: 0.8, jitter: 0 });
+    else this.play('count', { gain: 0.6, jitter: 0 });
   }
   transfer() {
-    this.tone(160, 0.18, { type: 'sine', gain: 0.45, slideTo: 60 });
-    this.noise(0.12, { gain: 0.25, freq: 2500, freqTo: 400 });
-    this.tone(660, 0.12, { type: 'triangle', gain: 0.12, delay: 0.04 });
+    this.play('punch', { gain: 0.9 });
+    this.play('knock', { gain: 0.5, delay: 0.02 });
   }
   throwBomb() {
-    this.noise(0.22, { gain: 0.18, type: 'bandpass', freq: 600, freqTo: 2400, q: 1.5 });
+    this.play('swish', { gain: 0.8, rate: 1.15 });
   }
   miss() {
-    this.tone(120, 0.2, { type: 'sine', gain: 0.3, slideTo: 70 });
-    this.noise(0.1, { gain: 0.15, freq: 500 });
+    this.play('thud', { gain: 0.7 });
   }
   explosion() {
-    this.noise(1.2, { gain: 0.7, freq: 2200, freqTo: 80 });
-    this.tone(90, 0.8, { type: 'sine', gain: 0.6, slideTo: 30 });
-    this.tone(45, 1.0, { type: 'triangle', gain: 0.3, slideTo: 25 });
+    this.play('blast', { gain: 1, jitter: 0.08 });
+    this.play('boom', { gain: 0.9, rate: 0.9 });
   }
   dash() {
-    this.noise(0.14, { gain: 0.14, type: 'highpass', freq: 1500, freqTo: 4000 });
+    this.play('swish', { gain: 0.5, rate: 1.5 });
   }
   pickup() {
-    [523, 659, 784].forEach((f, i) => this.tone(f, 0.12, { type: 'triangle', gain: 0.12, delay: i * 0.05 }));
+    this.play('coins', { gain: 0.8 });
   }
   reveal() {
-    this.tone(1046, 0.25, { type: 'sine', gain: 0.1 });
-    this.tone(1568, 0.3, { type: 'sine', gain: 0.08, delay: 0.06 });
+    this.play('reveal', { gain: 0.6, jitter: 0.02 });
   }
   ability(pitch = 1) {
-    this.tone(300 * pitch, 0.25, { type: 'sawtooth', gain: 0.08, slideTo: 900 * pitch });
-    this.noise(0.15, { gain: 0.1, type: 'bandpass', freq: 1800 * pitch, q: 3 });
+    this.play('magic', { gain: 0.6, rate: pitch });
   }
   reflect() {
-    this.tone(1400, 0.3, { type: 'square', gain: 0.08, slideTo: 2200 });
-    this.tone(700, 0.2, { type: 'triangle', gain: 0.15 });
+    this.play('ding', { gain: 0.6, rate: 1.4 });
   }
   block() {
-    this.tone(220, 0.15, { type: 'square', gain: 0.12, slideTo: 110 });
-    this.noise(0.08, { gain: 0.2, freq: 900 });
+    this.play('shield', { gain: 0.7 });
   }
   fuseReset() {
-    this.tone(440, 0.08, { type: 'triangle', gain: 0.1 });
-    this.tone(880, 0.1, { type: 'triangle', gain: 0.1, delay: 0.07 });
+    this.play('reset', { gain: 0.6 });
   }
   denied() {
-    this.tone(200, 0.12, { type: 'square', gain: 0.06 });
+    this.play('error', { gain: 0.45, jitter: 0 });
   }
   victory() {
-    [523, 659, 784, 1046, 784, 1046].forEach((f, i) =>
-      this.tone(f, i === 5 ? 0.6 : 0.14, { type: 'triangle', gain: 0.16, delay: i * 0.11 }),
-    );
+    this.play('win', { gain: 0.85, jitter: 0, bus: 'music' });
   }
   defeat() {
-    [392, 330, 262].forEach((f, i) => this.tone(f, 0.3, { type: 'triangle', gain: 0.14, delay: i * 0.18 }));
+    this.play('lose', { gain: 0.85, jitter: 0, bus: 'music' });
   }
 
-  /** Rising tension bed for the final duel. */
+  /** Under the round: a distant boat engine idling, revving with the tension. */
   startDrone() {
     const ctx = this.ctx;
-    if (!ctx || !this.musicBus || this.drone) return;
-    const g = ctx.createGain();
-    g.gain.value = 0.0001;
-    g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 1.5);
-    const f = ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 400;
-    const oscs = [55, 55.6, 82.4].map((hz) => {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = hz;
-      o.connect(f);
-      o.start();
-      return o;
-    });
-    f.connect(g).connect(this.musicBus);
-    this.drone = {
-      stop: () => {
-        const t = ctx.currentTime;
-        g.gain.cancelScheduledValues(t);
-        g.gain.setValueAtTime(g.gain.value, t);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-        oscs.forEach((o) => o.stop(t + 0.7));
-      },
-      setIntensity: (x: number) => {
-        f.frequency.setTargetAtTime(300 + x * 1500, ctx.currentTime, 0.2);
-        oscs.forEach((o, i) => o.frequency.setTargetAtTime([55, 55.6, 82.4][i] * (1 + x * 0.5), ctx.currentTime, 0.3));
-      },
-    };
+    const buf = this.buffers.get(BANK.engine[0]);
+    if (!ctx || !this.musicBus || this.engine || !buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true; src.playbackRate.value = 0.7;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 700;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 1.5);
+    src.connect(filter).connect(gain).connect(this.musicBus);
+    src.start();
+    this.engine = { src, gain, filter };
   }
   droneIntensity(x: number) {
-    this.drone?.setIntensity(x);
+    const e = this.engine, ctx = this.ctx;
+    if (!e || !ctx) return;
+    e.src.playbackRate.setTargetAtTime(0.7 + x * 0.6, ctx.currentTime, 0.3);
+    e.filter.frequency.setTargetAtTime(700 + x * 2200, ctx.currentTime, 0.3);
+    e.gain.gain.setTargetAtTime(0.22 + x * 0.2, ctx.currentTime, 0.3);
   }
   stopDrone() {
-    this.drone?.stop();
-    this.drone = null;
+    const e = this.engine, ctx = this.ctx;
+    if (!e || !ctx) return;
+    const t = ctx.currentTime;
+    e.gain.gain.cancelScheduledValues(t);
+    e.gain.gain.setValueAtTime(Math.max(0.0001, e.gain.gain.value), t);
+    e.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    e.src.stop(t + 0.7);
+    this.engine = null;
   }
 }
 
