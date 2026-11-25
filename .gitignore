@@ -1,0 +1,13 @@
+node_modules
+dist
+*.tsbuildinfo
+
+# Solana / Anchor
+target
+.anchor
+test-ledger
+.keys
+chain/node_modules
+
+# Local
+.claude/settings.local.json

@@ -1,0 +1,221 @@
+import { describe, expect, it } from 'vitest';
+import { BotBrain } from './bots';
+import { CONFIG, TICK_DT } from './config';
+import {
+  computeFuse,
+  createMatch,
+  drainEvents,
+  fulfillRandomness,
+  fuseRange,
+  getPlayer,
+  step,
+  type ParticipantSetup,
+} from './sim';
+import type { InputFrame, MatchState, PlayerId } from './types';
+
+const PARTS: ParticipantSetup[] = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => ({
+  id,
+  name: id,
+  character: (['frog', 'cat', 'blob', 'rat', 'duck', 'creature'] as const)[i],
+  isBot: true,
+}));
+
+const bytesFor = (...u: number[]) => {
+  const b = new Uint8Array(32);
+  u.forEach((x, i) => {
+    const n = Math.floor(x * 4294967296);
+    b[i * 4] = (n >>> 24) & 255;
+    b[i * 4 + 1] = (n >>> 16) & 255;
+    b[i * 4 + 2] = (n >>> 8) & 255;
+    b[i * 4 + 3] = n & 255;
+  });
+  return b;
+};
+
+const seqs = new Map<string, number>();
+function frame(id: string, f: Partial<InputFrame> = {}): InputFrame {
+  const seq = (seqs.get(id) ?? 0) + 1;
+  seqs.set(id, seq);
+  return { seq, move: { x: 0, z: 0 }, aim: { x: 0, z: 0 }, throw: false, tag: false, dash: false, use: false, ...f };
+}
+
+function run(s: MatchState, ticks: number, inputs: () => Map<PlayerId, InputFrame> = () => new Map()) {
+  for (let i = 0; i < ticks; i++) step(s, inputs());
+}
+
+/** Start a match with `holder` holding the bomb and an armed fuse of u. */
+function activeMatch(holderIndex = 0, fuseU = 0.5): MatchState {
+  const s = createMatch(PARTS);
+  run(s, Math.ceil(CONFIG.matchCountdown / TICK_DT) + 1);
+  expect(s.phase).toBe('assigning');
+  const req = s.randomRequests.find((r) => r.purpose === 'holder')!;
+  expect(fulfillRandomness(s, req.id, bytesFor((holderIndex + 0.5) / 6, fuseU))).toBe(true);
+  drainEvents(s);
+  return s;
+}
+
+describe('bomb assignment', () => {
+  it('waits in an explicit pending state until randomness arrives', () => {
+    const s = createMatch(PARTS);
+    run(s, 200);
+    expect(s.phase).toBe('assigning');
+    expect(s.bomb.holderId).toBeNull();
+    const req = s.randomRequests.find((r) => r.purpose === 'holder')!;
+    fulfillRandomness(s, req.id, bytesFor(0.99, 0));
+    expect(s.bomb.holderId).toBe('f');
+    expect(s.phase).toBe('active');
+    expect(s.bomb.fuseDeadline! - s.time).toBeCloseTo(8, 5);
+  });
+
+  it('ignores duplicate or unknown fulfilments', () => {
+    const s = activeMatch();
+    expect(fulfillRandomness(s, 999, bytesFor(0.5))).toBe(false);
+  });
+});
+
+describe('dynamic fuse', () => {
+  it('uses round ranges and compresses with elapsed round time', () => {
+    const s = activeMatch();
+    expect(fuseRange(s)).toEqual([8, 15]);
+    s.time = s.roundStart + 22.5; // factor 0.5
+    expect(fuseRange(s)).toEqual([4, 7.5]);
+    s.time = s.roundStart + 44; // factor floors at 0.25 → [2, 3.75]
+    expect(fuseRange(s)).toEqual([2, 3.75]);
+  });
+
+  it('never extends past the hard round deadline', () => {
+    const s = activeMatch();
+    s.time = s.roundDeadline - 0.5;
+    expect(computeFuse(s, 1)).toBeCloseTo(0.5, 5);
+  });
+
+  it('enforces the nominal minimum', () => {
+    const s = activeMatch();
+    s.players.slice(0, 4).forEach((p) => (p.alive = false)); // 2 survivors → [2,4]
+    s.time = s.roundStart + 40; // factor 0.25 → [0.5, 1] → clamped to 1.25
+    expect(fuseRange(s)).toEqual([1.25, 1.25]);
+  });
+});
+
+describe('transfers', () => {
+  function adjacent(s: MatchState) {
+    const a = getPlayer(s, 'a')!;
+    const b = getPlayer(s, 'b')!;
+    a.pos = { x: -10, z: -8 };
+    b.pos = { x: -9, z: -8 };
+    return { a, b };
+  }
+
+  it('tag transfers and resets the fuse after randomness', () => {
+    const s = activeMatch(0);
+    adjacent(s);
+    step(s, new Map([['a', frame('a', { tag: true, aim: { x: -9, z: -8 } })]]));
+    expect(s.bomb.holderId).toBe('b');
+    expect(s.bomb.fuseDeadline).toBeNull();
+    const req = s.randomRequests.find((r) => r.purpose === 'fuse')!;
+    expect(req.subject).toBe('b');
+    fulfillRandomness(s, req.id, bytesFor(0));
+    expect(s.bomb.fuseDeadline).not.toBeNull();
+  });
+
+  it('transfer protection blocks an immediate tag-back', () => {
+    const s = activeMatch(0);
+    adjacent(s);
+    step(s, new Map([['a', frame('a', { tag: true })]]));
+    const req = s.randomRequests.find((r) => r.purpose === 'fuse')!;
+    fulfillRandomness(s, req.id, bytesFor(0.5));
+    step(s, new Map([['b', frame('b', { tag: true })]]));
+    expect(s.bomb.holderId).toBe('b');
+  });
+
+  it('expiration takes precedence over a tag on the deadline tick', () => {
+    const s = activeMatch(0);
+    adjacent(s);
+    s.bomb.fuseDeadline = s.time;
+    step(s, new Map([['a', frame('a', { tag: true })]]));
+    expect(getPlayer(s, 'a')!.alive).toBe(false);
+    expect(s.phase).toBe('intermission');
+  });
+
+  it('a missed throw keeps ownership and applies recovery', () => {
+    const s = activeMatch(0);
+    const a = getPlayer(s, 'a')!;
+    a.pos = { x: -12, z: -9 };
+    step(s, new Map([['a', frame('a', { throw: true, aim: { x: -17, z: -9 } })]]));
+    expect(s.bomb.projectile).not.toBeNull();
+    run(s, 10);
+    expect(s.bomb.projectile).toBeNull();
+    expect(s.bomb.holderId).toBe('a');
+    expect(a.stats.misses).toBe(1);
+    expect(a.recoverUntil).toBeGreaterThan(s.time - 0.1);
+  });
+
+  it('fuse expiring mid-flight eliminates the thrower', () => {
+    const s = activeMatch(0);
+    const a = getPlayer(s, 'a')!;
+    a.pos = { x: -12, z: -9 };
+    step(s, new Map([['a', frame('a', { throw: true, aim: { x: 0, z: -9 } })]]));
+    s.bomb.fuseDeadline = s.time;
+    step(s, new Map());
+    expect(a.alive).toBe(false);
+    expect(s.bomb.projectile).toBeNull();
+  });
+
+  it('Not Today blocks and Return to Sender reflects', () => {
+    const s = activeMatch(0);
+    const { b } = adjacent(s);
+    b.inventory = 'notToday';
+    step(s, new Map([['b', frame('b', { use: true })]]));
+    step(s, new Map([['a', frame('a', { tag: true })]]));
+    expect(s.bomb.holderId).toBe('a');
+
+    const s2 = activeMatch(0);
+    const { b: b2 } = adjacent(s2);
+    b2.inventory = 'returnToSender';
+    step(s2, new Map([['b', frame('b', { use: true })]]));
+    step(s2, new Map([['a', frame('a', { tag: true })]]));
+    expect(s2.bomb.holderId).toBe('a');
+    expect(s2.bomb.lastGiverId).toBe('b');
+    expect(drainEvents(s2).some((e) => e.type === 'reflected')).toBe(true);
+  });
+});
+
+describe('input validation', () => {
+  it('rejects stale and duplicate sequence numbers', () => {
+    const s = activeMatch(0);
+    const f = frame('a', { move: { x: 1, z: 0 } });
+    step(s, new Map([['a', f]]));
+    step(s, new Map([['a', { ...f }]]));
+    expect(drainEvents(s).some((e) => e.type === 'inputRejected' && e.id === 'a')).toBe(true);
+  });
+
+  it('clamps oversized movement vectors', () => {
+    const s = activeMatch(0);
+    const a = getPlayer(s, 'a')!;
+    a.pos = { x: -12, z: -9 };
+    run(s, 20, () => new Map([['a', frame('a', { move: { x: 100, z: 0 } })]]));
+    expect(Math.hypot(a.vel.x, a.vel.z)).toBeLessThanOrEqual(CONFIG.moveSpeed + 1e-6);
+  });
+});
+
+describe('full bot match', () => {
+  it('six bots finish a match with exactly one winner in bounded time', () => {
+    for (let trial = 0; trial < 5; trial++) {
+      const s = createMatch(PARTS);
+      const brains = PARTS.map((p, i) => new BotBrain(p.id, 1234 + i * 7 + trial * 101));
+      let rng = 99 + trial;
+      const next = () => ((rng = (rng * 1103515245 + 12345) % 2147483648) / 2147483648);
+      const maxTicks = Math.ceil((CONFIG.matchCountdown + 5 * (CONFIG.roundHardDeadline + CONFIG.intermission + 1)) / TICK_DT);
+      let ticks = 0;
+      while (s.phase !== 'finished' && ticks < maxTicks) {
+        for (const r of [...s.randomRequests]) fulfillRandomness(s, r.id, bytesFor(next(), next()));
+        step(s, new Map(brains.map((b) => [b.id, b.decide(s)])));
+        drainEvents(s);
+        ticks++;
+      }
+      expect(s.phase).toBe('finished');
+      expect(s.players.filter((p) => p.alive)).toHaveLength(1);
+      expect(new Set(s.players.map((p) => p.placement))).toEqual(new Set([1, 2, 3, 4, 5, 6]));
+    }
+  });
+});
