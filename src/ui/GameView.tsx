@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { audio } from '../audio/audio';
-import { ABILITY_DEFS, CALLOUTS, characterDef } from '../game/content';
+import { ABILITY_DEFS, characterDef } from '../game/content';
 import { CONFIG } from '../game/config';
 import type { SessionLike } from '../game/sessionTypes';
 import { alivePlayers, fuseRemaining, getPlayer } from '../game/sim';
@@ -14,6 +14,7 @@ import { useSettings } from '../state/settings';
 import { Results } from './Results';
 import { SettingsPanel } from './SettingsPanel';
 import { VerificationPanel } from './VerificationPanel';
+import { line, type Pool } from './brainrot';
 import { Icon, type IconName } from './Icon';
 import { Portrait } from './Portrait';
 
@@ -55,6 +56,9 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   const [, force] = useState(0);
   const feedId = useRef(0);
   const calloutUntil = useRef(0);
+  /** Bot trash talk over their heads: one bubble per bot, a few seconds each. */
+  const [bubbles, setBubbles] = useState<Record<PlayerId, { text: string; key: number }>>({});
+  const lastBubble = useRef(new Map<PlayerId, number>());
 
   // Dev-only debugging handle.
   useEffect(() => {
@@ -112,6 +116,26 @@ export function GameView({ session, onRematch, onMenu }: Props) {
     force((n) => n + 1);
   };
 
+  // You're holding it and the fuse is nearly out: one panic line per hold.
+  useEffect(() => {
+    let warned = false;
+    let held = false;
+    const t = setInterval(() => {
+      const s = session.state;
+      const holding = s.phase === 'active' && s.bomb.holderId === session.localId;
+      if (holding && !held) warned = false;
+      held = holding;
+      const f = fuseRemaining(s);
+      if (holding && !warned && f !== null && f < 1.2) {
+        warned = true;
+        const now = performance.now();
+        calloutUntil.current = now + 1000;
+        setCallout({ text: line('youCritical'), key: now, tone: 'danger' });
+      }
+    }, 100);
+    return () => clearInterval(t);
+  }, [session]);
+
   // Event → feed, callouts, audio.
   useEffect(() => {
     let eliminations = 0;
@@ -128,6 +152,21 @@ export function GameView({ session, onRematch, onMenu }: Props) {
       calloutUntil.current = now + 1400;
       setCallout({ text, key: now, tone });
     };
+    /** A bot says something (only bots talk; real players' words are their own). */
+    const say = (id: PlayerId | null, pool: Pool, chance = 1) => {
+      const p = getPlayer(s, id);
+      if (!p || !p.isBot || !p.alive || Math.random() > chance) return;
+      const now = performance.now();
+      if (now - (lastBubble.current.get(p.id) ?? -1e9) < 2400) return;
+      lastBubble.current.set(p.id, now);
+      setBubbles((b) => ({ ...b, [p.id]: { text: line(pool), key: now } }));
+      setTimeout(() => setBubbles((b) => (b[p.id]?.key === now ? (({ [p.id]: _, ...rest }) => rest)(b) : b)), 2600);
+    };
+    /** Someone near the action reacts. */
+    const witness = (exclude: PlayerId[], pool: Pool, chance: number) => {
+      const others = alivePlayers(s).filter((p) => p.isBot && !exclude.includes(p.id));
+      if (others.length) say(others[Math.floor(Math.random() * others.length)].id, pool, chance);
+    };
 
     const onEvents = (events: GameEvent[]) => {
       for (const e of events) {
@@ -139,7 +178,8 @@ export function GameView({ session, onRematch, onMenu }: Props) {
                 <Icon name="bomb" size={16} /> <Name s={s} id={e.holder} /> starts round {e.round} with the bomb
               </>,
             );
-            if (e.holder === local) shout('you have the bomb', 'danger', true);
+            if (e.holder === local) shout(line('youStart'), 'danger', true);
+            else say(e.holder, 'botGot', 0.8);
             break;
           case 'fuseSet':
             audio.fuseReset();
@@ -152,8 +192,14 @@ export function GameView({ session, onRematch, onMenu }: Props) {
                 <Name s={s} id={e.to} />
               </>,
             );
-            if (e.fuseLeft < CONFIG.closeCallThreshold && e.method !== 'reflect') shout(CALLOUTS.closeCall, 'good');
-            else if (e.to === local) shout('you have the bomb', 'danger');
+            {
+              const late = e.fuseLeft < CONFIG.closeCallThreshold && e.method !== 'reflect';
+              if (e.from === local) shout(line(late ? 'youClutch' : 'youPassed'), 'good', late);
+              else if (e.to === local) shout(line('youGot'), 'danger', late);
+              else if (late) shout(line('youClutch'), 'good');
+              say(e.from, late ? 'botClutch' : 'botPassed', late ? 0.9 : 0.45);
+              say(e.to, late ? 'botGotLate' : 'botGot', late ? 0.9 : 0.4);
+            }
             break;
           case 'throw':
             audio.throwBomb();
@@ -165,11 +211,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
                 <Name s={s} id={e.from} /> missed
               </>,
             );
-            if (e.from === local) shout(CALLOUTS.missedThrow, 'bad');
+            if (e.from === local) shout(line('youMissed'), 'bad');
+            else say(e.from, 'botMissed', 0.6);
             break;
           case 'reflected':
             audio.reflect();
-            shout(CALLOUTS.reflection, 'good', true);
+            if (e.by === local) shout(line('youReflected'), 'good', true);
+            else say(e.by, 'botReflected', 0.9);
             break;
           case 'blocked':
             audio.block();
@@ -178,6 +226,8 @@ export function GameView({ session, onRematch, onMenu }: Props) {
                 <Name s={s} id={e.by} /> said not today
               </>,
             );
+            if (e.by === local) shout(line('youBlocked'), 'good', true);
+            else say(e.by, 'botBlocked', 0.8);
             break;
           case 'dash':
             if (e.id === local) audio.dash();
@@ -186,7 +236,13 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             if (e.id === local) audio.pickup();
             break;
           case 'pickupRevealed':
-            if (e.id === local) audio.reveal();
+            if (e.id === local) {
+              audio.reveal();
+              shout(line('youItem'), 'good');
+            }
+            break;
+          case 'swap':
+            if (e.a === local || e.b === local) shout(line('youSwapped'), 'neutral', true);
             break;
           case 'abilityUsed': {
             const pitch = 0.7 + Object.keys(ABILITY_DEFS).indexOf(e.ability) * 0.15;
@@ -202,6 +258,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
                 )}
               </>,
             );
+            if (e.ability === 'skillIssue' && e.target) {
+              if (e.target === local) shout(line('youSlowed'), 'bad', true);
+              else say(e.target, 'botSlowed', 0.8);
+            }
             break;
           }
           case 'notice':
@@ -219,21 +279,25 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.explosion();
             push(
               <>
-                <Icon name="boom" size={16} /> <Name s={s} id={e.id} /> blew up
+                <Icon name="boom" size={16} /> <Name s={s} id={e.id} /> {line('feedOut')}
               </>,
             );
             const by = getPlayer(s, e.by);
+            const meAlive = getPlayer(s, local)?.alive;
             if (e.id === local) {
               audio.defeat();
-              shout(by?.isBot ? CALLOUTS.eliminatedByBot : 'you blew up', 'bad', true);
+              shout(line(by?.isBot ? 'youOutBot' : 'youOut'), 'bad', true);
               const next = alivePlayers(s)[0];
               if (next) ctx.focus.id = next.id;
               force((n) => n + 1);
             } else if (eliminations === 1) {
-              shout(CALLOUTS.firstElimination, 'neutral', true);
+              shout(line('firstOut'), 'neutral', true);
+            } else if (meAlive && e.survivors > 2) {
+              setTimeout(() => shout(line('survived'), 'good', true), 1300);
             }
+            witness([e.id], 'botWitness', 0.85);
             if (e.survivors === 2) {
-              setTimeout(() => shout(CALLOUTS.finalTwo, 'danger', true), 1500);
+              setTimeout(() => shout(line('finalTwo'), 'danger', true), 1500);
               audio.startDrone();
             }
             if (ctx.focus.id === e.id) {
@@ -246,9 +310,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.stopDrone();
             if (e.winner === local) {
               audio.victory();
-              shout(CALLOUTS.victory, 'good', true);
+              shout(line('youWon'), 'good', true);
             } else {
-              shout(`${getPlayer(s, e.winner)?.name} wins`, 'neutral', true);
+              shout(line('theyWon', { name: getPlayer(s, e.winner)?.name ?? 'someone' }), 'neutral', true);
+              say(e.winner, 'botWon');
             }
             ctx.focus.id = e.winner;
             setTimeout(() => setShowResults(true), 2600);
@@ -279,7 +344,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         </Canvas>
 
 
-        <Hud session={session} />
+        <Hud session={session} bubbles={bubbles} />
 
         <div className="feed">
           {feed.map((f) => (
@@ -332,7 +397,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
  * Name tags over each head, filled in the player's colour with their headshot, so everyone reads apart at a glance.
  * Yours is a big gold "You" sign with a pointer; the bomb holder's turns red and pulses. Scene.tsx moves them.
  */
-function NameTags({ session }: { session: SessionLike }) {
+function NameTags({ session, bubbles }: { session: SessionLike; bubbles: Record<PlayerId, { text: string; key: number }> }) {
   const s = session.state;
   return (
     <div className="name-layer">
@@ -348,6 +413,11 @@ function NameTags({ session }: { session: SessionLike }) {
               else overlay.tags.delete(p.id);
             }}
           >
+            {bubbles[p.id] && (
+              <span key={bubbles[p.id].key} className="nt-bubble">
+                {bubbles[p.id].text}
+              </span>
+            )}
             <span className="nt-pill" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
               <Portrait id={p.character} bot={p.isBot} seat={seat} size={local ? 26 : 22} />
               <b>{local ? 'You' : p.name}</b>
@@ -445,7 +515,7 @@ function BombIndicator({ session }: { session: SessionLike }) {
 }
 
 /** HUD: high-frequency values are written to refs from a rAF loop. */
-function Hud({ session }: { session: SessionLike }) {
+function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<PlayerId, { text: string; key: number }> }) {
   const fuseText = useRef<HTMLDivElement>(null);
   const fuseBar = useRef<HTMLDivElement>(null);
   const roundBar = useRef<HTMLDivElement>(null);
@@ -533,7 +603,7 @@ function Hud({ session }: { session: SessionLike }) {
 
   return (
     <>
-      <NameTags session={session} />
+      <NameTags session={session} bubbles={bubbles} />
       <BombIndicator session={session} />
       <Roster session={session} />
       <div className="hud-top">

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { SessionLike } from '../game/sessionTypes';
 import { Icon, type IconName } from './Icon';
 import { Portrait } from './Portrait';
+import { verdict } from './brainrot';
 
 type P = SessionLike['state']['players'][number];
 
@@ -10,13 +11,13 @@ function awards(players: P[]): { icon: IconName; title: string; who: string; det
   const best = (f: (p: P) => number) => players.reduce((a, b) => (f(b) > f(a) ? b : a));
   const out: { icon: IconName; title: string; who: string; detail: string }[] = [];
   const tagger = best((p) => p.stats.tags);
-  if (tagger.stats.tags > 0) out.push({ icon: 'dash', title: 'Quickest hands', who: tagger.name, detail: `${tagger.stats.tags} tag${tagger.stats.tags === 1 ? '' : 's'}` });
+  if (tagger.stats.tags > 0) out.push({ icon: 'dash', title: 'Fastest hands in Ohio', who: tagger.name, detail: `${tagger.stats.tags} tag${tagger.stats.tags === 1 ? '' : 's'}` });
   const arm = best((p) => p.stats.throwHits);
-  if (arm.stats.throwHits > 0) out.push({ icon: 'arrow', title: 'Best arm', who: arm.name, detail: `${arm.stats.throwHits} of ${arm.stats.throws} throws landed` });
+  if (arm.stats.throwHits > 0) out.push({ icon: 'arrow', title: 'Aimbot (allegedly)', who: arm.name, detail: `${arm.stats.throwHits} of ${arm.stats.throws} throws landed` });
   const holder = best((p) => p.stats.timeHolding);
-  if (holder.stats.timeHolding > 0.5) out.push({ icon: 'bomb', title: 'Held it longest', who: holder.name, detail: `${holder.stats.timeHolding.toFixed(1)}s with the bomb` });
+  if (holder.stats.timeHolding > 0.5) out.push({ icon: 'bomb', title: 'Bomb hoarder', who: holder.name, detail: `${holder.stats.timeHolding.toFixed(1)}s with the bomb` });
   const clutch = best((p) => p.stats.closeCalls);
-  if (clutch.stats.closeCalls > 0) out.push({ icon: 'clock', title: 'Closest shave', who: clutch.name, detail: `${clutch.stats.closeCalls} pass${clutch.stats.closeCalls === 1 ? '' : 'es'} with the fuse nearly out` });
+  if (clutch.stats.closeCalls > 0) out.push({ icon: 'clock', title: 'Plot armour', who: clutch.name, detail: `${clutch.stats.closeCalls} pass${clutch.stats.closeCalls === 1 ? '' : 'es'} with the fuse nearly out` });
   return out;
 }
 
@@ -53,6 +54,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
         <div className="results-sub">
           {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last one standing'} · {Math.round(s.time)}s
         </div>
+        <div className="results-verdict">{verdict(local?.placement)}</div>
 
         <div className="podium">
           {podium.map((p, i) =>

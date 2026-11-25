@@ -1256,6 +1256,11 @@ kbd {
   vertical-align: 0.05em;
 }
 .callout {
+  width: max-content;
+  max-width: 94vw;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.05;
   font-family: var(--display);
   font-weight: 400;
   letter-spacing: 0.01em;
@@ -1354,6 +1359,57 @@ kbd {
   to {
     box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 0 14px 4px rgba(255, 110, 30, 0.85);
     transform: scale(1.1);
+  }
+}
+
+/* bot trash talk: a paper speech bubble above the tag */
+.name-tag .nt-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 4px 10px 5px;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+  color: var(--ink);
+  text-shadow: none;
+  background: #fff8e6;
+  border: 2px solid #3b1f0e;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(42, 20, 8, 0.45);
+  transform-origin: 50% 100%;
+  animation: bubbleIn 2.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+.name-tag .nt-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 12px;
+  height: 9px;
+  transform: translateX(-50%);
+  background: #3b1f0e;
+  clip-path: polygon(0 0, 100% 0, 30% 100%);
+}
+@keyframes bubbleIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.4) rotate(-6deg);
+  }
+  10% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.06) rotate(1deg);
+  }
+  16%,
+  86% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.96);
   }
 }
 
@@ -1793,6 +1849,19 @@ kbd {
   font-size: 0.95rem;
   text-shadow: 0 2px 0 #2a1408;
   margin: 8px 0 0;
+}
+.results-verdict {
+  display: inline-block;
+  margin: 8px auto 0;
+  padding: 3px 12px 4px;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: #fff3d6;
+  border: 2px solid #3b1f0e;
+  border-radius: 8px;
+  box-shadow: 0 3px 0 rgba(42, 20, 8, 0.45);
+  transform: rotate(-1.5deg);
 }
 .podium {
   display: grid;
