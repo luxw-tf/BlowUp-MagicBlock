@@ -60,6 +60,9 @@ interface Props {
   onMenu: () => void;
 }
 
+/** The fuse rope on the HUD: a lazy S from the left edge into the bomb on the right (viewBox 220 × 34). */
+const ROPE = 'M 6 20 C 30 6, 52 30, 78 18 S 122 6, 146 18 S 190 28, 222 15';
+
 export function GameView({ session, onRematch, onMenu }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const input = useMemo(() => new InputController(), []);
@@ -635,8 +638,10 @@ function BombIndicator({ session }: { session: SessionLike }) {
 /** HUD: high-frequency values are written to refs from a rAF loop. */
 function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<PlayerId, { text: string; key: number }> }) {
   const fuseText = useRef<HTMLDivElement>(null);
-  const fuseBar = useRef<HTMLDivElement>(null);
-  const roundBar = useRef<HTMLDivElement>(null);
+  /** the rope still to burn (an SVG path drawn from the spark to the bomb) and the spark riding its end */
+  const ropeLive = useRef<SVGPathElement>(null);
+  const ropeHi = useRef<SVGPathElement>(null);
+  const spark = useRef<HTMLDivElement>(null);
   const dashFill = useRef<HTMLDivElement>(null);
   const fuseBox = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
@@ -652,12 +657,11 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
       const me = getPlayer(s, session.localId)!;
       const fuse = fuseRemaining(s);
 
-      if (fuseText.current && fuseBar.current && fuseBox.current) {
+      if (fuseText.current && fuseBox.current) {
         if (s.phase === 'active' && fuse !== null) {
-          // the fuse length is hidden (that's the game): no number, and the bar doesn't shrink with the time left;
-          // it just burns, and only the last seconds give it away
-          fuseText.current.textContent = fuse < 1 ? '!!!' : fuse < 2.5 ? '!!' : 'lit';
-          fuseBar.current.style.transform = 'scaleX(1)';
+          // the fuse length is hidden (that's the game): no number. The rope burns down with the round's hard limit
+          // (which everyone knows), and only the last seconds give the real fuse away: the spark flares and sputters
+          fuseText.current.textContent = fuse < 1 ? 'any second!' : fuse < 2.5 ? 'it’s hissing…' : 'has the bomb';
           fuseBox.current.dataset.state = fuse < 1 ? 'critical' : fuse < 2.5 ? 'warn' : 'ok';
           // the off-screen badge pulses faster as the fuse runs down
           overlay.indicator?.style.setProperty('--pulse', `${Math.max(0.16, Math.min(0.9, fuse / 5)).toFixed(2)}s`);
@@ -670,20 +674,27 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
           }
           if (alivePlayers(s).length === 2) audio.droneIntensity(Math.max(0, 1 - fuse / 4));
         } else if (s.phase === 'active') {
-          fuseText.current.textContent = 'lighting';
-          fuseBar.current.style.transform = 'scaleX(1)';
+          fuseText.current.textContent = 'lighting the fuse…';
           fuseBox.current.dataset.state = 'arming';
           lastTickSlot = -1;
         } else {
-          fuseText.current.textContent = '';
-          fuseBar.current.style.transform = 'scaleX(0)';
+          fuseText.current.textContent = s.phase === 'assigning' ? 'drawing…' : 'waiting';
           fuseBox.current.dataset.state = 'idle';
           lastTickSlot = -1;
         }
       }
-      if (roundBar.current) {
+      // the rope: burnt back from the left as the round runs out, the spark riding the burning end
+      if (ropeLive.current && spark.current) {
         const left = s.phase === 'active' ? Math.max(0, s.roundDeadline - s.time) : CONFIG.roundHardDeadline;
-        roundBar.current.style.transform = `scaleX(${left / CONFIG.roundHardDeadline})`;
+        const burnt = 1 - left / CONFIG.roundHardDeadline;
+        const live = ropeLive.current;
+        const dash = `0 ${(burnt * 100).toFixed(2)} 100`;
+        live.style.strokeDasharray = dash;
+        if (ropeHi.current) ropeHi.current.style.strokeDasharray = dash;
+        const total = live.getTotalLength();
+        const pt = live.getPointAtLength(burnt * total);
+        spark.current.style.left = `${(pt.x / 220) * 100}%`;
+        spark.current.style.top = `${(pt.y / 34) * 100}%`;
       }
       if (dashFill.current) {
         const cd = Math.max(0, me.dashReadyAt - s.time);
@@ -730,27 +741,50 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
           ROUND <b>{Math.max(1, s.round)}</b>/{totalRounds}
         </div>
         <div className="fuse" ref={fuseBox} data-state="idle">
-          <div className="fuse-label">FUSE</div>
-          <div className="fuse-num" ref={fuseText}>
-            —
-          </div>
-          <div className="fuse-track">
-            <div className="fuse-fill" ref={fuseBar} />
-          </div>
-          <div className="round-track" title="Hard round limit">
-            <div className="round-fill" ref={roundBar} />
-          </div>
-          <div className="fuse-holder">
+          {/* who has it: their face and name in their colour (gold for you) */}
+          <div className="fuse-who">
             {holder ? (
-              <>
-                <Icon name="bomb" size={16} />{' '}
-                <span className="feed-name" style={{ '--c': characterDef(holder.character).color } as React.CSSProperties}>
-                  {holder.id === session.localId ? 'YOU' : holder.name}
-                </span>
-              </>
+              <Portrait id={holder.character} bot={holder.isBot} seat={s.players.indexOf(holder)} size={34} />
             ) : (
-              <span className="dim">no holder</span>
+              <span className="fuse-nobody" aria-hidden />
             )}
+            <div className="fuse-whotext">
+              <span
+                className={`fuse-name ${holder?.id === session.localId ? 'is-you' : ''}`}
+                style={holder ? ({ '--c': characterDef(holder.character).color } as React.CSSProperties) : undefined}
+              >
+                {holder ? (holder.id === session.localId ? 'YOU' : holder.name) : 'Nobody yet'}
+              </span>
+              <span className="fuse-sub" ref={fuseText}>
+                waiting
+              </span>
+            </div>
+          </div>
+          {/* the fuse itself: a twisted rope burning down towards the bomb (the round's hard limit; the real fuse is secret) */}
+          <div className="fuse-rope" title="Round time left">
+            <svg viewBox="0 0 220 34" preserveAspectRatio="none" aria-hidden>
+              <defs>
+                {/* the twist: diagonal strands fixed in space, so the rope keeps its lay as it burns away */}
+                <pattern id="rope-lay" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(55)">
+                  <rect width="6" height="6" fill="#d6a868" />
+                  <rect width="2.2" height="6" fill="#9a6634" />
+                </pattern>
+              </defs>
+              <path className="rope-ash" d={ROPE} pathLength={100} />
+              <path className="rope-live" ref={ropeLive} d={ROPE} pathLength={100} stroke="url(#rope-lay)" />
+              <path className="rope-hi" ref={ropeHi} d={ROPE} pathLength={100} />
+            </svg>
+            <div className="fuse-spark" ref={spark} aria-hidden>
+              <i />
+              <i />
+              <i />
+            </div>
+            <svg className="fuse-bomb" viewBox="0 0 32 32" aria-hidden>
+              {/* a black iron bomb with a brass cap, the rope running into the cap */}
+              <circle cx="17" cy="19" r="11" fill="#1d1e24" />
+              <ellipse cx="13" cy="15" rx="3.6" ry="2.4" fill="#5d6170" transform="rotate(-35 13 15)" />
+              <rect x="5.5" y="9" width="7" height="5" rx="1.2" fill="#c99a3d" transform="rotate(-40 9 11.5)" />
+            </svg>
           </div>
         </div>
         <div className="hud-chip">
