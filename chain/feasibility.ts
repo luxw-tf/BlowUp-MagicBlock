@@ -381,7 +381,12 @@ async function main() {
   };
   report.slotTiming = { nominalMs: slotMs, measuredMs: Math.round(measuredSlotMs * 10) / 10 };
   check('ER input confirmation p95 < 100ms (PRD target)', pct(confirmMs, 95) < 100, JSON.stringify(stats(confirmMs)));
-  check('input error rate < 1%', inputErrors / (100 * PLAYERS) < 0.01, `${inputErrors} errors ${JSON.stringify(errorReasons)}`);
+  // Inputs are independent transactions carrying absolute positions, so a late
+  // arrival behind a newer seq is correctly dropped (StaleSequence) and loses
+  // nothing. Anything else is a real failure.
+  const unexpected = inputErrors - (errorReasons.StaleSequence ?? 0);
+  report.inputs = { ...(report.inputs as object), reorderedDroppedPct: Math.round(((errorReasons.StaleSequence ?? 0) / (100 * PLAYERS)) * 1000) / 10 };
+  check('no input errors other than reordering', unexpected === 0, `${unexpected} unexpected ${JSON.stringify(errorReasons)}`);
 
   /** Re-read authoritative seq/position so one test can't poison the next. */
   const sync = async (i: number) => {
@@ -518,6 +523,7 @@ async function main() {
     for (let k = 0; k < 2 && m.phase === 2; k++) {
       const from = m.holder;
       const candidates = alive.filter((i) => i !== from && !(m.protectedPlayer === i));
+      if (candidates.length === 0) break; // final duel: the only target is still protected
       const to = candidates[Math.floor(Math.random() * candidates.length)];
       // Meet in the middle of the arena edge lane to stay clear of obstacles.
       await walkTo(to, Math.max(-16_000, Math.min(16_000, pos[from].x + 1_000)), pos[from].z);

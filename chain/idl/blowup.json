@@ -54,10 +54,10 @@
         {
           "name": "vrf_program_identity",
           "docs": [
-            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
-            "the callback was issued by the VRF program for this program."
+            "Signer proves the VRF program issued this callback for this program."
           ],
-          "signer": true
+          "signer": true,
+          "address": "iqnMnKeFa42JQ3UTap341RSqNEx1vwo1J7UUPHaNAGr"
         },
         {
           "name": "match_state",
