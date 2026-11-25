@@ -128,6 +128,8 @@ export const AMBIENT = {
   uClouds: { value: 0 },
   uWet: { value: 0 },
   uSnow: { value: 0 },
+  /** how far the snow has settled this match, 0..1 (rises over the first minute) */
+  uSnowBuild: { value: 0 },
   /** 0..1 flash from lightning, for the materials that want it */
   uFlash: { value: 0 },
 };

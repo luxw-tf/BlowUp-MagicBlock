@@ -347,7 +347,7 @@ export function Creature({ id }: { id: PlayerId }) {
     <group ref={root}>
       <group ref={body}>
         <Suspense fallback={<group scale={1.2}><Model id={player.character} /></group>}>
-          <CrewMember id={player.character} bot={player.isBot} seat={seat} drive={drive} />
+          <CrewMember id={player.character} bot={player.isBot} seat={seat} drive={drive} tint={ring} />
         </Suspense>
       </group>
       <mesh ref={shield} position={[0, 0.6, 0]} visible={false}>
@@ -364,10 +364,23 @@ export function Creature({ id }: { id: PlayerId }) {
         <ringGeometry args={[0.78, 0.9, 40]} />
         <meshBasicMaterial color="#f0d391" transparent opacity={0.8} depthWrite={false} />
       </mesh>
-      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.5, 0.64, 32]} />
-        <meshBasicMaterial color={ring} transparent opacity={0.9} depthWrite={false} />
+      {/* a soft disc and a bold ring in the player's exact colour (not tone-mapped, so it stays saturated); it sits
+          inside the bomb holder's red ring, which stays the loudest thing on the ground */}
+      <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
+        <circleGeometry args={[0.6, 32]} />
+        <meshBasicMaterial color={ring} transparent opacity={0.32} depthWrite={false} toneMapped={false} />
       </mesh>
+      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
+        <ringGeometry args={[0.42, 0.6, 40]} />
+        <meshBasicMaterial color={ring} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {/* you: a gold outer ring as well, always */}
+      {id === session.localId && (
+        <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
+          <ringGeometry args={[0.84, 0.95, 48]} />
+          <meshBasicMaterial color="#ffcf4a" depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
       {/* Blob shadow for readability even with shadows disabled */}
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.45, 20]} />

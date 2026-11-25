@@ -10,6 +10,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { AMBIENT, type Look } from './weatherLook';
+import { TRACK_RECT, resetTracks, trackTexture } from './snowTracks';
+import type { Obstacle } from '../game/arena';
 
 /** One clock and one wind for every ambient shader. */
 export function AmbientClock({ look }: { look: Look }) {
@@ -19,10 +21,16 @@ export function AmbientClock({ look }: { look: Look }) {
     AMBIENT.uClouds.value = look.clouds;
     AMBIENT.uWet.value = look.wet;
     AMBIENT.uSnow.value = look.snow;
+    AMBIENT.uSnowBuild.value = 0;
     AMBIENT.uFlash.value = 0;
+    resetTracks();
   }, [look]);
+  const born = useRef(-1);
   useFrame(({ clock }) => {
     AMBIENT.uTime.value = clock.elapsedTime;
+    // snow settles over the first minute or so: a dusting first, then the drifts fill in
+    if (born.current < 0) born.current = clock.elapsedTime;
+    if (look.snow > 0) AMBIENT.uSnowBuild.value = Math.min(1, 0.15 + (clock.elapsedTime - born.current) / 70);
   });
   return null;
 }
@@ -94,9 +102,13 @@ export function Windy({ children, amp = 0.35, flutter = 0.03, phase = 0 }: { chi
 // ───────────────────────────── the deck: clouds, wet ─────────────────────────────
 
 const GROUND_FUNCS = /* glsl */ `
-  uniform float uTime, uWind, uClouds, uWet, uRain, uFlash, uSnow;
+  uniform float uTime, uWind, uClouds, uWet, uRain, uFlash, uSnow, uSnowBuild;
   uniform vec2 uWindDir;
   uniform vec3 uSkyRefl;
+  uniform vec4 uObs[12];     // obstacles for snow drifts: x, z, then r and -1 (circle) or half width and half depth (box)
+  uniform int uObsN;
+  uniform sampler2D uTrack;  // footprints (snowTracks.ts)
+  uniform vec4 uTrackRect;
   varying vec3 vGW;
   float amb_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float amb_noise(vec2 p) {
@@ -130,10 +142,47 @@ const GROUND_DIFFUSE = /* glsl */ `
     }
   }
   if (uSnow > 0.0) {
-    // snow settling in drifts: thick downwind of nothing in particular, thin where it blew clear, slab seams still showing
-    float sn = amb_noise(vGW.xz * 0.32 + 11.0) * 0.55 + amb_noise(vGW.xz * 0.9 + 3.0) * 0.3 + amb_noise(vGW.xz * 3.1) * 0.15;
-    float cover = (0.35 + 0.6 * smoothstep(0.25, 0.7, sn)) * uSnow * 0.85;
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 0.99), cover);
+    vec2 gp = vGW.xz;
+    vec2 side = vec2(-uWindDir.y, uWindDir.x);
+    // drifts: snow banks up against everything in the way, deepest on the downwind (lee) side, and along the bay's edges
+    float drift = 0.0;
+    for (int i = 0; i < 12; i++) {
+      if (i >= uObsN) break;
+      vec4 o = uObs[i];
+      vec2 rel = gp - o.xy;
+      float d;
+      if (o.w < 0.0) d = length(rel) - o.z;
+      else { vec2 q = abs(rel) - o.zw; d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0); }
+      float lee = dot(normalize(rel + 1e-4), uWindDir);
+      float reach = 0.7 + 1.6 * max(lee, 0.0);
+      drift = max(drift, smoothstep(reach, 0.0, d) * (0.75 + 0.25 * lee));
+    }
+    vec2 e = vec2(18.0, 10.0) - abs(gp);
+    float edge = min(e.x, e.y);
+    drift = max(drift, smoothstep(1.1, 0.0, abs(edge)) * 0.85);
+    drift *= 0.75 + 0.5 * amb_noise(gp * 0.8 + 5.0);                     // lumpy, not ruled lines
+    // the open deck: a patchy dusting, swept thin in long streaks along the wind
+    vec2 wp = vec2(dot(gp, uWindDir), dot(gp, side));
+    float sn = amb_noise(vec2(wp.x * 0.18, wp.y * 0.55) + 11.0) * 0.6 + amb_noise(gp * 0.9 + 3.0) * 0.25 + amb_noise(gp * 3.1) * 0.15;
+    float open = smoothstep(0.3, 0.8, sn) * 0.7;
+    // it settles over the match: a thin dusting first, the drifts filling in
+    float build = uSnowBuild;
+    float cover = max(open * build, smoothstep(0.0, 1.0, drift * (0.35 + 0.9 * build)));
+    // footprints: wherever anyone walked the snow is trodden away, then fills back in
+    vec2 tuv = (gp - uTrackRect.xy) / uTrackRect.zw;
+    float track = (tuv.x > 0.0 && tuv.x < 1.0 && tuv.y > 0.0 && tuv.y < 1.0) ? texture2D(uTrack, tuv).r : 1.0;
+    cover *= mix(0.15, 1.0, track);
+    cover *= uSnow;
+    // deep snow is bright; a cold blue shade at the toe of each drift gives it some body
+    vec3 snowCol = mix(vec3(0.8, 0.86, 0.95), vec3(0.95, 0.97, 1.0), smoothstep(0.3, 0.9, cover));
+    diffuseColor.rgb = mix(diffuseColor.rgb, snowCol, clamp(cover, 0.0, 1.0));
+    diffuseColor.rgb *= 1.0 - 0.12 * (smoothstep(0.2, 0.45, cover) - smoothstep(0.45, 0.8, cover));
+    // trodden slush: damp and darker
+    diffuseColor.rgb *= mix(0.82, 1.0, track);
+    // powder blowing across the ground in wisps, racing downwind
+    float blow = amb_noise(vec2(wp.x * 0.7 - uTime * (1.4 + 2.5 * uWind), wp.y * 3.5));
+    blow = smoothstep(0.62, 0.9, blow) * amb_noise(gp * 0.25 - uWindDir * uTime * 0.3);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.97, 0.98, 1.0), blow * 0.55 * uSnow);
   }
 `;
 const GROUND_ROUGH = /* glsl */ `
@@ -147,14 +196,24 @@ const GROUND_EMISSIVE = /* glsl */ `
   totalEmissiveRadiance += (uSkyRefl * 0.3 + vec3(uFlash * 0.5)) * puddle + (uSkyRefl * 0.5 + 0.1) * ripple * (0.02 + 0.22 * puddle) * uWet;
 `;
 
-/** The deck and quay material: a plain standard material with clouds and wetness worked in. */
-export function groundMaterial(map: THREE.Texture, sky: string): THREE.MeshStandardMaterial {
+/**
+ * The deck and quay material: a plain standard material with clouds, wetness and snow worked in. `obstacles` are
+ * what the snow drifts against (the live layout).
+ */
+export function groundMaterial(map: THREE.Texture, sky: string, obstacles: readonly Obstacle[] = []): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.9 });
   const sk = { value: new THREE.Color(sky) };
+  const obs = Array.from({ length: 12 }, (_, i) => {
+    const o = obstacles[i];
+    if (!o) return new THREE.Vector4();
+    return o.kind === 'circle' ? new THREE.Vector4(o.x, o.z, o.r, -1) : new THREE.Vector4(o.x, o.z, o.hw, o.hd);
+  });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, {
       uTime: AMBIENT.uTime, uWind: AMBIENT.uWind, uWindDir: AMBIENT.uWindDir, uClouds: AMBIENT.uClouds,
-      uWet: AMBIENT.uWet, uRain: AMBIENT.uRain, uFlash: AMBIENT.uFlash, uSnow: AMBIENT.uSnow, uSkyRefl: sk,
+      uWet: AMBIENT.uWet, uRain: AMBIENT.uRain, uFlash: AMBIENT.uFlash, uSnow: AMBIENT.uSnow, uSnowBuild: AMBIENT.uSnowBuild,
+      uSkyRefl: sk, uObs: { value: obs }, uObsN: { value: Math.min(12, obstacles.length) },
+      uTrack: { value: trackTexture }, uTrackRect: { value: TRACK_RECT },
     });
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGW;')

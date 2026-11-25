@@ -978,8 +978,8 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
   const hazardTex = useMemo(makeHazardTexture, []);
   const crateTex = useMemo(makeCrateTexture, []);
   // the deck and quay drift with cloud shadows by day and shine wet in the rain
-  const deckMat = useMemo(() => groundMaterial(deckTex, L.sky), [deckTex, L.sky]);
-  const quayMat = useMemo(() => groundMaterial(quayTex, L.sky), [quayTex, L.sky]);
+  const deckMat = useMemo(() => groundMaterial(deckTex, L.sky, OBSTACLES), [deckTex, L.sky]);
+  const quayMat = useMemo(() => groundMaterial(quayTex, L.sky, OBSTACLES), [quayTex, L.sky]);
   const W = ARENA.halfWidth * 2;
   const D = ARENA.halfDepth * 2;
   const QUAY_Z = -13.3; // the quay lip: the sea starts beyond it
