@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "1.0.2"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+blowup = "11111111111111111111111111111111"
+
+[programs.localnet]
+blowup = "11111111111111111111111111111111"
+
+[provider]
+cluster = "devnet"
+wallet = ".keys/authority.json"
+
+[scripts]
+test = "cargo test -p blowup"

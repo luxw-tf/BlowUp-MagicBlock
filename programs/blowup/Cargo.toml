@@ -1,0 +1,25 @@
+[package]
+name = "blowup"
+version = "0.1.0"
+description = "BlowUp match program: authoritative bomb ownership, fuse and eliminations on a MagicBlock Ephemeral Rollup"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "blowup"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
+# Pinned per MagicBlock guidance: 0.18.0 supports validator 1.x and 2.0; 0.20.x breaks #[vrf].
+ephemeral-rollups-sdk = { version = "=0.18.0", features = ["anchor", "vrf"] }
