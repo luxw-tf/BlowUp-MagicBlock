@@ -46,4 +46,6 @@ pub enum BlowupError {
     RetryTooEarly,
     #[msg("Oracle queue is not a MagicBlock VRF queue")]
     BadOracleQueue,
+    #[msg("Player is still sending inputs; takeover not allowed yet")]
+    PlayerStillActive,
 }

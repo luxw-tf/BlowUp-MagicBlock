@@ -42,6 +42,16 @@ pub const MIN_INPUT_WINDOW_MS: i64 = 60;
 /// a +15 unit teleport through after an idle period.
 pub const MAX_INPUT_WINDOW_MS: i64 = 300;
 
+/// A player must be silent this long before the lobby may hand them to a bot.
+pub const TAKEOVER_GRACE_MS: u64 = 5_000;
+
+/// Takeover is allowed once the player has sent no input for the grace
+/// period. A player who never sent any input (last_input_slot == 0) counts as
+/// disconnected.
+pub fn takeover_allowed(slot: u64, last_input_slot: u64, slot_ms: u16) -> bool {
+    slots_to_ms(slot.saturating_sub(last_input_slot), slot_ms) >= TAKEOVER_GRACE_MS
+}
+
 /// Unbiased-enough mapping of a u32 to [0, n): floor(u * n / 2^32).
 pub fn pick_index(u: u32, n: u32) -> u32 {
     ((u as u64 * n as u64) >> 32) as u32
@@ -157,6 +167,15 @@ mod tests {
         assert_eq!(seen, [true, false, true, false, true, true]);
         assert_eq!(pick_index(u32::MAX, 6), 5);
         assert_eq!(pick_index(0, 6), 0);
+    }
+
+    #[test]
+    fn takeover_needs_five_silent_seconds() {
+        // 10 ms slots: 500 slots = 5 s.
+        assert!(!takeover_allowed(1_000_499, 1_000_000, 10));
+        assert!(takeover_allowed(1_000_500, 1_000_000, 10));
+        assert!(takeover_allowed(1_000_000, 0, 10)); // never sent an input
+        assert!(!takeover_allowed(1_000_000, 1_000_000, 10)); // just sent one
     }
 
     #[test]

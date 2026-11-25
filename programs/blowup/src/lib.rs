@@ -343,6 +343,24 @@ pub mod blowup {
         Ok(())
     }
 
+    /// Bot takeover of a disconnected player (PRD §13). The match authority
+    /// may point the player's session at a lobby-held bot key, but only after
+    /// the player has been silent for TAKEOVER_GRACE_MS, so an active player
+    /// can never be hijacked. The guest reclaims control with `renew_session`.
+    pub fn takeover(ctx: Context<Takeover>, bot_session: Pubkey) -> Result<()> {
+        let m = &ctx.accounts.match_state;
+        let p = &mut ctx.accounts.player_state;
+        require_keys_eq!(m.authority, ctx.accounts.authority.key(), BlowupError::NotAuthority);
+        require_keys_eq!(p.match_key, m.key(), BlowupError::WrongMatch);
+        require!(m.phase != phase::FINISHED, BlowupError::WrongPhase);
+        require!(m.alive_mask & (1 << p.index) != 0, BlowupError::PlayerEliminated);
+        let slot = Clock::get()?.slot;
+        require!(takeover_allowed(slot, p.last_input_slot, m.slot_ms), BlowupError::PlayerStillActive);
+        p.session_key = bot_session;
+        p.session_expiry = Clock::get()?.unix_timestamp + MAX_SESSION_SECONDS;
+        Ok(())
+    }
+
     /// Bomb transfer. method 0 = tag (1.5u), 1 = throw hit (10u).
     /// Requests a fresh fuse from VRF; the fuse is "arming" until the callback.
     pub fn transfer(ctx: Context<TransferCtx>, target_index: u8, method: u8, client_seed: [u8; 8]) -> Result<()> {
@@ -630,6 +648,14 @@ pub struct SubmitInput<'info> {
 #[derive(Accounts)]
 pub struct RenewSession<'info> {
     pub authority: Signer<'info>,
+    #[account(mut)]
+    pub player_state: Account<'info, PlayerState>,
+}
+
+#[derive(Accounts)]
+pub struct Takeover<'info> {
+    pub authority: Signer<'info>,
+    pub match_state: Account<'info, MatchState>,
     #[account(mut)]
     pub player_state: Account<'info, PlayerState>,
 }

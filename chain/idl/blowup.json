@@ -1065,6 +1065,44 @@
       ]
     },
     {
+      "name": "takeover",
+      "docs": [
+        "Bot takeover of a disconnected player (PRD §13). The match authority",
+        "may point the player's session at a lobby-held bot key, but only after",
+        "the player has been silent for TAKEOVER_GRACE_MS, so an active player",
+        "can never be hijacked. The guest reclaims control with `renew_session`."
+      ],
+      "discriminator": [
+        16,
+        223,
+        149,
+        148,
+        132,
+        54,
+        233,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "match_state"
+        },
+        {
+          "name": "player_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "bot_session",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "transfer",
       "docs": [
         "Bomb transfer. method 0 = tag (1.5u), 1 = throw hit (10u).",
@@ -1308,6 +1346,11 @@
       "code": 6021,
       "name": "BadOracleQueue",
       "msg": "Oracle queue is not a MagicBlock VRF queue"
+    },
+    {
+      "code": 6022,
+      "name": "PlayerStillActive",
+      "msg": "Player is still sending inputs; takeover not allowed yet"
     }
   ],
   "types": [
