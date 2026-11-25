@@ -114,6 +114,14 @@ Known gaps:
 - Bots run on the lobby, so the lobby must stay up for a match to finish. If it dies mid-match, `abort_match` and the 8-minute timeout are the only recovery.
 - The lobby holds the devnet authority key locally (`.keys/`). Public hosting needs a proper key store.
 
+## Art and sound
+
+All third-party assets are CC0 (public domain), credited anyway:
+
+- 3D models: [Kenney](https://kenney.nl) (Watercraft, Pirate, Nature and Food kits) and [Quaternius](https://quaternius.com) (Pirate Kit, including the six pirates). See `public/models/CREDITS.md`.
+- Sound effects and jingles: [Kenney](https://kenney.nl) audio packs. See `public/audio/CREDITS.md`.
+- Fonts: Lilita One and Nunito (SIL Open Font License), via Fontsource.
+
 ## Not done yet / next steps
 
 - On-chain gaps: throw line-of-sight/obstacles, pickups and abilities.
