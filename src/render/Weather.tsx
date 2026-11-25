@@ -163,6 +163,7 @@ const GUST_VERT = /* glsl */ `
   uniform float uTime, uWind;
   uniform vec2 uWindDir;
   varying float vA;
+  varying float vSide;
   float gh(float n) { return fract(sin(n) * 43758.5453); }
   void main() {
     float life = 2.6 + aSeed.y * 1.4;
@@ -172,31 +173,38 @@ const GUST_VERT = /* glsl */ `
     vec3 o = vec3(-24.0 + gh(cyc * 12.9 + aSeed.z * 78.2) * 48.0, 0.5 + gh(cyc * 4.1 + aSeed.x * 9.7) * 2.6, -13.0 + gh(cyc * 7.3 + aSeed.y * 31.1) * 24.0);
     vec2 dir = uWindDir;
     vec2 side = vec2(-dir.y, dir.x);
-    float len = 4.0 + 3.0 * aSeed.z;
+    float len = 3.0 + 2.5 * aSeed.z;
     float travel = 9.0 + uWind * 8.0;
     float along = (ph - 0.5) * travel - (1.0 - aT) * len;
-    // a lazy wave along the line, curling up at the head
-    float wave = sin(along * 0.9 + aSeed.z * 6.0 + uTime * 2.0) * 0.35;
+    // a lazy ripple along the line
+    float wave = sin(along * 0.8 + aSeed.z * 6.0 + uTime * 1.6) * 0.18;
     vec3 p = o + vec3(dir.x, 0.0, dir.y) * along + vec3(side.x, 0.0, side.y) * wave;
     p.y += sin(along * 0.6 + aSeed.x * 5.0) * 0.25;
-    p += vec3(side.x, 0.0, side.y) * aSide * 0.085;
-    p.y += aSide * 0.05;
+    // a hair-thin wisp: widest in the middle, tapering to nothing at both ends
+    float w = 0.045 * sin(3.14159 * aT);
+    p += vec3(side.x, 0.0, side.y) * aSide * w;
+    p.y += aSide * w * 0.6;
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
-    vA = sin(3.14159 * ph) * smoothstep(0.0, 0.35, aT) * smoothstep(1.0, 0.8, aT);
+    vSide = aSide;
+    // fades in and out over its pass, and along its length: faint tail, brighter towards the head
+    vA = sin(3.14159 * ph) * smoothstep(0.0, 0.6, aT) * smoothstep(1.0, 0.85, aT);
   }
 `;
 const GUST_FRAG = /* glsl */ `
   uniform float uOpacity;
+  uniform vec3 uColor;
   varying float vA;
+  varying float vSide;
   void main() {
-    if (vA < 0.01) discard;
-    gl_FragColor = vec4(1.0, 1.0, 1.0, vA * uOpacity);
+    float a = vA * (1.0 - vSide * vSide) * uOpacity;   // soft across its width
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(uColor, a);
   }
 `;
 
 /** White streaks racing over the deck downwind (the wind lines of a cartoon): one draw call. */
-function Gusts({ amount }: { amount: number }) {
-  const n = Math.round(16 * amount);
+function Gusts({ amount, night }: { amount: number; night: boolean }) {
+  const n = Math.round(14 * amount);
   const { geo, mat } = useMemo(() => {
     const SEG = 24;
     const t: number[] = [], side: number[] = [], pos: number[] = [], idx: number[] = [];
@@ -218,13 +226,16 @@ function Gusts({ amount }: { amount: number }) {
     const mat = new THREE.ShaderMaterial({
       vertexShader: GUST_VERT,
       fragmentShader: GUST_FRAG,
-      uniforms: { uTime: AMBIENT.uTime, uWind: AMBIENT.uWind, uWindDir: AMBIENT.uWindDir, uOpacity: { value: 0.8 } },
+      uniforms: {
+        uTime: AMBIENT.uTime, uWind: AMBIENT.uWind, uWindDir: AMBIENT.uWindDir,
+        uOpacity: { value: night ? 0.28 : 0.45 }, uColor: { value: new THREE.Color(night ? '#a9b9d6' : '#ffffff') },
+      },
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     return { geo, mat };
-  }, [n]);
+  }, [n, night]);
   useLayoutEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);
   return <mesh geometry={geo} material={mat} frustumCulled={false} renderOrder={5} />;
 }
@@ -321,7 +332,7 @@ export function WeatherLayer({ look, night, quiet = false }: { look: Look; night
     <>
       {look.rain > 0 && <Rain amount={look.rain} night={night} />}
       {look.snow > 0 && <Snow amount={look.snow} night={night} />}
-      {look.gusts > 0 && <Gusts amount={look.gusts} />}
+      {look.gusts > 0 && <Gusts amount={look.gusts} night={night} />}
       {look.lightning && <Lightning />}
     </>
   );

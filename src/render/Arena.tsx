@@ -71,7 +71,7 @@ function makeDeckTexture(): THREE.CanvasTexture {
     for (let k = 0; k < 6; k++) { x += (r() - 0.5) * 40; y += (r() - 0.3) * 30; g.lineTo(x, y); }
     g.stroke();
   }
-  // painted markings: a bay outline, corner brackets, a dashed lane and stencilled bay number
+  // painted markings: a bay outline, corner brackets, a dashed lane and the stencilled name
   g.strokeStyle = P.line; g.lineWidth = 7; g.globalAlpha = 0.9;
   g.strokeRect(14, 14, c.width - 28, c.height - 28);
   g.setLineDash([26, 20]); g.lineWidth = 5;
@@ -87,10 +87,11 @@ function makeDeckTexture(): THREE.CanvasTexture {
   hazard(c.width - 154, 34, 120, 22); hazard(34, c.height - 56, 120, 22);
   g.globalAlpha = 0.55; g.fillStyle = P.cream;
   g.font = `900 ${U * 2.2}px Arial Black, Impact, sans-serif`; g.textAlign = 'center';
-  g.fillText('BAY 7', c.width * 0.5, c.height * 0.2);
-  g.save(); g.translate(c.width * 0.5, c.height * 0.86); g.rotate(Math.PI); g.fillText('BAY 7', 0, 0); g.restore();
+  // the game's name stencilled at each end, reading the right way up from either side
+  g.fillText('BLOWUP', c.width * 0.5, c.height * 0.2);
+  g.save(); g.translate(c.width * 0.5, c.height * 0.86); g.rotate(Math.PI); g.fillText('BLOWUP', 0, 0); g.restore();
   g.globalAlpha = 1;
-  // drain grates by the bay number
+  // drain grates by the name
   for (const [x, y] of [[c.width * 0.3, c.height * 0.2], [c.width * 0.7, c.height * 0.8]]) {
     g.fillStyle = '#7c776e'; g.fillRect(x - 22, y - 14, 44, 28);
     g.fillStyle = '#4c4843'; for (let k = 0; k < 6; k++) g.fillRect(x - 18 + k * 7, y - 10, 4, 20);
@@ -331,11 +332,12 @@ function Sea() {
 
 // ───────────────────────────── props ─────────────────────────────
 
-function Container({ position, rotation = 0, color, len = 6 }: { position: [number, number, number]; rotation?: number; color: string; len?: number }) {
+function Container({ position, rotation = 0, color, len = 6, hanging = false }: { position: [number, number, number]; rotation?: number; color: string; len?: number; hanging?: boolean }) {
   const ribs = useMemo(() => Array.from({ length: Math.round(len / 0.45) }, (_, i) => -len / 2 + 0.22 + i * 0.45), [len]);
   return (
     <group position={position} rotation={[0, rotation, 0]}>
-      <mesh castShadow receiveShadow position={[0, 1.3, 0]}>
+      {/* a swinging load doesn't take shadows on itself: they would shimmer as it sways */}
+      <mesh castShadow receiveShadow={!hanging} position={[0, 1.3, 0]}>
         <boxGeometry args={[len, 2.6, 2.4]} />
         <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
       </mesh>
@@ -352,7 +354,8 @@ function Container({ position, rotation = 0, color, len = 6 }: { position: [numb
         </group>
       ))}
       {/* a dark base rail, a thin frame round the roof (the roof itself stays in colour), a door end with lock bars */}
-      <mesh position={[0, 0.06, 0]}>
+      {/* sits a hair below the box so their bottoms never share a plane (seen from below they z-fought) */}
+      <mesh position={[0, 0.054, 0]}>
         <boxGeometry args={[len + 0.04, 0.12, 2.45]} />
         <meshStandardMaterial color="#3d3f46" roughness={0.6} />
       </mesh>
@@ -535,7 +538,7 @@ function Crane({ position }: { position: [number, number, number] }) {
             <cylinderGeometry args={[0.03, 0.03, 4, 4]} />
             <meshStandardMaterial color="#26262c" />
           </mesh>
-          <Container position={[0, -6.6, 0]} color={P.teal} len={4.2} />
+          <Container position={[0, -6.6, 0]} color={P.teal} len={4.2} hanging />
         </group>
       </group>
     </group>
@@ -728,7 +731,7 @@ function MiniContainer({ hw, hd, color }: { hw: number; hd: number; color: strin
         )),
       )}
       {/* a thin dark frame round the base and the roof edge, the roof itself in the container's colour */}
-      <mesh position={[0, 0.05, 0]}>
+      <mesh position={[0, 0.045, 0]}>
         <boxGeometry args={[hw * 2 + 0.04, 0.1, hd * 2 + 0.04]} />
         <meshStandardMaterial color="#3d3f46" />
       </mesh>
