@@ -193,6 +193,9 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             );
             break;
           }
+          case 'notice':
+            if (e.id === local) shout(e.text, 'good', true);
+            break;
           case 'abilityFailed':
           case 'transferRejected':
             if (e.id === local) {

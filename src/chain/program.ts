@@ -247,13 +247,18 @@ export function instructions(connection: Connection) {
           oracleQueue: EPHEMERAL_QUEUE,
         })
         .instruction(),
-    finalize: (payer: PublicKey, match: PublicKey, players: number) =>
+    /** `seats`: the player indices that exist in this match. */
+    finalize: (payer: PublicKey, match: PublicKey, seats: number[]) =>
       m
         .finalize()
         .accountsPartial({ payer, matchState: match })
-        .remainingAccounts(
-          Array.from({ length: players }, (_, i) => ({ pubkey: pda.player(match, i), isSigner: false, isWritable: true })),
-        )
+        .remainingAccounts(seats.map((i) => ({ pubkey: pda.player(match, i), isSigner: false, isWritable: true })))
+        .instruction(),
+    /** Lobby hands a silent player to a bot key (program enforces the grace period). */
+    takeover: (authority: PublicKey, match: PublicKey, index: number, botSession: PublicKey) =>
+      m
+        .takeover(botSession)
+        .accountsPartial({ authority, matchState: match, playerState: pda.player(match, index) })
         .instruction(),
     recordResult: (payer: PublicKey, match: PublicKey) =>
       m.recordResult().accountsPartial({ payer, matchState: match, result: pda.result(match) }).instruction(),

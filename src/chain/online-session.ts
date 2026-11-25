@@ -46,8 +46,27 @@ export interface LobbyMatchInfo {
   validator: string | null;
   slotMs: number;
   roster: RosterEntry[];
-  humanIndex: number;
+  takeovers?: number[];
   result: Record<string, unknown> | null;
+}
+
+/** Remembered so a reload or crash can rejoin the same live match. */
+const ACTIVE_KEY = 'blowup.activeMatch';
+export function rememberActiveMatch(matchId: string | null) {
+  try {
+    if (matchId) localStorage.setItem(ACTIVE_KEY, JSON.stringify({ matchId, at: Date.now() }));
+    else localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    // storage unavailable
+  }
+}
+export function activeMatchId(): string | null {
+  try {
+    const r = JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? 'null') as { matchId: string; at: number } | null;
+    return r && Date.now() - r.at < 15 * 60_000 ? r.matchId : null;
+  } catch {
+    return null;
+  }
 }
 
 const SEND_INTERVAL_MS = 100;
@@ -83,20 +102,37 @@ export class OnlineSession implements SessionLike {
   private lastVrfPurpose = 0;
   private settlementPoll: ReturnType<typeof setInterval> | null = null;
   private disposed = false;
+  private synced = false;
+  private reclaiming = false;
+  private lastUpdateAt = 0;
+  private session: Keypair;
 
+  /**
+   * @param identity the guest identity (persistent); finds our seat and can
+   *   reclaim it with `renew_session` after a bot takeover.
+   * @param session  the per-match session key registered at join (or a fresh
+   *   one when rejoining; it is installed via `renew_session`).
+   */
   constructor(
     private readonly info: LobbyMatchInfo,
-    private readonly session: Keypair,
+    private readonly identity: Keypair,
+    session: Keypair,
     private readonly lobbyUrl = '',
+    rejoin = false,
   ) {
-    this.myIndex = info.humanIndex;
-    this.localId = playerId(info.humanIndex);
+    const seat = info.roster.find((r) => r.identity === identity.publicKey.toBase58());
+    if (!seat) throw new Error('This match has no seat for you.');
+    this.session = session;
+    this.myIndex = seat.index;
+    this.localId = playerId(seat.index);
     this.match = new PublicKey(info.matchPda);
     this.er = new Connection(info.erUrl, { commitment: 'processed', wsEndpoint: info.erUrl.replace(/^http/, 'ws') });
     this.clock = new SlotClock(this.er, info.slotMs);
     this.clock.start();
     this.ix = instructions(this.er);
-    this.mirror = new ChainMirror(info.roster, this.clock, new Set([info.humanIndex]));
+    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]));
+    rememberActiveMatch(info.id);
+    if (rejoin) void this.reclaim();
     this.online = {
       network: 'Solana devnet + MagicBlock Ephemeral Rollup',
       programId: info.programId,
@@ -130,7 +166,10 @@ export class OnlineSession implements SessionLike {
           const m = decodeMatch(data);
           this.trackVrf(m);
           this.queued.push(...this.mirror.applyMatch(m));
-          if (m.phase === PHASE.FINISHED) this.watchSettlement();
+          if (m.phase === PHASE.FINISHED) {
+            rememberActiveMatch(null);
+            this.watchSettlement();
+          }
         },
         { pollMs: 500 },
       ),
@@ -143,6 +182,50 @@ export class OnlineSession implements SessionLike {
           this.mirror.applyPlayer(decodePlayer(data));
         }),
       );
+    }
+    // Our own seat: initial position/sequence sync, and takeover detection.
+    this.subs.push(
+      watchAccount(this.er, pda.player(this.match, this.myIndex), (data, slot) => {
+        this.clock.observe(slot);
+        const p = decodePlayer(data);
+        const me = this.me();
+        if (!this.synced) {
+          this.synced = true;
+          me.pos = { x: p.x / 1000, z: p.z / 1000 };
+          me.vel = { x: 0, z: 0 };
+        }
+        this.seq = Math.max(this.seq, p.seq);
+        const active = performance.now() - this.lastUpdateAt < 1_000;
+        if (!p.sessionKey.equals(this.session.publicKey)) {
+          // A bot is playing our seat. Follow its moves until we take it back.
+          me.pos = { x: p.x / 1000, z: p.z / 1000 };
+          if (active && me.alive) void this.reclaim();
+        }
+      }),
+    );
+  }
+
+  /** Take our seat back from a takeover bot (or install a rejoin key). */
+  private async reclaim() {
+    if (this.reclaiming || this.disposed) return;
+    this.reclaiming = true;
+    try {
+      const fresh = Keypair.generate();
+      const expiry = Math.floor(Date.now() / 1000) + 3600;
+      const r = await sendTx(
+        this.er,
+        [await this.ix.renewSession(this.identity.publicKey, this.match, this.myIndex, fresh.publicKey, expiry)],
+        [],
+        this.identity,
+        { confirm: true, timeoutMs: 5_000 },
+      );
+      if (!r.err) {
+        this.session = fresh;
+        this.lastSent = null; // force a position send right away
+        this.queued.push({ type: 'notice', id: this.localId, text: 'back in control' });
+      }
+    } finally {
+      this.reclaiming = false;
     }
   }
 
@@ -183,6 +266,7 @@ export class OnlineSession implements SessionLike {
         const r = (await (await fetch(`${this.lobbyUrl}/api/matches/${this.info.id}`)).json()) as LobbyMatchInfo;
         if (r.status === 'finished' && r.result) {
           this.online.settlement = 'settled';
+          rememberActiveMatch(null);
           this.online.resultPda = String(r.result.resultPda ?? '');
           this.online.commitSig = String(r.result.commitSig ?? '');
           this.online.recordSig = String(r.result.recordSig ?? '');
@@ -225,6 +309,7 @@ export class OnlineSession implements SessionLike {
 
   update(dt: number) {
     if (this.disposed) return;
+    this.lastUpdateAt = performance.now();
     this.acc += Math.min(dt, 0.25);
     while (this.acc >= TICK_DT) {
       this.acc -= TICK_DT;

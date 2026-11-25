@@ -121,7 +121,8 @@ export type GameEvent =
   | { type: 'elimination'; id: PlayerId; by: PlayerId | null; at: Vec2; survivors: number }
   | { type: 'matchEnd'; winner: PlayerId }
   | { type: 'inputRejected'; id: PlayerId; reason: string }
-  | { type: 'transferRejected'; id: PlayerId; reason: string };
+  | { type: 'transferRejected'; id: PlayerId; reason: string }
+  | { type: 'notice'; id: PlayerId; text: string };
 
 export interface MatchState {
   tick: number;

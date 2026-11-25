@@ -18,10 +18,20 @@ export function Landing({
   initial,
   onPlay,
   onPlayOnline,
+  onPrivateRoom,
+  pendingRoom,
+  onRejoin,
+  notice,
 }: {
   initial: Profile | null;
   onPlay: (p: Profile) => void;
   onPlayOnline: (p: Profile) => void;
+  onPrivateRoom: (p: Profile) => void;
+  /** Room code from an invite link. */
+  pendingRoom: string | null;
+  /** Offered when a live online match can be rejoined. */
+  onRejoin: (() => void) | null;
+  notice: string | null;
 }) {
   const [name, setName] = useState(initial?.name ?? `guest${Math.floor(1000 + Math.random() * 9000)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
@@ -36,6 +46,11 @@ export function Landing({
     if (!clean) return;
     audio.unlock();
     onPlayOnline({ name: clean, character });
+  };
+  const room = () => {
+    if (!clean) return;
+    audio.unlock();
+    onPrivateRoom({ name: clean, character });
   };
 
   return (
@@ -66,6 +81,20 @@ export function Landing({
               </button>
             ))}
           </div>
+          {(pendingRoom || onRejoin) && (
+            <div className="row">
+              {onRejoin && (
+                <button className="btn primary big" onClick={onRejoin}>
+                  Rejoin your match
+                </button>
+              )}
+              {pendingRoom && (
+                <button className="btn primary big" onClick={room} disabled={!clean}>
+                  Join room {pendingRoom}
+                </button>
+              )}
+            </div>
+          )}
           <div className="row">
             <button className="btn primary big" onClick={play} disabled={!clean}>
               Quick Play
@@ -73,10 +102,13 @@ export function Landing({
             <button className="btn big" onClick={playOnline} disabled={!clean} title="Live match on a MagicBlock rollup (Solana devnet)">
               Play online <small>devnet</small>
             </button>
-            <button className="btn ghost" disabled title="Private rooms arrive with live multiplayer">
-              Private room <small>soon</small>
-            </button>
+            {!pendingRoom && (
+              <button className="btn" onClick={room} disabled={!clean} title="Create or join a room with friends (online)">
+                Private room
+              </button>
+            )}
           </div>
+          {notice && <p className="verify-status warn">{notice}</p>}
           <p className="fine">
             No wallet needed. Identical stats for everyone — only skill (and the fuse) decides. Online matches have no pickups yet.
           </p>

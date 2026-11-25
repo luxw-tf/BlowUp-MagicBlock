@@ -7,6 +7,7 @@
  * player, or the server's bots) are predicted here and pushed to the chain;
  * everyone else's positions come from their PlayerState accounts.
  */
+import { SPAWNS } from '../game/arena';
 import { createMatch, type ParticipantSetup } from '../game/sim';
 import type { GameEvent, MatchState, Phase, PlayerState } from '../game/types';
 import { mmToUnits, NO_PLAYER, PHASE, type ChainMatch, type ChainPlayer, type SlotClock } from './program';
@@ -16,6 +17,8 @@ export interface RosterEntry {
   name: string;
   character: ParticipantSetup['character'];
   isBot: boolean;
+  /** Guest identity (base58) for human seats, so a client can find its own seat. */
+  identity?: string;
 }
 
 export const playerId = (index: number) => `p${index}`;
@@ -36,7 +39,9 @@ export class ChainMirror {
     this.state = createMatch(
       ordered.map((r) => ({ id: playerId(r.index), name: r.name, character: r.character, isBot: r.isBot })),
     );
-    // createMatch assigns spawns by array order, which matches on-chain SPAWNS_MM by index.
+    // Spawn by seat index (matches the program's SPAWNS_MM), not by array order:
+    // matches with fewer than 6 seats have gaps.
+    for (const p of this.state.players) p.pos = { ...SPAWNS[indexOf(p.id)] };
     this.state.pickups = []; // pickups are disabled in online matches for now
     this.state.phase = 'assigning';
     this.state.randomRequests = [];

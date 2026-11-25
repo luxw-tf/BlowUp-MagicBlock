@@ -1,24 +1,34 @@
 import { useCallback, useState } from 'react';
-import type { OnlineSession } from './chain/online-session';
+import { activeMatchId, rememberActiveMatch, type OnlineSession } from './chain/online-session';
 import { buildParticipants, GameSession } from './game/session';
 import type { SessionLike } from './game/sessionTypes';
 import type { ParticipantSetup } from './game/sim';
 import { GameView } from './ui/GameView';
 import { Landing, Lobby } from './ui/Menus';
 import { OnlineLobby } from './ui/OnlineLobby';
+import { rejoinMatch } from './ui/onlineFlow';
+import { RoomScreen } from './ui/RoomScreen';
 import { loadProfile, saveProfile, type Profile } from './state/settings';
 
 type Screen =
   | { kind: 'landing' }
   | { kind: 'lobby'; participants: ParticipantSetup[] }
   | { kind: 'online-lobby'; profile: Profile; attempt: number }
+  | { kind: 'room'; profile: Profile; code: string | null; attempt: number }
   | { kind: 'match'; session: SessionLike };
+
+const params = new URLSearchParams(location.search);
+/** Invite links: ?room=CODE */
+const inviteCode = /^[A-Za-z0-9]{5}$/.test(params.get('room') ?? '') ? params.get('room')!.toUpperCase() : null;
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(loadProfile);
+  const [pendingRoom, setPendingRoom] = useState<string | null>(inviteCode);
+  const [rejoinId, setRejoinId] = useState<string | null>(activeMatchId);
+  const [notice, setNotice] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>(() =>
     // Dev shortcut: ?quick jumps straight into a match.
-    new URLSearchParams(location.search).has('quick')
+    params.has('quick')
       ? { kind: 'match', session: new GameSession(buildParticipants(loadProfile() ?? { name: 'dev', character: 'frog' })) }
       : { kind: 'landing' },
   );
@@ -57,18 +67,51 @@ export default function App() {
     [go, remember],
   );
 
-  if (screen.kind === 'landing') return <Landing initial={profile} onPlay={quickPlay} onPlayOnline={playOnline} />;
-  if (screen.kind === 'lobby')
-    return <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={() => go({ kind: 'landing' })} />;
-  if (screen.kind === 'online-lobby')
+  const privateRoom = useCallback(
+    (p: Profile, code: string | null = null) => {
+      remember(p);
+      setPendingRoom(null);
+      if (code) history.replaceState(null, '', location.pathname);
+      go({ kind: 'room', profile: p, code, attempt: Date.now() });
+    },
+    [go, remember],
+  );
+
+  const rejoin = useCallback(() => {
+    if (!rejoinId) return;
+    rejoinMatch(rejoinId)
+      .then((s) => go({ kind: 'match', session: s }))
+      .catch((e: Error) => {
+        rememberActiveMatch(null);
+        setRejoinId(null);
+        setNotice(e.message);
+      });
+  }, [go, rejoinId]);
+
+  const toMatch = useCallback((s: OnlineSession) => go({ kind: 'match', session: s }), [go]);
+  const toLanding = useCallback(() => {
+    setRejoinId(activeMatchId());
+    go({ kind: 'landing' });
+  }, [go]);
+
+  if (screen.kind === 'landing')
     return (
-      <OnlineLobby
-        key={screen.attempt}
-        profile={screen.profile}
-        onReady={(s: OnlineSession) => go({ kind: 'match', session: s })}
-        onCancel={() => go({ kind: 'landing' })}
+      <Landing
+        initial={profile}
+        onPlay={quickPlay}
+        onPlayOnline={playOnline}
+        onPrivateRoom={(p) => privateRoom(p, pendingRoom)}
+        pendingRoom={pendingRoom}
+        onRejoin={rejoinId ? rejoin : null}
+        notice={notice}
       />
     );
+  if (screen.kind === 'lobby')
+    return <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
+  if (screen.kind === 'online-lobby') return <OnlineLobby key={screen.attempt} profile={screen.profile} onReady={toMatch} onCancel={toLanding} />;
+  if (screen.kind === 'room')
+    return <RoomScreen key={screen.attempt} profile={screen.profile} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
+
   const online = screen.session.online !== null;
   return (
     <GameView
@@ -79,7 +122,7 @@ export default function App() {
           ? playOnline(profile ?? { name: 'guest', character: 'frog' })
           : startMatch(buildParticipants(profile ?? { name: 'guest', character: 'frog' }))
       }
-      onMenu={() => go({ kind: 'landing' })}
+      onMenu={toLanding}
     />
   );
 }

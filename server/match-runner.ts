@@ -1,7 +1,12 @@
 /**
  * Runs one online match end to end on devnet + a MagicBlock ER:
- * sponsored setup → delegation → start (VRF) → bots + elimination crank →
- * finalize (commit + undelegate) → durable MatchResult on Solana.
+ * sponsored setup → delegation → start (VRF) → bots, takeovers + elimination
+ * crank → finalize (commit + undelegate) → durable MatchResult on Solana.
+ *
+ * Seats: 1–6 humans, optionally filled to 6 with bots. A human who goes
+ * silent for longer than the on-chain grace period is handed to a bot
+ * (`takeover`); if they come back, `renew_session` returns control and the
+ * bot steps aside.
  */
 import { ConnectionMagicRouter, GetCommitmentSignature } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { Connection, Keypair, PublicKey, type TransactionInstruction } from '@solana/web3.js';
@@ -28,6 +33,7 @@ import {
   sendTx,
   unitsToMm,
   watchAccount,
+  type ChainPlayer,
 } from '../src/chain/program';
 
 export type MatchStatus = 'creating' | 'delegating' | 'starting' | 'live' | 'settling' | 'finished' | 'error';
@@ -48,12 +54,18 @@ interface Bot {
   lastSentAt: number;
   lastSent: { x: number; z: number } | null;
   busyUntil: number; // ms timestamp: pending transfer in flight
+  /** True when this bot is covering for a disconnected human. */
+  takeover: boolean;
 }
 
+/** Seat order that spreads small matches across the arena's spawn points. */
+const SEAT_ORDER = [0, 3, 1, 4, 2, 5];
 const SEND_INTERVAL_MS = 100; // position updates at 10 Hz
 const TICK_MS = 50;
 const MATCH_TIMEOUT_MS = 8 * 60_000;
 const RANDOMNESS_RETRY_MS = 3_500;
+/** Slightly above the on-chain TAKEOVER_GRACE_MS (5 s) so the check passes first time. */
+const TAKEOVER_AFTER_MS = 6_000;
 
 const shuffle = <T,>(a: T[]) => {
   const r = [...a];
@@ -65,6 +77,17 @@ const shuffle = <T,>(a: T[]) => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Unique display names within a match (PRD §09). */
+function uniqueNames(names: string[]): string[] {
+  const seen = new Map<string, number>();
+  return names.map((n) => {
+    const k = n.toLowerCase();
+    const c = (seen.get(k) ?? 0) + 1;
+    seen.set(k, c);
+    return c === 1 ? n : `${n} ${c}`;
+  });
+}
+
 let counter = 0;
 
 export class MatchRunner {
@@ -73,14 +96,12 @@ export class MatchRunner {
   error: string | null = null;
   readonly matchId = BigInt(Date.now()) * 100n + BigInt(counter % 100);
   readonly match = pda.match(this.matchId);
-  readonly humanIndex = Math.floor(Math.random() * MAX_PLAYERS);
   roster: RosterEntry[] = [];
   erUrl: string | null = null;
   slotMs = 10;
   validator: PublicKey | null = null;
   result: Record<string, unknown> | null = null;
   readonly createdAt = Date.now();
-  lastSeenAt = Date.now();
 
   private base: Connection;
   private router: ConnectionMagicRouter;
@@ -88,19 +109,28 @@ export class MatchRunner {
   private er: Connection | null = null;
   private clock: SlotClock | null = null;
   private mirror: ChainMirror | null = null;
+  private seats: number[] = [];
+  private humanSeats = new Map<number, HumanJoin>();
+  private chainPlayers = new Map<number, ChainPlayer>();
   private bots = new Map<number, Bot>();
+  private localIndices = new Set<number>();
   private subs: (() => void)[] = [];
   private loop: ReturnType<typeof setInterval> | null = null;
   private lastCrankAt = 0;
   private crankLagMs: number[] = [];
   private lastRetryAt = 0;
   private lastTickAt = 0;
+  private lastTakeoverCheck = 0;
+  private takeoverPending = new Set<number>();
+  readonly events: string[] = [];
 
   constructor(
     private readonly authority: Keypair,
-    private readonly human: HumanJoin,
-    opts: { baseRpc?: string; router?: string } = {},
+    private readonly humans: HumanJoin[],
+    private readonly opts: { botFill: boolean; baseRpc?: string; router?: string },
   ) {
+    if (humans.length < 1 || humans.length > MAX_PLAYERS) throw new Error('1–6 humans per match');
+    if (!opts.botFill && humans.length < 2) throw new Error('a match without bots needs at least 2 players');
     this.base = new Connection(opts.baseRpc ?? DEFAULT_BASE_RPC, 'confirmed');
     this.router = new ConnectionMagicRouter(opts.router ?? DEFAULT_ROUTER, { commitment: 'confirmed' });
     this.ix = instructions(this.base);
@@ -108,6 +138,11 @@ export class MatchRunner {
 
   private log(...a: unknown[]) {
     console.log(`[match ${this.id}]`, ...a);
+  }
+
+  private note(msg: string) {
+    this.events.push(`${new Date().toISOString().slice(11, 19)} ${msg}`);
+    this.log(msg);
   }
 
   publicInfo() {
@@ -122,7 +157,8 @@ export class MatchRunner {
       validator: this.validator?.toBase58() ?? null,
       slotMs: this.slotMs,
       roster: this.roster,
-      humanIndex: this.humanIndex,
+      /** Human seats currently driven by a bot because their player went silent. */
+      takeovers: [...this.bots.values()].filter((b) => b.takeover).map((b) => b.index),
       result: this.result,
     };
   }
@@ -159,34 +195,49 @@ export class MatchRunner {
     );
     this.slotMs = Math.max(1, Math.round(route?.blockTimeMs ?? 10));
 
-    // Roster: the human at a random slot, bots elsewhere with distinct names/characters.
-    const names = shuffle(BOT_NAMES.filter((n) => n.toLowerCase() !== this.human.name.toLowerCase()));
-    const chars = shuffle(CHARACTERS.map((c) => c.id).filter((c) => c !== this.human.character));
+    // Seats: humans get random seats among the used ones; bots fill the rest.
+    const total = this.opts.botFill ? MAX_PLAYERS : this.humans.length;
+    this.seats = SEAT_ORDER.slice(0, total).sort((a, b) => a - b);
+    const humanSeatList = shuffle(this.seats).slice(0, this.humans.length);
+    const humanNames = uniqueNames(this.humans.map((h) => h.name));
+    const taken = new Set(humanNames.map((n) => n.toLowerCase()));
+    const botNames = shuffle(BOT_NAMES.filter((n) => !taken.has(n.toLowerCase())));
+    const usedChars = new Set(this.humans.map((h) => h.character));
+    const botChars = shuffle([
+      ...CHARACTERS.map((c) => c.id).filter((c) => !usedChars.has(c)),
+      ...CHARACTERS.map((c) => c.id).filter((c) => usedChars.has(c)),
+    ]);
+
     const now = Math.floor(Date.now() / 1000);
     const joins: { index: number; identity: PublicKey; session: PublicKey; expiry: number }[] = [];
     let b = 0;
-    for (let i = 0; i < MAX_PLAYERS; i++) {
-      if (i === this.humanIndex) {
-        this.roster.push({ index: i, name: this.human.name, character: this.human.character, isBot: false });
-        joins.push({ index: i, identity: this.human.identity, session: this.human.session, expiry: this.human.sessionExpiry });
+    for (const i of this.seats) {
+      const h = humanSeatList.indexOf(i);
+      if (h >= 0) {
+        const human = this.humans[h];
+        this.humanSeats.set(i, human);
+        this.roster.push({ index: i, name: humanNames[h], character: human.character, isBot: false, identity: human.identity.toBase58() });
+        joins.push({ index: i, identity: human.identity, session: human.session, expiry: human.sessionExpiry });
         continue;
       }
       const session = Keypair.generate();
-      this.bots.set(i, { index: i, session, brain: new BotBrain(playerId(i), (Math.random() * 2 ** 31) | 0), seq: 0, lastSentAt: 0, lastSent: null, busyUntil: 0 });
-      this.roster.push({ index: i, name: names[b], character: chars[b % chars.length], isBot: true });
+      this.bots.set(i, this.newBot(i, session, false));
+      this.localIndices.add(i);
+      this.roster.push({ index: i, name: botNames[b], character: botChars[b % botChars.length], isBot: true });
       joins.push({ index: i, identity: Keypair.generate().publicKey, session: session.publicKey, expiry: now + 2 * 3600 });
       b++;
     }
+    this.roster.sort((a, z) => a.index - z.index);
 
     const auth = this.authority.publicKey;
     const joinIxs = await Promise.all(joins.map((j) => this.ix.joinMatch(auth, this.match, j.index, j.identity, j.session, j.expiry)));
     await this.base_([await this.ix.createMatch(auth, this.matchId, this.slotMs), ...joinIxs.slice(0, 3)], 'create+join');
-    await this.base_(joinIxs.slice(3), 'join');
+    if (joinIxs.length > 3) await this.base_(joinIxs.slice(3), 'join');
 
     this.status = 'delegating';
-    for (let i = 0; i < MAX_PLAYERS; i += 2) {
+    for (let k = 0; k < this.seats.length; k += 2) {
       await this.base_(
-        await Promise.all([i, i + 1].map((k) => this.ix.delegatePlayer(auth, this.match, k, this.validator!))),
+        await Promise.all(this.seats.slice(k, k + 2).map((i) => this.ix.delegatePlayer(auth, this.match, i, this.validator!))),
         'delegate players',
       );
     }
@@ -210,7 +261,20 @@ export class MatchRunner {
 
     // Wait for the ER to clone the match.
     for (let i = 0; i < 60 && !(await this.er.getAccountInfo(this.match, 'processed')); i++) await sleep(250);
-    this.log('delegated to', this.erUrl);
+    this.note(`delegated to ${this.erUrl} (${this.humans.length} human, ${this.seats.length - this.humans.length} bot)`);
+  }
+
+  private newBot(index: number, session: Keypair, takeover: boolean): Bot {
+    return {
+      index,
+      session,
+      brain: new BotBrain(playerId(index), (Math.random() * 2 ** 31) | 0),
+      seq: 0,
+      lastSentAt: 0,
+      lastSent: null,
+      busyUntil: 0,
+      takeover,
+    };
   }
 
   private async base_(ixs: TransactionInstruction[], what: string) {
@@ -223,7 +287,7 @@ export class MatchRunner {
   private async play() {
     const er = this.er!;
     const clock = this.clock!;
-    const mirror = new ChainMirror(this.roster, clock, new Set(this.bots.keys()));
+    const mirror = new ChainMirror(this.roster, clock, this.localIndices);
     this.mirror = mirror;
 
     this.subs.push(
@@ -233,20 +297,22 @@ export class MatchRunner {
         (data, slot) => {
           clock.observe(slot);
           for (const e of mirror.applyMatch(decodeMatch(data))) {
-            if (e.type === 'elimination') this.log(`eliminated ${e.id}; ${e.survivors} left`);
-            if (e.type === 'holderAssigned') this.log(`round ${e.round}: ${e.holder} holds`);
+            if (e.type === 'elimination') this.note(`eliminated ${e.id}; ${e.survivors} left`);
+            if (e.type === 'holderAssigned') this.note(`round ${e.round}: ${e.holder} holds`);
           }
         },
         { pollMs: 500 },
       ),
     );
-    for (let i = 0; i < MAX_PLAYERS; i++) {
-      if (this.bots.has(i)) continue; // bots are simulated here; their chain state lags ours
+    // Human seats: track positions, last input slot and session key.
+    for (const i of this.humanSeats.keys()) {
       this.subs.push(
         watchAccount(er, pda.player(this.match, i), (data, slot) => {
           clock.observe(slot);
-          mirror.applyPlayer(decodePlayer(data));
-          this.lastSeenAt = Date.now();
+          const p = decodePlayer(data);
+          this.chainPlayers.set(i, p);
+          mirror.applyPlayer(p);
+          this.checkReclaim(p);
         }),
       );
     }
@@ -257,7 +323,7 @@ export class MatchRunner {
     const r = await sendTx(er, [await this.ix.startMatch(this.authority.publicKey, this.match)], [], this.authority, { confirm: true });
     if (r.err) throw new Error(`start_match failed: ${r.err}`);
     this.status = 'live';
-    this.log('started');
+    this.note('started');
 
     this.lastTickAt = performance.now();
     await new Promise<void>((resolve) => {
@@ -295,18 +361,22 @@ export class MatchRunner {
     if (!m) return false;
     if (m.phase === PHASE.FINISHED) return true;
     if (Date.now() - this.createdAt > MATCH_TIMEOUT_MS) {
-      this.log('timeout: aborting');
+      this.note('timeout: aborting');
       void this.er_([this.ix.abortMatch(this.authority.publicKey, this.match)], this.authority);
       return false;
     }
 
     for (const bot of this.bots.values()) this.tickBot(bot, nowMs);
+    if (nowMs - this.lastTakeoverCheck > 1_000) {
+      this.lastTakeoverCheck = nowMs;
+      this.checkTakeovers();
+    }
 
     // Elimination crank: permissionless on-chain; the lobby runs it promptly.
-    const clock = this.clock!;
-    const deadline = Math.min(m.fuseDeadlineSlot || Infinity, m.roundDeadlineSlot || Infinity);
     // Start 2 slots early and retry every 150 ms: an early attempt just fails
     // with FuseNotExpired (ER transactions are free), a late one delays play.
+    const clock = this.clock!;
+    const deadline = Math.min(m.fuseDeadlineSlot || Infinity, m.roundDeadlineSlot || Infinity);
     if (m.phase === PHASE.ACTIVE && m.holder !== 255 && clock.now() >= deadline - 2 && nowMs - this.lastCrankAt > 150) {
       this.lastCrankAt = nowMs;
       const slotMs = m.slotMs;
@@ -324,11 +394,50 @@ export class MatchRunner {
       nowMs - this.lastRetryAt > RANDOMNESS_RETRY_MS
     ) {
       this.lastRetryAt = nowMs;
-      this.log('VRF pending too long; retrying');
+      this.note('VRF pending too long; retrying');
       void this.er_([this.ix.retryRandomness(this.authority.publicKey, this.match)], this.authority);
     }
     return false;
   }
+
+  // ───────────────────────── disconnects ─────────────────────────
+
+  /** Hand silent humans to a bot (the program enforces the grace period). */
+  private checkTakeovers() {
+    const m = this.mirror!.chain!;
+    const clock = this.clock!;
+    for (const [i, p] of this.chainPlayers) {
+      if (this.bots.has(i) || this.takeoverPending.has(i)) continue;
+      if (!(m.aliveMask & (1 << i))) continue;
+      const silentMs = p.lastInputSlot ? (clock.now() - p.lastInputSlot) * m.slotMs : Date.now() - this.createdAt;
+      if (silentMs < TAKEOVER_AFTER_MS) continue;
+      this.takeoverPending.add(i);
+      const session = Keypair.generate();
+      void (async () => {
+        const r = await this.er_([this.ix.takeover(this.authority.publicKey, this.match, i, session.publicKey)], this.authority);
+        if (r && !r.err) {
+          const bot = this.newBot(i, session, true);
+          bot.seq = p.seq; // continue after the human's last accepted sequence
+          const sp = this.mirror!.state.players.find((q) => q.id === playerId(i));
+          if (sp) sp.vel = { x: 0, z: 0 };
+          this.bots.set(i, bot);
+          this.localIndices.add(i);
+          this.note(`${playerId(i)} went silent for ${Math.round(silentMs / 1000)}s: bot took over`);
+        }
+      })().finally(() => this.takeoverPending.delete(i));
+    }
+  }
+
+  /** A human who renewed their session (reconnect) takes their seat back. */
+  private checkReclaim(p: ChainPlayer) {
+    const bot = this.bots.get(p.index);
+    if (!bot?.takeover || p.sessionKey.equals(bot.session.publicKey)) return;
+    this.bots.delete(p.index);
+    this.localIndices.delete(p.index);
+    this.note(`${playerId(p.index)} reconnected: control returned`);
+  }
+
+  // ───────────────────────── bots ─────────────────────────
 
   private tickBot(bot: Bot, nowMs: number) {
     const s = this.mirror!.state;
@@ -400,7 +509,7 @@ export class MatchRunner {
         bot.lastSentAt = performance.now();
         bot.lastSent = { ...p.pos };
         const r = await sendTx(this.er!, ixs, [], bot.session, { confirm: true, timeoutMs: 5_000 });
-        if (r.err && !/StaleSequence|ImpossibleMovement/.test(r.err)) this.log(`bot ${bot.index} → ${target} rejected: ${r.err}`);
+        if (r.err && !/StaleSequence|ImpossibleMovement|NotSessionKey/.test(r.err)) this.log(`bot ${bot.index} → ${target} rejected: ${r.err}`);
       })().catch(() => {});
     }, delayMs);
   }
@@ -409,7 +518,7 @@ export class MatchRunner {
     try {
       const resolved = await Promise.all(ixs);
       const r = await sendTx(this.er!, resolved, [], payer, { confirm: true, timeoutMs: 5_000 });
-      if (r.err && !/FuseNotExpired|WrongPhase|RetryTooEarly|NothingPending/.test(r.err)) this.log('ER tx error:', r.err);
+      if (r.err && !/FuseNotExpired|WrongPhase|RetryTooEarly|NothingPending|PlayerStillActive/.test(r.err)) this.log('ER tx error:', r.err);
       return r;
     } catch (e) {
       this.log('ER send error', (e as Error).message);
@@ -423,7 +532,7 @@ export class MatchRunner {
     this.status = 'settling';
     const er = this.er!;
     const final = decodeMatch((await er.getAccountInfo(this.match, 'processed'))!.data);
-    const r = await sendTx(er, [await this.ix.finalize(this.authority.publicKey, this.match, MAX_PLAYERS)], [], this.authority, {
+    const r = await sendTx(er, [await this.ix.finalize(this.authority.publicKey, this.match, this.seats)], [], this.authority, {
       confirm: true,
     });
     if (r.err) throw new Error(`finalize failed: ${r.err}`);
@@ -457,6 +566,7 @@ export class MatchRunner {
       recordSig: rec.sig,
       resultPda: pda.result(this.match).toBase58(),
       resultWinner: res?.winner.toBase58() ?? null,
+      events: this.events,
     };
   }
 }
