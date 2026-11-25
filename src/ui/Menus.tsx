@@ -8,42 +8,12 @@ import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 
 
-/** The "O" of the wordmark: a painted iron bomb with a brass cap and a lit fuse. */
-function BombO() {
-  return (
-    <svg className="logo-o" viewBox="0 0 100 118" aria-hidden>
-      <defs>
-        <radialGradient id="logo-iron" cx="0.36" cy="0.32" r="0.75">
-          <stop offset="0" stopColor="#5d6a7c" />
-          <stop offset="0.45" stopColor="#2c3442" />
-          <stop offset="1" stopColor="#151a23" />
-        </radialGradient>
-        <linearGradient id="logo-brass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffe7a0" />
-          <stop offset="1" stopColor="#d08a1e" />
-        </linearGradient>
-      </defs>
-      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="#7a4a22" strokeWidth="6" strokeLinecap="round" />
-      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="#c48a4a" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="3 4" />
-      <rect x="49" y="26" width="22" height="15" rx="3" fill="url(#logo-brass)" transform="rotate(32 60 34)" />
-      <circle cx="46" cy="76" r="38" fill="url(#logo-iron)" />
-      <path d="M24 64 A 24 24 0 0 1 40 48" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" opacity="0.4" />
-      <circle cx="28" cy="74" r="3.4" fill="#fff" opacity="0.3" />
-      <g className="logo-spark">
-        <circle cx="90" cy="6" r="9" fill="#ffb347" opacity="0.45" />
-        <path d="M90 -4 L92.6 3.4 L100 6 L92.6 8.6 L90 16 L87.4 8.6 L80 6 L87.4 3.4 Z" fill="#ffe27a" />
-      </g>
-    </svg>
-  );
-}
-
-/** The painted wordmark, "O" swapped for the bomb. */
+/** The title sign: carved driftwood letters with the bomb as the O, its fuse spark animated. */
 function Wordmark({ className = '' }: { className?: string }) {
   return (
-    <h1 className={`logo ${className}`} aria-label={GAME_TITLE}>
-      <span className="logo-word">BL</span>
-      <BombO />
-      <span className="logo-word">WUP</span>
+    <h1 className={`logo ${className}`}>
+      <img src={`${import.meta.env.BASE_URL}ui/title-logo.webp`} alt={GAME_TITLE} draggable={false} />
+      <span className="logo-spark" aria-hidden />
     </h1>
   );
 }
@@ -71,7 +41,9 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
   });
   return (
     <div className={`title-screen ${leaving ? 'leaving' : ''}`} onPointerDown={start} role="button" tabIndex={-1} aria-label="Start">
-      <div className="title-art" aria-hidden />
+      <div className="title-art" aria-hidden>
+        <span className="title-spark" />
+      </div>
       <div className="title-shade" aria-hidden />
       <div className="title-center">
         <Wordmark className="title-logo" />
