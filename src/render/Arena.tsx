@@ -807,11 +807,122 @@ function Basin({ x, z, r, statue = true }: { x: number; z: number; r: number; st
   );
 }
 
+/**
+ * A big harbour capstan on a round timber platform that fills the footprint: an iron-banded drum with a coil of
+ * mooring hawser round it, and capstan bars sticking out like spokes, turning very slowly as if someone just let go.
+ */
+function Capstan({ r }: { r: number }) {
+  const head = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (head.current) head.current.rotation.y = clock.elapsedTime * 0.06;
+  });
+  const BARS = 8;
+  const reach = r - 0.25; // the bar tips stay inside the footprint
+  return (
+    <group>
+      {/* the platform: an iron rim and a planked timber top */}
+      <mesh receiveShadow castShadow position={[0, 0.08, 0]}>
+        <cylinderGeometry args={[r, r + 0.05, 0.16, 40]} />
+        <meshStandardMaterial color="#4a4b52" roughness={0.6} metalness={0.3} />
+      </mesh>
+      <mesh receiveShadow position={[0, 0.2, 0]}>
+        <cylinderGeometry args={[r - 0.1, r - 0.1, 0.1, 40]} />
+        <meshStandardMaterial color="#9a8a74" roughness={0.9} />
+      </mesh>
+      {/* sea-bleached planks laid straight across, like a real deck */}
+      {Array.from({ length: 9 }, (_, k) => {
+        const z = (k - 4) * ((r - 0.1) / 4.6);
+        const half = Math.sqrt(Math.max(0, (r - 0.12) ** 2 - z * z));
+        return (
+          <mesh key={`p${k}`} position={[0, 0.252, z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[half * 2, 0.03]} />
+            <meshStandardMaterial color="#6f6252" roughness={0.9} />
+          </mesh>
+        );
+      })}
+      {/* a ring of studs round the rim */}
+      {Array.from({ length: 16 }, (_, k) => {
+        const a = (k / 16) * Math.PI * 2;
+        return (
+          <mesh key={`s${k}`} position={[Math.cos(a) * (r - 0.22), 0.27, Math.sin(a) * (r - 0.22)]}>
+            <cylinderGeometry args={[0.06, 0.06, 0.05, 8]} />
+            <meshStandardMaterial color="#3a3b42" metalness={0.5} roughness={0.4} />
+          </mesh>
+        );
+      })}
+      <group ref={head}>
+        {/* the drum: waisted so the hawser stays on, ribbed (whelps) and banded with iron */}
+        <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
+          <cylinderGeometry args={[0.72, 0.9, 1.2, 24]} />
+          <meshStandardMaterial color={P.woodDark} roughness={0.8} />
+        </mesh>
+        {Array.from({ length: 8 }, (_, k) => {
+          const a = (k / 8) * Math.PI * 2;
+          return (
+            <mesh key={`w${k}`} castShadow position={[Math.cos(a) * 0.78, 0.85, Math.sin(a) * 0.78]} rotation={[0, -a, 0.1]}>
+              <boxGeometry args={[0.14, 1.15, 0.16]} />
+              <meshStandardMaterial color={P.wood} roughness={0.8} />
+            </mesh>
+          );
+        })}
+        {[0.3, 1.42].map((y) => (
+          <mesh key={`b${y}`} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[y < 1 ? 0.9 : 0.74, 0.05, 6, 28]} />
+            <meshStandardMaterial color="#3a3b42" metalness={0.5} roughness={0.4} />
+          </mesh>
+        ))}
+        {/* the drumhead with its sockets, and the bars */}
+        <mesh castShadow receiveShadow position={[0, 1.62, 0]}>
+          <cylinderGeometry args={[0.95, 0.8, 0.36, 24]} />
+          <meshStandardMaterial color={P.wood} roughness={0.75} />
+        </mesh>
+        <mesh position={[0, 1.81, 0]}>
+          <cylinderGeometry args={[0.5, 0.6, 0.06, 20]} />
+          <meshStandardMaterial color="#d9b46a" metalness={0.6} roughness={0.35} />
+        </mesh>
+        {Array.from({ length: BARS }, (_, k) => {
+          const a = (k / BARS) * Math.PI * 2;
+          const len = reach - 0.85;
+          return (
+            <group key={`bar${k}`} rotation={[0, -a, 0]}>
+              <mesh castShadow position={[0.85 + len / 2, 1.6, 0]} rotation={[0, 0, -0.04]}>
+                <boxGeometry args={[len, 0.13, 0.13]} />
+                <meshStandardMaterial color={P.wood} roughness={0.8} />
+              </mesh>
+              {/* a worn, darker grip at the end */}
+              <mesh position={[reach - 0.2, 1.57, 0]} rotation={[0, 0, -0.04]}>
+                <boxGeometry args={[0.4, 0.145, 0.145]} />
+                <meshStandardMaterial color={P.woodDark} roughness={0.9} />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+      {/* the hawser: a few turns round the drum, its end trailing off across the platform */}
+      {[0.5, 0.66, 0.82].map((y, k) => (
+        <mesh key={`h${k}`} castShadow position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.92 - k * 0.04, 0.09, 8, 28]} />
+          <meshStandardMaterial color="#d8b77e" roughness={0.95} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[1.55, 0.33, 0.35]} rotation={[0, 0.25, Math.PI / 2]}>
+        <cylinderGeometry args={[0.09, 0.09, 1.5, 8]} />
+        <meshStandardMaterial color="#d8b77e" roughness={0.95} />
+      </mesh>
+      <mesh castShadow position={[2.25, 0.33, 0.55]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.28, 0.08, 8, 20]} />
+        <meshStandardMaterial color="#d8b77e" roughness={0.95} />
+      </mesh>
+    </group>
+  );
+}
+
 /** One obstacle, dressed by its tag. The footprint always matches the collision shape exactly. */
 function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number; crateTex: THREE.Texture }) {
   const colors = [P.blue, P.orange, P.teal, P.red];
   if (o.kind === 'circle') {
-    if (o.tag === 'basin' || o.tag === 'tub') return <Basin x={o.x} z={o.z} r={o.r} statue={o.tag === 'basin'} />;
+    if (o.tag === 'capstan') return <Capstan r={o.r} />;
+    if (o.tag === 'tub') return <Basin x={o.x} z={o.z} r={o.r} statue={false} />;
     // barrels: a tight cluster inside the circle
     const n = o.r > 0.8 ? 4 : 3;
     return (

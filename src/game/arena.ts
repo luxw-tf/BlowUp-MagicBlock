@@ -18,7 +18,7 @@ export type Obstacle =
  * Layouts. Spawns are shared by every layout (the on-chain program knows them); obstacles and pickup spots vary.
  * Obstacles are client-side only (not enforced on-chain), so a layout only has to be the same for everyone in a match:
  * offline it is picked at random, online it is derived from the match address (see selectLayoutFor).
- * Tags decide the look: basin / tub (water), barrels, crate, container, stack (stacked containers), stall.
+ * Tags decide the look: capstan, tub (the fish market's ice tub), barrels, crate, container, stack (stacked containers), stall.
  */
 export interface Layout { id: string; name: string; obstacles: Obstacle[]; pickups: Vec2[] }
 
@@ -27,10 +27,10 @@ const circle = (x: number, z: number, r: number, tag: string): Obstacle => ({ ki
 
 export const LAYOUTS: Layout[] = [
   {
-    id: 'fountain',
-    name: 'Fountain Square',
+    id: 'capstan',
+    name: 'Capstan Square',
     obstacles: [
-      circle(0, 0, 2.8, 'basin'),
+      circle(0, 0, 2.8, 'capstan'),
       box(-8, -4.2, 0.9, 0.9, 'crate'), box(8, -4.2, 0.9, 0.9, 'crate'), box(-8, 4.2, 0.9, 0.9, 'crate'), box(8, 4.2, 0.9, 0.9, 'crate'),
       box(-13.6, 0, 0.7, 1.4, 'container'), box(13.6, 0, 0.7, 1.4, 'container'),
     ],
