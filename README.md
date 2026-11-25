@@ -85,6 +85,14 @@ src/ui/                  OnlineLobby (queue), RoomScreen (private rooms), online
 
 **Matchmaking (milestone 2).** Quick play groups humans first. When 6 are waiting, or the oldest has waited 8 s (`QUEUE_WINDOW_MS`), the match starts and bots fill the empty seats. Private rooms have a 5-letter code and an invite link (`?room=CODE`), per-player ready states, and host-controlled bot fill. Without bots a room needs 2–6 humans. Names are made unique per match.
 
+**Remote players for free (Cloudflare Quick Tunnel).** Expose a production build, never the dev server:
+```bash
+npm run server                      # lobby on :8787
+npx vite build && npx vite preview  # dist/ only, on :4173, proxies /api to the lobby
+cloudflared tunnel --url http://localhost:4173   # prints https://<random>.trycloudflare.com
+```
+`vite preview` serves only `dist/`, so the keys in `.keys/` and `target/` can't be fetched (checked through the tunnel). The dev server also denies those paths, in case it is ever exposed. The URL changes on every tunnel restart, this machine must stay on, and anyone with the link can start matches, which spend devnet SOL from the lobby key, capped at 3 concurrent matches.
+
 **Disconnects (milestone 2).** If a player sends no input for 6 s (15 s for a first input after the match goes live), the lobby calls the on-chain `takeover`, which only succeeds after 5 s of silence, and a bot plays the seat. When the player is active again, their client automatically re-keys the seat with `renew_session`, signed by the guest identity, and the bot steps aside. After a reload, the landing page offers **Rejoin your match**.
 
 How a match flows:
