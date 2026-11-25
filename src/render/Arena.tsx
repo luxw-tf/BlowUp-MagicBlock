@@ -681,41 +681,94 @@ function Crane({ position }: { position: [number, number, number] }) {
 
 
 
-/** Gulls circle lazily over the water, wings flapping now and then. */
+/** A flat wing panel from outline points [x (out along the span), z (forward)], lying in the bird's wing plane. */
+function wingPanel(pts: [number, number][]): THREE.BufferGeometry {
+  const s = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+  return new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2);
+}
+
+/**
+ * Herring gulls: white body with a yellow beak, swept grey wings with black tips, held in the gull's shallow M (the
+ * inner wing up a touch, the outer wing drooping from the wrist). They mostly glide, banking into their turns, and
+ * now and then give a short burst of wingbeats; each loops its own lazy circuit over the harbour at its own height.
+ * Local forward is +z, span along x; one useFrame drives the lot.
+ */
 function Gulls() {
-  const birds = useMemo(() => Array.from({ length: 5 }, (_, i) => ({ r: 7 + i * 2.2, h: 9 + (i % 3) * 1.5, s: 0.18 + i * 0.03, p: i * 1.7, cx: -6 + i * 4, cz: -22 - (i % 2) * 5 })), []);
-  const refs = useRef<(THREE.Group | null)[]>([]);
+  const parts = useMemo(() => {
+    const white = new THREE.MeshStandardMaterial({ color: '#f7f8fa', roughness: 0.7, flatShading: true });
+    const grey = new THREE.MeshStandardMaterial({ color: '#b9c2cc', roughness: 0.7, flatShading: true, side: THREE.DoubleSide });
+    const black = new THREE.MeshStandardMaterial({ color: '#23252b', roughness: 0.8, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 });
+    const beak = new THREE.MeshStandardMaterial({ color: '#f2c230', roughness: 0.5 });
+    return {
+      white, grey, black, beak,
+      body: new THREE.CapsuleGeometry(0.075, 0.36, 4, 8).rotateX(Math.PI / 2),
+      head: new THREE.SphereGeometry(0.075, 10, 8),
+      bill: new THREE.ConeGeometry(0.022, 0.1, 6).rotateX(Math.PI / 2),
+      tail: wingPanel([[-0.07, -0.18], [0.07, -0.18], [0.09, -0.36], [-0.09, -0.36]]),
+      inner: wingPanel([[0.05, 0.1], [0.46, 0.075], [0.46, -0.075], [0.05, -0.12]]),
+      outer: wingPanel([[0, 0.075], [0.28, 0.02], [0.46, -0.1], [0.42, -0.15], [0, -0.075]]),
+      tip: wingPanel([[0.26, 0.022], [0.46, -0.1], [0.42, -0.15], [0.22, -0.06]]),
+    };
+  }, []);
+  // each bird's circuit: centre, radii, height, speed (units/s), direction, phase
+  const birds = useMemo(
+    () => [
+      { cx: -8, cz: -24, rx: 9, rz: 5, h: 9.5, v: 3.2, dir: 1, p: 0 },
+      { cx: 7, cz: -30, rx: 11, rz: 6, h: 12, v: 3.6, dir: -1, p: 2.1 },
+      { cx: 19, cz: -21, rx: 6, rz: 4, h: 7.5, v: 2.8, dir: 1, p: 4.2 },
+      { cx: -21, cz: -33, rx: 8, rz: 6, h: 11, v: 3.0, dir: -1, p: 1.3 },
+    ],
+    [],
+  );
+  const refs = useRef<{ root: THREE.Group | null; wings: (THREE.Group | null)[] }[]>(birds.map(() => ({ root: null, wings: [] })));
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     birds.forEach((b, i) => {
-      const g = refs.current[i]; if (!g) return;
-      const a = t * b.s + b.p;
-      g.position.set(b.cx + Math.cos(a) * b.r, b.h + Math.sin(t * 0.6 + b.p) * 0.4, b.cz + Math.sin(a) * b.r * 0.5);
-      g.rotation.y = -a;
-      const flap = Math.sin(t * 9 + b.p) * (Math.sin(t * 0.5 + b.p) > 0.2 ? 0.6 : 0.08);
-      (g.children[1] as THREE.Object3D).rotation.x = flap; (g.children[2] as THREE.Object3D).rotation.x = -flap;
+      const { root, wings } = refs.current[i];
+      if (!root) return;
+      const r = Math.max(b.rx, b.rz);
+      const a = b.dir * (t * b.v) / r + b.p;
+      const x = b.cx + Math.cos(a) * b.rx, z = b.cz + Math.sin(a) * b.rz;
+      const y = b.h + Math.sin(t * 0.35 + b.p) * 0.7;
+      root.position.set(x, y, z);
+      // heading along the path; bank into the turn (the inside wing dips); nose down a touch when descending
+      const dx = -Math.sin(a) * b.rx * b.dir, dz = Math.cos(a) * b.rz * b.dir;
+      const yaw = Math.atan2(dx, dz);
+      const side = (b.cx - x) * Math.cos(yaw) - (b.cz - z) * Math.sin(yaw);
+      root.rotation.set(-Math.cos(t * 0.35 + b.p) * 0.08, yaw, -Math.sign(side) * 0.32, 'YXZ');
+      // a burst of 3 or 4 wingbeats every 8 s or so, gliding the rest of the time
+      const k = (t * 0.12 + b.p * 0.37) % 1;
+      const beat = k < 0.1 ? Math.sin((k / 0.1) * Math.PI) : 0;
+      const ph = t * Math.PI * 2 * 3.2 + b.p;
+      const innerA = 0.1 + 0.03 * Math.sin(t * 1.3 + b.p) + beat * 0.42 * Math.sin(ph);
+      const outerA = -0.16 + beat * (0.05 + 0.22 * Math.sin(ph - 0.9));
+      for (let w = 0; w < 2; w++) {
+        const inner = wings[w * 2], outer = wings[w * 2 + 1];
+        if (inner) inner.rotation.z = innerA;
+        if (outer) outer.rotation.z = outerA;
+      }
     });
   });
   return (
     <>
       {birds.map((_, i) => (
-        <group key={i} ref={(el) => (refs.current[i] = el)}>
-          <mesh>
-            <capsuleGeometry args={[0.13, 0.4, 4, 8]} />
-            <meshStandardMaterial color="#ffffff" />
-          </mesh>
-          <group>
-            <mesh position={[0, 0, 0.45]} rotation={[0, 0, Math.PI / 2]}>
-              <boxGeometry args={[0.04, 0.3, 0.8]} />
-              <meshStandardMaterial color="#e9eef2" />
-            </mesh>
-          </group>
-          <group>
-            <mesh position={[0, 0, -0.45]} rotation={[0, 0, Math.PI / 2]}>
-              <boxGeometry args={[0.04, 0.3, 0.8]} />
-              <meshStandardMaterial color="#e9eef2" />
-            </mesh>
-          </group>
+        <group key={i} ref={(el) => (refs.current[i].root = el)} scale={0.85}>
+          <mesh geometry={parts.body} material={parts.white} />
+          <mesh geometry={parts.head} material={parts.white} position={[0, 0.05, 0.25]} />
+          <mesh geometry={parts.bill} material={parts.beak} position={[0, 0.04, 0.35]} />
+          <mesh geometry={parts.tail} material={parts.white} position={[0, 0.02, 0]} />
+          {[1, -1].map((sx, w) => (
+            // the left wing is the right one mirrored, so the same angles move both
+            <group key={sx} scale={[sx, 1, 1]} position={[0, 0.05, 0.02]}>
+              <group ref={(el) => (refs.current[i].wings[w * 2] = el)}>
+                <mesh geometry={parts.inner} material={parts.grey} />
+                <group ref={(el) => (refs.current[i].wings[w * 2 + 1] = el)} position={[0.46, 0, 0]}>
+                  <mesh geometry={parts.outer} material={parts.grey} />
+                  <mesh geometry={parts.tip} material={parts.black} position={[0, 0.002, 0]} />
+                </group>
+              </group>
+            </group>
+          ))}
         </group>
       ))}
     </>
