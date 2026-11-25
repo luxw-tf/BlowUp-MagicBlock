@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { guestKeys, type OnlineSession } from '../chain/online-session';
-import { characterDef } from '../game/content';
 import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { api, joinPayload, SETUP_STEPS, waitForMatch, type GuestKeys } from './onlineFlow';
 import { Icon } from './Icon';
+import { Portrait } from './Portrait';
 
 interface RoomView {
   code: string;
@@ -175,7 +175,7 @@ export function RoomScreen({
         <div className="slots">
           {room?.members.map((m, i) => (
             <div key={i} className="slot-row on">
-              <span className="char-icon small" style={{ background: characterDef(m.character).color }} />
+              <Portrait id={m.character} size={38} />
               <span className="slot-name">
                 {m.name}
                 {m.host && <span className="bot-badge">HOST</span>}

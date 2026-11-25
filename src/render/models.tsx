@@ -140,7 +140,7 @@ const isNeutral = (r: number, g: number, b: number) => Math.max(r, g, b) - Math.
  * Finds which atlas swatches dress which part of the body (by the height of the vertices that sample them), then
  * paints the coat, the hat/hair and the trousers. Skin and neutral details (eyes, belts, bone) are left alone.
  */
-function dress(scene: THREE.Object3D, outfit: Outfit) {
+export function dress(scene: THREE.Object3D, outfit: Outfit) {
   let tex: THREE.Texture | null = null;
   const meshes: THREE.Mesh[] = [];
   scene.updateWorldMatrix(true, true);

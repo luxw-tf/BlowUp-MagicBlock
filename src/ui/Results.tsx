@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { characterDef } from '../game/content';
 import type { SessionLike } from '../game/sessionTypes';
 import { Icon, type IconName } from './Icon';
+import { Portrait } from './Portrait';
 
 type P = SessionLike['state']['players'][number];
 
@@ -54,9 +54,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
               <div key={p.id} className={`step ${place[i]} ${p.id === session.localId ? 'is-local' : ''}`}>
                 <div className="step-who">
                   {i === 1 && <Icon name="crown" size={30} fill="#ffc832" style={{ marginBottom: -6 }} />}
-                  <span className="step-badge" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
-                    {characterDef(p.character).name.slice(0, 2)}
-                  </span>
+                  <Portrait id={p.character} size={i === 1 ? 84 : 64} className="step-badge" />
                   <span className="step-name">{p.name}</span>
                 </div>
                 <div className="step-block">{num[i]}</div>

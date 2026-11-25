@@ -25,7 +25,7 @@ function Name({ s, id }: { s: MatchState; id: PlayerId | null }) {
   const p = getPlayer(s, id);
   if (!p) return <span>?</span>;
   return (
-    <span className="feed-name" style={{ color: characterDef(p.character).color }}>
+    <span className="feed-name" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
       {p.name}
       {p.isBot && <span className="bot-badge">BOT</span>}
     </span>
@@ -152,7 +152,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.miss();
             push(
               <>
-                <Name s={s} id={e.from} /> airballed
+                <Name s={s} id={e.from} /> missed
               </>,
             );
             if (e.from === local) shout(CALLOUTS.missedThrow, 'bad');
@@ -183,7 +183,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.ability(pitch);
             push(
               <>
-                <Name s={s} id={e.id} /> used <b style={{ color: ABILITY_DEFS[e.ability].color }}>{ABILITY_DEFS[e.ability].name}</b>
+                <Name s={s} id={e.id} /> used <b className="ability-name" style={{ '--c': ABILITY_DEFS[e.ability].color } as React.CSSProperties}>{ABILITY_DEFS[e.ability].name}</b>
                 {e.target && (
                   <>
                     {' '}
@@ -450,7 +450,7 @@ function Hud({ session }: { session: SessionLike }) {
             {holder ? (
               <>
                 <Icon name="bomb" size={16} />{' '}
-                <span style={{ color: characterDef(holder.character).color }}>
+                <span className="feed-name" style={{ '--c': characterDef(holder.character).color } as React.CSSProperties}>
                   {holder.id === session.localId ? 'YOU' : holder.name}
                 </span>
               </>
@@ -484,7 +484,7 @@ function Hud({ session }: { session: SessionLike }) {
           <div className="item-name">
             {inv && inv !== 'pending' ? (
               <>
-                <b style={{ color: ABILITY_DEFS[inv].color }}>{ABILITY_DEFS[inv].name}</b>
+                <b className="ability-name" style={{ '--c': ABILITY_DEFS[inv].color } as React.CSSProperties}>{ABILITY_DEFS[inv].name}</b>
                 <small>{ABILITY_DEFS[inv].blurb}</small>
               </>
             ) : inv === 'pending' ? (

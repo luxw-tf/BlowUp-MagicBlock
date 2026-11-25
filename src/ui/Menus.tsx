@@ -5,16 +5,8 @@ import type { ParticipantSetup } from '../game/sim';
 import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
+import { Portrait } from './Portrait';
 
-// each pirate's initial on its own colour (the 3D crew is the real portrait)
-const ICON: Record<CharacterId, string> = {
-  frog: 'Sh',
-  cat: 'An',
-  blob: 'Ma',
-  rat: 'He',
-  duck: 'Ba',
-  creature: 'Bo',
-};
 
 /** The "o" of the wordmark: a bomb drawn in the same yellow and ink as the letters, fuse lit. */
 function BombO() {
@@ -88,7 +80,7 @@ export function Landing({
       <div className="menu-shade" />
 
       <label className="name-chip" title="Your name">
-        <span className="name-chip-swatch" style={{ background: hero.color }} />
+        <Portrait id={hero.id} size={34} />
         <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} spellCheck={false} aria-label="Your name" />
         <Icon name="pencil" size={18} />
       </label>
@@ -197,15 +189,12 @@ export function Lobby({ participants, onStart, onCancel }: { participants: Parti
         </div>
         <div className="slots">
           {ordered.map((p, i) => {
-            const c = characterDef(p.character);
             const on = i < filled;
             return (
               <div key={p.id} className={`slot-row ${on ? 'on' : ''}`}>
                 {on ? (
                   <>
-                    <span className="char-icon small" style={{ background: c.color }}>
-                      {ICON[p.character]}
-                    </span>
+                    <Portrait id={p.character} size={38} />
                     <span className="slot-name">{p.name}</span>
                     {p.isBot ? <span className="bot-badge">BOT</span> : <span className="you-badge">YOU</span>}
                     <span className="ready"><Icon name="check" size={16} /></span>
