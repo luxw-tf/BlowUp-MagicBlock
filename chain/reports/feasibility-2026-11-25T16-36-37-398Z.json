@@ -1,0 +1,163 @@
+{
+  "startedAt": "2026-11-25T16:36:37.398Z",
+  "solanaRpc": "https://rpc.magicblock.app/devnet",
+  "router": "https://devnet-router.magicblock.app",
+  "programId": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob",
+  "players": 6,
+  "checks": [
+    {
+      "name": "delegation visible via router",
+      "pass": true,
+      "detail": "384ms after confirmation"
+    },
+    {
+      "name": "unfunded guest key can pay its own ER transactions",
+      "pass": true,
+      "detail": "201ms"
+    },
+    {
+      "name": "ER input confirmation p95 < 100ms (PRD target)",
+      "pass": false,
+      "detail": "{\"n\":574,\"p50\":224,\"p95\":697,\"p99\":858,\"max\":1411}"
+    },
+    {
+      "name": "no input errors other than reordering",
+      "pass": true,
+      "detail": "0 unexpected {\"StaleSequence\":26}"
+    },
+    {
+      "name": "rejects duplicate sequence",
+      "pass": true,
+      "detail": "got StaleSequence"
+    },
+    {
+      "name": "rejects teleport after idling",
+      "pass": true,
+      "detail": "got ImpossibleMovement"
+    },
+    {
+      "name": "rejects out of bounds",
+      "pass": true,
+      "detail": "got OutOfBounds"
+    },
+    {
+      "name": "rejects foreign signer",
+      "pass": true,
+      "detail": "got NotSessionKey"
+    },
+    {
+      "name": "rejects expired session",
+      "pass": true,
+      "detail": "got SessionExpired"
+    },
+    {
+      "name": "guest renews its own session",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "renewed session accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "rejects transfer by non-holder",
+      "pass": true,
+      "detail": "got NotHolder"
+    },
+    {
+      "name": "immediate tag-back rejected",
+      "pass": true,
+      "detail": "got TargetProtected"
+    },
+    {
+      "name": "rejects transfer after fuse expiry (expiration precedence)",
+      "pass": true,
+      "detail": "got FuseExpired"
+    },
+    {
+      "name": "match finished with a winner",
+      "pass": true,
+      "detail": "winner index 2"
+    },
+    {
+      "name": "match undelegated back to program on Solana",
+      "pass": true,
+      "detail": "2568ms"
+    },
+    {
+      "name": "result recorded on Solana",
+      "pass": true,
+      "detail": "2b5qxuxp41tEzRQupg1gbr9xvN7xf45PYuVULTxA7ThPhyHbcVecGUAa8SC1kPhQELNKb9mTQqxfpBSCKMAVSm3b"
+    }
+  ],
+  "validator": {
+    "identity": "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57",
+    "fqdn": "https://devnet-as.magicblock.app/",
+    "nominalBlockTimeMs": 10
+  },
+  "match": {
+    "id": "1795624598387",
+    "pda": "87Jj9HeovNNtUNJvN37Z9mvqnzRP7vw7hM7U28rozun9"
+  },
+  "baseSetupMs": 1933,
+  "delegation": {
+    "baseConfirmMs": 3655,
+    "routerVisibleMs": 384
+  },
+  "erVersion": {
+    "core": "2.0.5",
+    "solana-core": "4.2.2",
+    "feature-set": 565236538,
+    "git-commit": "380360a"
+  },
+  "sponsorship": {
+    "unfundedGuestCanPay": true
+  },
+  "inputs": {
+    "sent": 600,
+    "errors": 26,
+    "errorReasons": {
+      "StaleSequence": 26
+    },
+    "confirm": {
+      "n": 574,
+      "p50": 224,
+      "p95": 697,
+      "p99": 858,
+      "max": 1411
+    },
+    "subscriptionVisible": {
+      "n": 99,
+      "p50": 146,
+      "p95": 448,
+      "p99": 601,
+      "max": 601
+    },
+    "reorderedDroppedPct": 4.3
+  },
+  "slotTiming": {
+    "nominalMs": 10,
+    "measuredMs": 10
+  },
+  "erClockSkewS": -52,
+  "vrf": {
+    "holder": {
+      "n": 1,
+      "p50": 523,
+      "p95": 523,
+      "p99": 523,
+      "max": 523
+    },
+    "fuse": {
+      "n": 8,
+      "p50": 536,
+      "p95": 687,
+      "p99": 687,
+      "max": 687
+    },
+    "retries": 0
+  },
+  "fatal": "Cannot read properties of null (reading 'data')",
+  "finishedAt": "2026-11-25T16:39:17.432Z"
+}

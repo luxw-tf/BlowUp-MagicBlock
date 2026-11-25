@@ -610,7 +610,14 @@ async function main() {
     60_000,
   );
   check('result recorded on Solana', !r.err, r.err ?? r.sig);
-  const res = decode<{ winner: PublicKey; placements: number[] }>('matchResult', (await base.getAccountInfo(resultPda(match)))!.data);
+  // A load-balanced RPC may serve the read from a node that hasn't seen the write yet.
+  let resultInfo = await base.getAccountInfo(resultPda(match), 'confirmed');
+  for (let i = 0; !resultInfo && i < 20; i++) {
+    await sleep(500);
+    resultInfo = await base.getAccountInfo(resultPda(match), 'confirmed');
+  }
+  if (!resultInfo) throw new Error('MatchResult account not readable after recording');
+  const res = decode<{ winner: PublicKey; placements: number[] }>('matchResult', resultInfo.data);
   check('on-chain winner matches ER state', res.winner.equals(guests[m.winner].identity.publicKey), res.winner.toBase58());
   r = await send(
     base,
