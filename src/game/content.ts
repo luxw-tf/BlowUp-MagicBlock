@@ -14,7 +14,7 @@ export const CHARACTERS: CharacterDef[] = [
   { id: 'cat', name: 'Barbarian', color: '#e8713c', accent: '#fff2e0' },
   { id: 'blob', name: 'Mage', color: '#d2475b', accent: '#e8dcff' },
   { id: 'rat', name: 'Knight', color: '#5b84e0', accent: '#e6eefc' },
-  { id: 'duck', name: 'Rogue', color: '#b8c23a', accent: '#ff8c1a' },
+  { id: 'duck', name: 'Rogue', color: '#8a5bd6', accent: '#ff8c1a' },
   { id: 'creature', name: 'Shade', color: '#b04aa0', accent: '#d8fffb' },
 ];
 
