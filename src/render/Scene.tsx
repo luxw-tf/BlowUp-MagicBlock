@@ -81,7 +81,7 @@ function CameraRig() {
     let follow = true; // open play keeps a dead zone, so small moves don't swim the view
     if (s.phase === 'finished') {
       const w = posOf(s.winnerId) ?? f;
-      tx = w.x; tz = w.z; zoomT = 0.95; yawT = calm ? 0 : t * 0.22; follow = false;
+      tx = w.x; tz = w.z; zoomT = 0.95; yawT = calm ? 0 : Math.sin(t * 0.35) * 0.45; follow = false; // a sway, not a full orbit: the rain and snow volumes are fixed boxes round the bay
     } else if (st.blast && now < st.blast.until && !spectating) {
       tx = st.blast.x; tz = st.blast.z; zoomT = 0.55; yawT = calm ? 0 : 0.18; follow = false;
     } else if (s.phase === 'countdown') {
