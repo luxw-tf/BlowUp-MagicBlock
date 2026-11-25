@@ -56,6 +56,19 @@ fn is_vrf_queue(k: &Pubkey) -> bool {
     *k == DEFAULT_QUEUE || *k == DEFAULT_EPHEMERAL_QUEUE || *k == DEFAULT_TEST_QUEUE || *k == DEFAULT_EPHEMERAL_TEST_QUEUE
 }
 
+/// Derives a u32 draw from a VRF output: first 4 bytes (LE) of
+/// sha256("blowup" ‖ tag ‖ randomness).
+///
+/// Devnet showed the leading raw bytes are not uniform (20 holder draws read
+/// from bytes 0..4 all fell below 0.76, p ≈ 0.4%), and the SDK's own helpers
+/// read from the tail. Hashing with a domain tag gives uniform, independent
+/// draws per purpose without depending on the output's byte layout, and anyone
+/// can recompute them from the callback data.
+fn draw_u32(randomness: &[u8; 32], tag: &[u8]) -> u32 {
+    let h = solana_sha256_hasher::hashv(&[b"blowup", tag, randomness]).to_bytes();
+    u32::from_le_bytes([h[0], h[1], h[2], h[3]])
+}
+
 fn caller_seed(m: &MatchState, client_seed: [u8; 8], slot: u64) -> [u8; 32] {
     let mut s = [0u8; 32];
     s[0..8].copy_from_slice(&m.match_id.to_le_bytes());
@@ -272,7 +285,7 @@ pub mod blowup {
                 return Ok(());
             }
             let n = survivors(m.alive_mask);
-            let holder = nth_alive(m.alive_mask, pick_index(uniform_u32(&randomness, 0), n as u32));
+            let holder = nth_alive(m.alive_mask, pick_index(draw_u32(&randomness, b"holder"), n as u32));
             m.holder = holder;
             m.round = m.player_count - n + 1;
             m.round_start_slot = slot;
@@ -280,13 +293,13 @@ pub mod blowup {
             m.protected_player = NO_PLAYER;
             m.last_giver = NO_PLAYER;
             m.phase = phase::ACTIVE;
-            arm_fuse(m, uniform_u32(&randomness, 1), slot);
+            arm_fuse(m, draw_u32(&randomness, b"holder-fuse"), slot);
             msg!("round {} holder {} fuse {}ms", m.round, holder, m.fuse_ms);
         } else {
             if m.phase != phase::ACTIVE || m.fuse_deadline_slot != 0 {
                 return Ok(());
             }
-            arm_fuse(m, uniform_u32(&randomness, 0), slot);
+            arm_fuse(m, draw_u32(&randomness, b"fuse"), slot);
             msg!("fuse {}ms for holder {}", m.fuse_ms, m.holder);
         }
         Ok(())
@@ -650,4 +663,32 @@ pub struct Finalize<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub match_state: Account<'info, MatchState>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::draw_u32;
+
+    /// Inputs whose leading bytes are skewed (like the raw devnet outputs)
+    /// still produce uniform draws, and tags give independent draws.
+    #[test]
+    fn hashed_draws_are_uniform_and_domain_separated() {
+        let n = 20_000u32;
+        let (mut sum, mut max, mut same) = (0f64, 0f64, 0);
+        for i in 0..n {
+            let mut r = [0u8; 32];
+            r[0..4].copy_from_slice(&i.to_le_bytes());
+            r[3] = (i % 0xC0) as u8; // leading word confined below 0.75
+            let u = draw_u32(&r, b"holder") as f64 / 4_294_967_296.0;
+            sum += u;
+            max = f64::max(max, u);
+            if draw_u32(&r, b"holder") == draw_u32(&r, b"fuse") {
+                same += 1;
+            }
+        }
+        let mean = sum / n as f64;
+        assert!((mean - 0.5).abs() < 0.01, "mean {mean}");
+        assert!(max > 0.99, "max {max}");
+        assert_eq!(same, 0);
+    }
 }

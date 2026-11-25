@@ -23,3 +23,5 @@ custom-panic = []
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
 # Pinned per MagicBlock guidance: 0.18.0 supports validator 1.x and 2.0; 0.20.x breaks #[vrf].
 ephemeral-rollups-sdk = { version = "=0.18.0", features = ["anchor", "vrf"] }
+# sha256 via the sol_sha256 syscall on-chain (already in the dependency graph).
+solana-sha256-hasher = "=3.1.0"

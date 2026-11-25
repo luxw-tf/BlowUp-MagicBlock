@@ -42,12 +42,6 @@ pub const MIN_INPUT_WINDOW_MS: i64 = 60;
 /// a +15 unit teleport through after an idle period.
 pub const MAX_INPUT_WINDOW_MS: i64 = 300;
 
-/// Reads the i-th little-endian u32 from a VRF output.
-pub fn uniform_u32(randomness: &[u8; 32], i: usize) -> u32 {
-    let o = (i * 4) % 32;
-    u32::from_le_bytes([randomness[o], randomness[o + 1], randomness[o + 2], randomness[o + 3]])
-}
-
 /// Unbiased-enough mapping of a u32 to [0, n): floor(u * n / 2^32).
 pub fn pick_index(u: u32, n: u32) -> u32 {
     ((u as u64 * n as u64) >> 32) as u32
