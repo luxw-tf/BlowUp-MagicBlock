@@ -1,0 +1,150 @@
+import { useEffect, useMemo, useState } from 'react';
+import { audio } from '../audio/audio';
+import { CHARACTERS, GAME_TITLE, characterDef } from '../game/content';
+import type { ParticipantSetup } from '../game/sim';
+import type { CharacterId } from '../game/types';
+import type { Profile } from '../state/settings';
+
+const ICON: Record<CharacterId, string> = {
+  frog: '🐸',
+  cat: '🐱',
+  blob: '🦠',
+  rat: '🐀',
+  duck: '🦆',
+  creature: '👾',
+};
+
+export function Landing({ initial, onPlay }: { initial: Profile | null; onPlay: (p: Profile) => void }) {
+  const [name, setName] = useState(initial?.name ?? `guest${Math.floor(1000 + Math.random() * 9000)}`);
+  const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
+  const clean = name.trim().slice(0, 18);
+
+  const play = () => {
+    if (!clean) return;
+    audio.unlock();
+    onPlay({ name: clean, character });
+  };
+
+  return (
+    <div className="screen landing">
+      <div className="landing-bg" />
+      <div className="landing-inner">
+        <h1 className="logo">
+          {GAME_TITLE}
+          <span className="logo-bomb">💣</span>
+        </h1>
+        <p className="tagline">six creatures. one bomb. the fuse lies.</p>
+
+        <div className="panel onboarding">
+          <label className="field">
+            <span>name</span>
+            <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && play()} autoFocus />
+          </label>
+          <div className="char-grid">
+            {CHARACTERS.map((c) => (
+              <button
+                key={c.id}
+                className={`char-card ${character === c.id ? 'selected' : ''}`}
+                style={{ '--c': c.color } as React.CSSProperties}
+                onClick={() => setCharacter(c.id)}
+              >
+                <span className="char-icon">{ICON[c.id]}</span>
+                <span className="char-name">{c.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="row">
+            <button className="btn primary big" onClick={play} disabled={!clean}>
+              Quick Play
+            </button>
+            <button className="btn ghost" disabled title="Private rooms arrive with live multiplayer">
+              Private room <small>soon</small>
+            </button>
+          </div>
+          <p className="fine">No wallet needed. Identical stats for everyone — only skill (and the fuse) decides.</p>
+        </div>
+
+        <div className="how">
+          <div>
+            <kbd>WASD</kbd> move
+          </div>
+          <div>
+            <kbd>LMB</kbd> throw
+          </div>
+          <div>
+            <kbd>RMB</kbd> tag
+          </div>
+          <div>
+            <kbd>Space</kbd> dash
+          </div>
+          <div>
+            <kbd>E</kbd> item
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Quick Play lobby: human slots first, bots fill after a short matchmaking
+ * window. Online matchmaking is not implemented yet, so this always fills
+ * with bots.
+ */
+export function Lobby({ participants, onStart, onCancel }: { participants: ParticipantSetup[]; onStart: () => void; onCancel: () => void }) {
+  const ordered = useMemo(() => [...participants].sort((a, b) => Number(a.isBot) - Number(b.isBot)), [participants]);
+  const [filled, setFilled] = useState(1);
+  const code = useMemo(() => Math.random().toString(36).slice(2, 6).toUpperCase(), []);
+
+  useEffect(() => {
+    if (filled >= ordered.length) {
+      const t = setTimeout(onStart, 700);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setFilled((n) => n + 1), filled === 1 ? 1400 : 160);
+    return () => clearTimeout(t);
+  }, [filled, ordered.length, onStart]);
+
+  return (
+    <div className="screen lobby">
+      <div className="panel lobby-panel">
+        <div className="lobby-head">
+          <h2>{filled < ordered.length ? (filled === 1 ? 'finding players…' : 'filling with bots…') : 'starting'}</h2>
+          <span className="room-code">room {code}</span>
+        </div>
+        <div className="slots">
+          {ordered.map((p, i) => {
+            const c = characterDef(p.character);
+            const on = i < filled;
+            return (
+              <div key={p.id} className={`slot-row ${on ? 'on' : ''}`}>
+                {on ? (
+                  <>
+                    <span className="char-icon small" style={{ background: c.color }}>
+                      {ICON[p.character]}
+                    </span>
+                    <span className="slot-name">{p.name}</span>
+                    {p.isBot ? <span className="bot-badge">BOT</span> : <span className="you-badge">YOU</span>}
+                    <span className="ready">ready</span>
+                  </>
+                ) : (
+                  <span className="dim">
+                    <span className="spinner" /> open slot
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="row">
+          <button className="btn ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn" onClick={onStart}>
+            Start now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
