@@ -10,12 +10,12 @@ export interface CharacterDef {
 }
 
 export const CHARACTERS: CharacterDef[] = [
-  { id: 'frog', name: 'the frog', color: '#5fbf4a', accent: '#f2e9c9' },
-  { id: 'cat', name: 'the cat', color: '#f08a3c', accent: '#fff2e0' },
-  { id: 'blob', name: 'the blob', color: '#a678ff', accent: '#e8dcff' },
-  { id: 'rat', name: 'the rat', color: '#9aa1ad', accent: '#f4a7b9' },
-  { id: 'duck', name: 'the duck', color: '#ffd23f', accent: '#ff8c1a' },
-  { id: 'creature', name: 'the creature', color: '#2f3b4f', accent: '#7cf9e0' },
+  { id: 'frog', name: 'Sharky', color: '#5fbf4a', accent: '#f2e9c9' },
+  { id: 'cat', name: 'Anne', color: '#f08a3c', accent: '#fff2e0' },
+  { id: 'blob', name: 'Mako', color: '#a678ff', accent: '#e8dcff' },
+  { id: 'rat', name: 'Henry', color: '#9aa1ad', accent: '#f4a7b9' },
+  { id: 'duck', name: 'Barbarossa', color: '#ffd23f', accent: '#ff8c1a' },
+  { id: 'creature', name: 'Bones', color: '#2f3b4f', accent: '#7cf9e0' },
 ];
 
 export const characterDef = (id: CharacterId): CharacterDef => CHARACTERS.find((c) => c.id === id)!;

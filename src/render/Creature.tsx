@@ -4,7 +4,8 @@
  * colours per character, identical gameplay. Replaced by GLB rigs in Phase 04.
  */
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
+import { Rig, type Outfit, type RigDrive } from './models';
 import * as THREE from 'three';
 import { characterDef } from '../game/content';
 import { fuseRemaining } from '../game/sim';
@@ -194,6 +195,16 @@ function Model({ id }: { id: CharacterId }) {
   }
 }
 
+/** Each seat's wardrobe: the coat takes the seat's colour (as in the HUD), the hat or hair a colour of its own. */
+const OUTFIT: Record<string, Outfit> = {
+  frog: { coat: '#5fbf4a', hat: '#f2e9c9' },
+  cat: { coat: '#f08a3c', hat: '#5a3a24' },
+  blob: { coat: '#a678ff', hat: '#2f2a3a' },
+  rat: { coat: '#9aa1ad', hat: '#d94a6a' },
+  duck: { coat: '#ffd23f', hat: '#2a2f45' },
+  creature: { coat: '#2f3b4f', hat: '#7cf9e0' },
+};
+
 export function Creature({ id }: { id: PlayerId }) {
   const { session, renderPos } = useGame();
   const player = session.state.players.find((p) => p.id === id)!;
@@ -203,12 +214,18 @@ export function Creature({ id }: { id: PlayerId }) {
   const shieldMat = useRef<THREE.MeshStandardMaterial>(null);
   const slowRing = useRef<THREE.Mesh>(null);
   const anim = useRef({ yaw: 0, phase: 0, pop: 0, launchT: -1, lastPos: { ...player.pos }, smooth: { ...player.pos } });
+  /** what the rigged model should be doing, set every frame below */
+  const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
+  const ring = characterDef(player.character).color;
+  const outfit = OUTFIT[player.character] ?? { coat: ring, hat: '#2b2a33' };
 
   useEffect(
     () =>
       session.subscribe((events) => {
         for (const e of events) {
-          if ((e.type === 'transfer' && e.to === id) || (e.type === 'holderAssigned' && e.holder === id)) anim.current.pop = 1;
+          if ((e.type === 'transfer' && e.to === id) || (e.type === 'holderAssigned' && e.holder === id)) { anim.current.pop = 1; drive.current.hitAt = performance.now(); }
+          // the tagger or thrower swings
+          if ((e.type === 'throw' && e.from === id) || (e.type === 'transfer' && e.from === id && e.method === 'tag')) drive.current.actAt = performance.now();
           if (e.type === 'elimination' && e.id === id) anim.current.launchT = 0;
           if (e.type === 'swap' && (e.a === id || e.b === id)) {
             const p = session.state.players.find((q) => q.id === id)!;
@@ -228,6 +245,7 @@ export function Creature({ id }: { id: PlayerId }) {
     if (!root.current || !body.current) return;
 
     if (!p.alive) {
+      drive.current.state = 'death';
       // Elimination launch: up and away with a spin, then gone.
       if (a.launchT < 0) {
         root.current.visible = false;
@@ -293,6 +311,9 @@ export function Creature({ id }: { id: PlayerId }) {
     let shakeX = 0;
     if (fuse !== null && fuse < 2) shakeX = Math.sin(performance.now() * 0.06) * 0.06 * (1 - fuse / 2);
 
+    drive.current.speed = speed;
+    drive.current.state = s.phase === 'finished' && s.winnerId === id ? 'win' : dashing ? 'dash' : speed > 0.6 ? 'run' : 'idle';
+
     if (s.phase === 'finished' && s.winnerId === id) {
       const j = Math.abs(Math.sin(performance.now() * 0.006));
       body.current.position.y = j * 0.8;
@@ -324,9 +345,9 @@ export function Creature({ id }: { id: PlayerId }) {
   return (
     <group ref={root}>
       <group ref={body}>
-        <group scale={1.2}>
-          <Model id={player.character} />
-        </group>
+        <Suspense fallback={<group scale={1.2}><Model id={player.character} /></group>}>
+          <Rig id={player.character} drive={drive} outfit={outfit} />
+        </Suspense>
       </group>
       <mesh ref={shield} position={[0, 0.6, 0]} visible={false}>
         <sphereGeometry args={[0.85, 24, 16]} />
@@ -335,6 +356,11 @@ export function Creature({ id }: { id: PlayerId }) {
       <mesh ref={slowRing} position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
         <ringGeometry args={[0.55, 0.7, 6]} />
         <meshBasicMaterial color="#ffb347" transparent opacity={0.8} />
+      </mesh>
+      {/* the player's colour, as a ring on the ground, so every pirate reads as its seat from above */}
+      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.5, 0.64, 32]} />
+        <meshBasicMaterial color={ring} transparent opacity={0.9} depthWrite={false} />
       </mesh>
       {/* Blob shadow for readability even with shadows disabled */}
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>

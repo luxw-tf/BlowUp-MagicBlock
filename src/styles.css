@@ -240,7 +240,11 @@ kbd {
 .char-icon {
   display: grid;
   place-items: center;
-  font-size: 1.9rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -249,7 +253,7 @@ kbd {
 .char-icon.small {
   width: 32px;
   height: 32px;
-  font-size: 1.1rem;
+  font-size: 0.78rem;
 }
 .char-name {
   font-size: 0.75rem;

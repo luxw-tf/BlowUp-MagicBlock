@@ -5,13 +5,14 @@ import type { ParticipantSetup } from '../game/sim';
 import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 
+// each pirate's initial on its own colour (the 3D crew is the real portrait)
 const ICON: Record<CharacterId, string> = {
-  frog: '🐸',
-  cat: '🐱',
-  blob: '🦠',
-  rat: '🐀',
-  duck: '🦆',
-  creature: '👾',
+  frog: 'Sh',
+  cat: 'An',
+  blob: 'Ma',
+  rat: 'He',
+  duck: 'Ba',
+  creature: 'Bo',
 };
 
 export function Landing({
@@ -76,7 +77,7 @@ export function Landing({
                 style={{ '--c': c.color } as React.CSSProperties}
                 onClick={() => setCharacter(c.id)}
               >
-                <span className="char-icon">{ICON[c.id]}</span>
+                <span className="char-icon" style={{ background: c.color }}>{ICON[c.id]}</span>
                 <span className="char-name">{c.name}</span>
               </button>
             ))}
