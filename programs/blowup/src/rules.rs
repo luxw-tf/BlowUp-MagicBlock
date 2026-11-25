@@ -37,7 +37,10 @@ pub const MAX_SPEED_MM_PER_S: i64 = 26_000;
 /// can still move a tick's worth.
 pub const MIN_INPUT_WINDOW_MS: i64 = 60;
 /// Cap on time credited between inputs (prevents "saving up" movement).
-pub const MAX_INPUT_WINDOW_MS: i64 = 1_000;
+/// 300ms at max speed ≈ 7.8 units: enough for a dash after a brief network
+/// stall, far too little to cross the arena. Measured on devnet: a 1s cap let
+/// a +15 unit teleport through after an idle period.
+pub const MAX_INPUT_WINDOW_MS: i64 = 300;
 
 /// Reads the i-th little-endian u32 from a VRF output.
 pub fn uniform_u32(randomness: &[u8; 32], i: usize) -> u32 {
@@ -174,6 +177,8 @@ mod tests {
         assert!(move_plausible(300, 0, 50)); // a normal 20 Hz step
         assert!(!move_plausible(5_000, 0, 50)); // teleport
         assert!(!move_plausible(30_000, 0, 10_000)); // can't bank time
+        assert!(!move_plausible(15_000, 0, 5_000)); // teleport after idling (caught on devnet)
+        assert!(move_plausible(6_000, 0, 5_000)); // a full dash after idling is fine
         assert!(within_range(0, 0, 1_500, 0, TAG_RANGE_MM));
         assert!(!within_range(0, 0, 2_500, 0, TAG_RANGE_MM));
         assert!(in_bounds(17_000, -9_000));

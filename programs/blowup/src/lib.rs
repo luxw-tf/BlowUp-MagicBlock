@@ -16,8 +16,8 @@ use ephemeral_rollups_sdk::{
     ephem::MagicIntentBundleBuilder,
     vrf::{
         consts::{
-            program_identity_pubkey, DEFAULT_EPHEMERAL_QUEUE, DEFAULT_EPHEMERAL_TEST_QUEUE, DEFAULT_QUEUE,
-            DEFAULT_TEST_QUEUE,
+            program_identity_pubkey, scoped_vrf_identity_const, DEFAULT_EPHEMERAL_QUEUE, DEFAULT_EPHEMERAL_TEST_QUEUE,
+            DEFAULT_QUEUE, DEFAULT_TEST_QUEUE,
         },
         instructions::{create_request_randomness_ix_const, RequestRandomnessParams},
         types::SerializableAccountMeta,
@@ -587,9 +587,21 @@ pub struct RequestCtx<'info> {
     pub oracle_queue: UncheckedAccount<'info>,
 }
 
+/// Scoped VRF identity for this program, computed at COMPILE time.
+///
+/// `#[vrf_callback]` would otherwise inject
+/// `address = scoped_vrf_identity_const(&crate::ID)` inline in Anchor's account
+/// validation, which is not a const context: the PDA derivation then runs
+/// on-chain and exhausts the callback's ~270k CU budget. Declaring the field
+/// ourselves makes the macro skip its injection.
+const VRF_CALLBACK_IDENTITY: Pubkey = Pubkey::new_from_array(scoped_vrf_identity_const(&crate::ID).0);
+
 #[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRandomnessCtx<'info> {
+    /// Signer proves the VRF program issued this callback for this program.
+    #[account(address = VRF_CALLBACK_IDENTITY)]
+    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub match_state: Account<'info, MatchState>,
 }

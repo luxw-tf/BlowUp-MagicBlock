@@ -19,6 +19,7 @@ import {
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
+  SYSVAR_CLOCK_PUBKEY,
   Transaction,
   TransactionInstruction,
   type AccountInfo,
@@ -28,7 +29,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SOLANA_RPC = process.env.SOLANA_RPC ?? 'https://api.devnet.solana.com';
+const SOLANA_RPC = process.env.SOLANA_RPC ?? 'https://rpc.magicblock.app/devnet';
 const ROUTER_RPC = process.env.ROUTER_RPC ?? 'https://devnet-router.magicblock.app';
 const PLAYERS = Math.min(6, Math.max(2, Number(process.env.PLAYERS ?? 6)));
 const EPHEMERAL_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc');
@@ -126,10 +127,18 @@ async function send(conn: Connection, ixs: TransactionInstruction[], signers: Ke
   } catch (e) {
     return { sig: '', ms: now() - t0, err: `send failed: ${(e as Error).message.slice(0, 200)}` };
   }
+  // ER: poll tightly to measure latency. Base layer: be gentle with public RPC limits.
+  const interval = conn === base ? 500 : 10;
   while (now() - t0 < timeoutMs) {
-    const st = (await conn.getSignatureStatuses([sig])).value[0];
+    let st;
+    try {
+      st = (await conn.getSignatureStatuses([sig])).value[0];
+    } catch {
+      await sleep(Math.max(interval, 250)); // transient RPC error / rate limit
+      continue;
+    }
     if (st && (st.confirmationStatus || st.err)) return { sig, ms: now() - t0, err: explainErr(st.err) };
-    await sleep(10);
+    await sleep(interval);
   }
   return { sig, ms: now() - t0, err: 'timeout' };
 }
@@ -321,6 +330,7 @@ async function main() {
   const confirmMs: number[] = [];
   const visibleMs: number[] = [];
   let inputErrors = 0;
+  const errorReasons: Record<string, number> = {};
   const watched = playerPda(match, 0);
   const pendingVisible = new Map<number, number>(); // seq → sent time
   const sub = er.onAccountChange(
@@ -348,8 +358,10 @@ async function main() {
         (async () => {
           if (i === 0) pendingVisible.set(seq, now());
           const res = await send(er, [await ix.input(i, seq, x, z)], [guests[i].session], feePayerFor(i));
-          if (res.err) inputErrors++;
-          else confirmMs.push(res.ms);
+          if (res.err) {
+            inputErrors++;
+            errorReasons[res.err] = (errorReasons[res.err] ?? 0) + 1;
+          } else confirmMs.push(res.ms);
         })(),
       );
     }
@@ -360,27 +372,38 @@ async function main() {
   await er.removeAccountChangeListener(sub);
   const slot1 = await er.getSlot('processed');
   const measuredSlotMs = (now() - tSlot0) / Math.max(1, slot1 - slot0);
-  report.inputs = { sent: 100 * PLAYERS, errors: inputErrors, confirm: stats(confirmMs), subscriptionVisible: stats(visibleMs) };
+  report.inputs = {
+    sent: 100 * PLAYERS,
+    errors: inputErrors,
+    errorReasons,
+    confirm: stats(confirmMs),
+    subscriptionVisible: stats(visibleMs),
+  };
   report.slotTiming = { nominalMs: slotMs, measuredMs: Math.round(measuredSlotMs * 10) / 10 };
   check('ER input confirmation p95 < 100ms (PRD target)', pct(confirmMs, 95) < 100, JSON.stringify(stats(confirmMs)));
-  check('input error rate < 1%', inputErrors / (100 * PLAYERS) < 0.01, `${inputErrors} errors`);
+  check('input error rate < 1%', inputErrors / (100 * PLAYERS) < 0.01, `${inputErrors} errors ${JSON.stringify(errorReasons)}`);
 
-  // Server-authoritative positions now match the client model.
-  const ps = await Promise.all(guests.map((_, i) => er.getAccountInfo(playerPda(match, i), 'processed')));
-  ps.forEach((info, i) => {
-    const p = decode<{ x: number; z: number; seq: number }>('playerState', info!.data);
+  /** Re-read authoritative seq/position so one test can't poison the next. */
+  const sync = async (i: number) => {
+    const p = decode<{ x: number; z: number; seq: number }>('playerState', (await er.getAccountInfo(playerPda(match, i), 'processed'))!.data);
     pos[i] = { x: p.x, z: p.z };
     seqs[i] = p.seq;
-  });
+  };
+  await Promise.all(guests.map((_, i) => sync(i)));
 
   // ── invalid inputs are rejected ──
   const expectErr = async (name: string, expected: string, ixs: TransactionInstruction[], signers: Keypair[], payer: Keypair) => {
     const res = await send(er, ixs, signers, payer);
     check(`rejects ${name}`, res.err === expected, `got ${res.err ?? 'success'}`);
   };
+  await sleep(1_500); // idle first: the teleport must be rejected even after banking time
+  await sync(0);
   await expectErr('duplicate sequence', 'StaleSequence', [await ix.input(0, seqs[0], pos[0].x, pos[0].z)], [guests[0].session], feePayerFor(0));
-  await expectErr('teleport', 'ImpossibleMovement', [await ix.input(0, seqs[0] + 1, pos[0].x + 15_000, pos[0].z)], [guests[0].session], feePayerFor(0));
+  await sync(0);
+  await expectErr('teleport after idling', 'ImpossibleMovement', [await ix.input(0, seqs[0] + 1, pos[0].x + 15_000, pos[0].z)], [guests[0].session], feePayerFor(0));
+  await sync(0);
   await expectErr('out of bounds', 'OutOfBounds', [await ix.input(0, seqs[0] + 1, 25_000, 0)], [guests[0].session], feePayerFor(0));
+  await sync(0);
   await expectErr(
     'foreign signer',
     'NotSessionKey',
@@ -390,12 +413,15 @@ async function main() {
   );
 
   // ── session expiry and renewal (no wallet) ──
-  const waitS = nowSec + SHORT_SESSION_S + 3 - Math.floor(Date.now() / 1000);
-  if (waitS > 0) {
-    log(`waiting ${waitS}s for player 1's session to expire…`);
-    await sleep(waitS * 1000);
-  }
+  // Expiry is judged by the ER's Clock sysvar, which may be offset from wall time.
+  const erUnix = async () => Number((await er.getAccountInfo(SYSVAR_CLOCK_PUBKEY, 'processed'))!.data.readBigInt64LE(32));
+  report.erClockSkewS = (await erUnix()) - Math.floor(Date.now() / 1000);
+  const expiry = nowSec + SHORT_SESSION_S;
+  log(`ER clock skew ${report.erClockSkewS}s; waiting for player 1's session to expire on the ER…`);
+  while ((await erUnix()) <= expiry + 1) await sleep(1_000);
+  await sync(1);
   await expectErr('expired session', 'SessionExpired', [await ix.input(1, seqs[1] + 1, pos[1].x, pos[1].z)], [guests[1].session], feePayerFor(1));
+  await sync(1);
   const newSession = Keypair.generate();
   r = await send(
     er,

@@ -1,0 +1,111 @@
+{
+  "startedAt": "2026-11-25T16:15:52.466Z",
+  "solanaRpc": "https://rpc.magicblock.app/devnet",
+  "router": "https://devnet-router.magicblock.app",
+  "programId": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob",
+  "players": 6,
+  "checks": [
+    {
+      "name": "delegation visible via router",
+      "pass": true,
+      "detail": "318ms after confirmation"
+    },
+    {
+      "name": "unfunded guest key can pay its own ER transactions",
+      "pass": true,
+      "detail": "232ms"
+    },
+    {
+      "name": "ER input confirmation p95 < 100ms (PRD target)",
+      "pass": false,
+      "detail": "{\"n\":568,\"p50\":202,\"p95\":514,\"p99\":687,\"max\":808}"
+    },
+    {
+      "name": "input error rate < 1%",
+      "pass": false,
+      "detail": "32 errors"
+    },
+    {
+      "name": "rejects duplicate sequence",
+      "pass": true,
+      "detail": "got StaleSequence"
+    },
+    {
+      "name": "rejects teleport",
+      "pass": false,
+      "detail": "got success"
+    },
+    {
+      "name": "rejects out of bounds",
+      "pass": false,
+      "detail": "got StaleSequence"
+    },
+    {
+      "name": "rejects foreign signer",
+      "pass": true,
+      "detail": "got NotSessionKey"
+    },
+    {
+      "name": "rejects expired session",
+      "pass": false,
+      "detail": "got success"
+    },
+    {
+      "name": "guest renews its own session",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "renewed session accepted",
+      "pass": false,
+      "detail": "StaleSequence"
+    }
+  ],
+  "validator": {
+    "identity": "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57",
+    "fqdn": "https://devnet-as.magicblock.app/",
+    "nominalBlockTimeMs": 10
+  },
+  "match": {
+    "id": "1795623353186",
+    "pda": "BKZuYfxzninix8hB9bnft8zwbuLes9iRj23rD6GHuKee"
+  },
+  "baseSetupMs": 2290,
+  "delegation": {
+    "baseConfirmMs": 3880,
+    "routerVisibleMs": 319
+  },
+  "erVersion": {
+    "core": "2.0.5",
+    "solana-core": "4.2.2",
+    "feature-set": 565236538,
+    "git-commit": "380360a"
+  },
+  "sponsorship": {
+    "unfundedGuestCanPay": true
+  },
+  "inputs": {
+    "sent": 600,
+    "errors": 32,
+    "confirm": {
+      "n": 568,
+      "p50": 202,
+      "p95": 514,
+      "p99": 687,
+      "max": 808
+    },
+    "subscriptionVisible": {
+      "n": 97,
+      "p50": 136,
+      "p95": 201,
+      "p99": 229,
+      "max": 229
+    }
+  },
+  "slotTiming": {
+    "nominalMs": 10,
+    "measuredMs": 10
+  },
+  "fatal": "VRF did not fulfil after retries",
+  "finishedAt": "2026-11-25T16:17:07.758Z"
+}
