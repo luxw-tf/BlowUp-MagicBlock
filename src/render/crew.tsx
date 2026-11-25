@@ -87,14 +87,16 @@ function identity(base: THREE.Material, color: string, recolour: boolean): THREE
       sh.fragmentShader = sh.fragmentShader.replace(
         '#include <map_fragment>',
         `#include <map_fragment>
+        // keep the cloth's light and shade (folds, brims, trims) so the shape still reads, and a touch of its detail
         float tl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        diffuseColor.rgb = uTint * clamp(0.45 + tl * 2.4, 0.0, 1.25);`,
+        vec3 dyed = uTint * clamp(0.22 + tl * 3.6, 0.0, 1.2);
+        diffuseColor.rgb = mix(dyed, diffuseColor.rgb * 1.6, 0.12);`,
       );
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
       float rimF = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
-      totalEmissiveRadiance += uTint * pow(rimF, 3.0) * 0.55;`,
+      totalEmissiveRadiance += uTint * pow(rimF, 3.0) * 0.35;`,
     );
   };
   m.customProgramCacheKey = () => (recolour ? 'crew-id-tint' : 'crew-id');
@@ -152,8 +154,12 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
     });
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const k = build.height / Math.max(0.001, box.max.y - box.min.y);
-    // the outline: thin ink on the menu, a bolder edge in the player's own colour in a match
-    const ink = tint ? outlineMaterial((box.max.y - box.min.y) * 0.011, tint) : outlineMaterial((box.max.y - box.min.y) * 0.008);
+    // the outline: thin black ink on the menu; in a match a deep ink of the player's own colour. Not the colour itself
+    // and not thick: an edge the same colour as the clothes melts the figure into one flat blob from the high camera,
+    // and a fat hull pokes through thin hat brims and flickers.
+    const ink = tint
+      ? outlineMaterial((box.max.y - box.min.y) * 0.0085, '#' + new THREE.Color(tint).multiplyScalar(0.32).getHexString())
+      : outlineMaterial((box.max.y - box.min.y) * 0.008);
     const meshes: THREE.Mesh[] = [];
     scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     for (const m of meshes) {
