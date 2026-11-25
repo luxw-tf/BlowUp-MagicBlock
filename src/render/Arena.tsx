@@ -199,14 +199,16 @@ const WATER_FRAG = /* glsl */ `
     vec2 c = cells(p * scale + vec2(uTime * 0.05, uTime * 0.03), uTime * 0.6);
     float web = smoothstep(0.05, 0.012, c.y - c.x);
     float patchy = smoothstep(0.5, 0.78, noise(p * 0.09 + vec2(uTime * 0.025, -uTime * 0.018)));
-    float foamAmt = web * patchy * mix(0.95, 0.35, depth);
+    float foamAmt = basin > 0.5 ? 0.0 : web * patchy * mix(0.95, 0.35, depth);   // the basin is too small for foam patches
+    // in the basin: soft bands of light rippling out from the fountain instead
+    if (basin > 0.5) col += smoothstep(0.55, 1.0, sin(length(p - uCentre) * 5.5 - uTime * 2.2)) * 0.05;
     // subtle darker cell centres give the surface a hammered, moving feel
-    col *= 1.0 - smoothstep(0.0, 0.6, c.x) * 0.06;
+    if (basin < 0.5) col *= 1.0 - smoothstep(0.0, 0.6, c.x) * 0.06;
 
     // foam hugging the wall, with a second line that swells in and out
     float lap = sin(uTime * 1.4 + (basin > 0.5 ? atan(p.y - uCentre.y, p.x - uCentre.x) * 6.0 : p.x * 0.45)) * 0.22;
     foamAmt += smoothstep(0.55, 0.05, edge);
-    foamAmt += smoothstep(0.07, 0.0, abs(edge - 0.95 - lap)) * (basin > 0.5 ? 0.35 : 0.7);
+    foamAmt += basin > 0.5 ? 0.0 : smoothstep(0.07, 0.0, abs(edge - 0.95 - lap)) * 0.7;
 
     // foam rings round everything floating: a hugging ring plus slow ripples spreading out
     if (basin < 0.5) {

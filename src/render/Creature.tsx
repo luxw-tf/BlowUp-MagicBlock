@@ -253,11 +253,10 @@ export function Creature({ id }: { id: PlayerId }) {
       }
       a.launchT += dt;
       const t = a.launchT;
-      root.current.position.y = 9 * t - 6 * t * t;
-      root.current.position.z -= dt * 6;
-      body.current.rotation.x += dt * 14;
-      body.current.rotation.z += dt * 9;
-      root.current.scale.setScalar(Math.max(0, 1 - t * 0.5));
+      // knocked back in a short hop while the Death animation plays, then sinks into the smoke
+      root.current.position.y = Math.max(0, 4.2 * t - 7 * t * t);
+      if (t < 0.6) root.current.position.z -= dt * 2.4;
+      root.current.scale.setScalar(t < 1.1 ? 1 : Math.max(0.001, 1 - (t - 1.1) / 0.5));
       if (t > 1.6) {
         a.launchT = -1;
         root.current.visible = false;

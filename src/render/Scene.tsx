@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { ARENA } from '../game/arena';
 import { CONFIG, TICK_DT } from '../game/config';
-import { ABILITY_DEFS } from '../game/content';
+import { ABILITY_DEFS, characterDef } from '../game/content';
 import { fuseRemaining, getPlayer, holderCanAct } from '../game/sim';
 import { getSettings, useSettings } from '../state/settings';
 import { Arena, FOG } from './Arena';
@@ -325,6 +325,152 @@ interface Ring {
   color: string;
 }
 
+/** One cartoon explosion: flash, fireball puffs, smoke, tumbling debris, a shockwave and a scorch mark. */
+interface Blast { alive: boolean; x: number; z: number; t: number; color: string; seed: number[] }
+const BLAST_LIFE = 1.6;
+const SCORCH_LIFE = 6;
+const PUFFS = 8, SMOKE = 6, DEBRIS = 12;
+const fireRamp = [new THREE.Color('#fff4c2'), new THREE.Color('#ffc23d'), new THREE.Color('#ff6a2a'), new THREE.Color('#9c3b26'), new THREE.Color('#4a3f3c')];
+const tmpColor = new THREE.Color();
+function ramp(k: number) {
+  const f = Math.min(0.999, Math.max(0, k)) * (fireRamp.length - 1), i = Math.floor(f);
+  return tmpColor.copy(fireRamp[i]).lerp(fireRamp[i + 1], f - i);
+}
+
+function BlastView({ b }: { b: Blast }) {
+  const root = useRef<THREE.Group>(null);
+  const flash = useRef<THREE.Mesh>(null);
+  const puffs = useRef<(THREE.Mesh | null)[]>([]);
+  const smoke = useRef<(THREE.Mesh | null)[]>([]);
+  const debris = useRef<(THREE.Mesh | null)[]>([]);
+  const wave = useRef<THREE.Mesh>(null);
+  const scorch = useRef<THREE.Mesh>(null);
+  const deb = useMemo(() => Array.from({ length: DEBRIS }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Vector3(), w: new THREE.Vector3() })), []);
+  const started = useRef(-1);
+
+  useFrame((_, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.05);
+    const g = root.current;
+    if (!g) return;
+    if (!b.alive) { g.visible = false; started.current = -1; return; }
+    g.visible = true;
+    g.position.set(b.x, 0, b.z);
+    if (started.current !== b.seed[0]) {
+      // a new blast: throw the debris
+      started.current = b.seed[0];
+      deb.forEach((d, i) => {
+        const a = (i / DEBRIS) * Math.PI * 2 + b.seed[i % b.seed.length] * 0.6;
+        const sp = 4 + b.seed[(i + 3) % b.seed.length] * 5;
+        d.p.set(0, 0.7, 0);
+        d.v.set(Math.cos(a) * sp, 5 + b.seed[(i + 5) % b.seed.length] * 5, Math.sin(a) * sp);
+        d.r.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+        d.w.set((Math.random() - 0.5) * 18, (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 18);
+      });
+    }
+    b.t += dt;
+    const t = b.t;
+    if (t > SCORCH_LIFE) { b.alive = false; return; }
+    const live = t < BLAST_LIFE;
+
+    // the flash: a fast white-hot pop
+    if (flash.current) {
+      const k = Math.min(1, t / 0.12);
+      flash.current.visible = t < 0.28;
+      flash.current.scale.setScalar(0.4 + k * 2.1);
+      (flash.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - t / 0.28);
+    }
+    // fireball puffs: bloom out and up, burn from yellow through orange to soot, then shrink away
+    puffs.current.forEach((m, i) => {
+      if (!m) return;
+      m.visible = live && t < 0.95;
+      if (!m.visible) return;
+      const a = (i / PUFFS) * Math.PI * 2 + b.seed[i % b.seed.length];
+      const out = Math.min(1, t / 0.35);
+      const reach = 0.7 + b.seed[(i + 2) % b.seed.length] * 0.9;
+      m.position.set(Math.cos(a) * reach * out, 0.7 + out * (0.4 + (i % 3) * 0.35) + t * 0.6, Math.sin(a) * reach * out);
+      const grow = Math.sin(Math.min(1, t / 0.95) * Math.PI);
+      m.scale.setScalar((0.55 + b.seed[(i + 4) % b.seed.length] * 0.5) * (0.35 + grow));
+      m.rotation.set(t * 2 + i, t * 1.4, 0);
+      (m.material as THREE.MeshStandardMaterial).color.copy(ramp(t / 0.95));
+      (m.material as THREE.MeshStandardMaterial).emissive.copy(ramp(t / 0.95)).multiplyScalar(Math.max(0, 0.6 - t));
+    });
+    // smoke: rolls up slowly and thins out
+    smoke.current.forEach((m, i) => {
+      if (!m) return;
+      const t0 = 0.18 + i * 0.05, k = (t - t0) / (BLAST_LIFE - t0);
+      m.visible = live && k > 0 && k < 1;
+      if (!m.visible) return;
+      const a = (i / SMOKE) * Math.PI * 2 + 0.5;
+      m.position.set(Math.cos(a) * 0.6 * (1 + k), 1.2 + k * 2.6, Math.sin(a) * 0.6 * (1 + k));
+      m.scale.setScalar(0.5 + k * 1.1);
+      m.rotation.y = t * 0.8 + i;
+      (m.material as THREE.MeshStandardMaterial).opacity = 0.85 * (1 - k);
+    });
+    // debris: tumbles, bounces once, then settles and sinks
+    debris.current.forEach((m, i) => {
+      if (!m) return;
+      const d = deb[i];
+      m.visible = t < 2.4;
+      if (!m.visible) return;
+      d.v.y -= 22 * dt;
+      d.p.addScaledVector(d.v, dt);
+      if (d.p.y < 0.08) { d.p.y = 0.08; d.v.y = Math.abs(d.v.y) * 0.3; d.v.x *= 0.55; d.v.z *= 0.55; d.w.multiplyScalar(0.5); }
+      d.r.addScaledVector(d.w, dt);
+      m.position.copy(d.p);
+      m.rotation.set(d.r.x, d.r.y, d.r.z);
+      m.scale.setScalar(t > 1.8 ? Math.max(0.001, 1 - (t - 1.8) / 0.6) : 1);
+    });
+    // shockwave on the ground
+    if (wave.current) {
+      const k = t / 0.5;
+      wave.current.visible = k < 1;
+      wave.current.scale.setScalar(0.5 + k * 5.5);
+      (wave.current.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.85;
+    }
+    // scorch mark: stays a few seconds, then fades
+    if (scorch.current) {
+      (scorch.current.material as THREE.MeshBasicMaterial).opacity = 0.55 * Math.min(1, t / 0.15) * (1 - Math.max(0, (t - SCORCH_LIFE + 2) / 2));
+    }
+  });
+
+  return (
+    <group ref={root} visible={false}>
+      <mesh ref={flash}>
+        <sphereGeometry args={[1, 16, 12]} />
+        <meshBasicMaterial color="#fff8dc" transparent toneMapped={false} depthWrite={false} />
+      </mesh>
+      {Array.from({ length: PUFFS }, (_, i) => (
+        <mesh key={`p${i}`} ref={(el) => (puffs.current[i] = el)} castShadow>
+          <icosahedronGeometry args={[0.85, 1]} />
+          <meshStandardMaterial flatShading roughness={0.8} />
+        </mesh>
+      ))}
+      {Array.from({ length: SMOKE }, (_, i) => (
+        <mesh key={`s${i}`} ref={(el) => (smoke.current[i] = el)}>
+          <icosahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color="#8d8a88" flatShading roughness={1} transparent depthWrite={false} />
+        </mesh>
+      ))}
+      {Array.from({ length: DEBRIS }, (_, i) => (
+        <mesh key={`d${i}`} ref={(el) => (debris.current[i] = el)} castShadow>
+          <boxGeometry args={[i % 3 ? 0.22 : 0.34, 0.12, i % 2 ? 0.16 : 0.3]} />
+          <meshStandardMaterial color={i % 3 === 0 ? b.color : i % 3 === 1 ? '#c99257' : '#3d3f46'} roughness={0.7} />
+        </mesh>
+      ))}
+      <mesh ref={wave} position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.78, 1, 40]} />
+        <meshBasicMaterial color="#fff3d6" transparent depthWrite={false} />
+      </mesh>
+      <mesh ref={scorch} position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[1.5, 24]} />
+        <meshBasicMaterial color="#1e1a18" transparent depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+const MAX_BLASTS = 6;
+
 const MAX_PARTICLES = 600;
 const MAX_RINGS = 12;
 
@@ -350,6 +496,7 @@ function Effects() {
     () => Array.from({ length: MAX_RINGS }, () => ({ alive: false, x: 0, z: 0, life: 0, max: 1, size: 1, color: '#fff' })),
     [],
   );
+  const blasts = useMemo<Blast[]>(() => Array.from({ length: MAX_BLASTS }, () => ({ alive: false, x: 0, z: 0, t: 0, color: '#fff', seed: [] as number[] })), []);
   const cursor = useRef(0);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const dustTimer = useRef(new Map<string, number>());
@@ -384,9 +531,9 @@ function Effects() {
         for (const e of events) {
           switch (e.type) {
             case 'elimination': {
-              spawn(e.at.x, 0.8, e.at.z, 70, { speed: 9, up: 7, life: 0.9, size: 0.32, grav: 14, colors: ['#ff6a00', '#ffd35c', '#ff2a1a', '#fff3c4'] });
-              spawn(e.at.x, 0.6, e.at.z, 30, { speed: 4, up: 2, life: 1.3, size: 0.36, grav: -1, colors: ['#5a5a5a', '#777', '#8a8580'] });
-              ring(e.at.x, e.at.z, 7, '#ffb347', 0.6);
+              const b = blasts.find((q) => !q.alive) ?? blasts[0];
+              const who = getPlayer(session.state, e.id);
+              Object.assign(b, { alive: true, x: e.at.x, z: e.at.z, t: 0, color: who ? characterDef(who.character).color : '#ffd23f', seed: Array.from({ length: 8 }, () => Math.random()) });
               shake.amount = Math.min(1.2, shake.amount + 1);
               break;
             }
@@ -504,9 +651,12 @@ function Effects() {
   return (
     <>
       <instancedMesh ref={inst} args={[undefined, undefined, MAX_PARTICLES]} frustumCulled={false}>
-        <sphereGeometry args={[1, 10, 8]} />
-        <meshBasicMaterial toneMapped={false} />
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial flatShading roughness={0.8} />
       </instancedMesh>
+      {blasts.map((b, i) => (
+        <BlastView key={i} b={b} />
+      ))}
       {rings.map((_, i) => (
         <mesh key={i} ref={(el) => (ringRefs.current[i] = el)} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
           <ringGeometry args={[0.85, 1, 40]} />
