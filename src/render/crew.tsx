@@ -42,21 +42,28 @@ const BUILD: Record<string, { height: number; idle: string; stride: number }> = 
   'kaykit/Skeleton_Minion.glb': { height: 1.68, idle: 'Skeletons_Idle', stride: 1.2 },
 };
 
-/** An ink outline: a back-face copy of each mesh pushed out along its (skinned) normals. Our look, not stock KayKit. */
+/**
+ * An ink outline: a back-face copy of each mesh pushed out along its (skinned) normals. Our look, not stock KayKit.
+ * Width and colour are uniforms, so every figure on the dock shares one compiled program.
+ */
 function outlineMaterial(width: number, color = '#16110d') {
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, toneMapped: false });
+  const uWidth = { value: width };
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace(
-      '#include <project_vertex>',
-      `#ifdef USE_SKINNING
-        transformed += normalize(objectNormal) * ${width.toFixed(5)};
-      #else
-        transformed += normalize(normal) * ${width.toFixed(5)};
-      #endif
-      #include <project_vertex>`,
-    );
+    sh.uniforms.uOutlineWidth = uWidth;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uOutlineWidth;')
+      .replace(
+        '#include <project_vertex>',
+        `#ifdef USE_SKINNING
+          transformed += normalize(objectNormal) * uOutlineWidth;
+        #else
+          transformed += normalize(normal) * uOutlineWidth;
+        #endif
+        #include <project_vertex>`,
+      );
   };
-  m.customProgramCacheKey = () => `outline-${width.toFixed(5)}`;
+  m.customProgramCacheKey = () => 'crew-outline';
   // a fog-free edge: in rain, fog or night the outline is what still says who this is
   m.fog = false;
   return m;
