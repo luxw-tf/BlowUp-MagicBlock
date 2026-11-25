@@ -6,32 +6,36 @@ import { CONFIG, TICK_DT } from '../game/config';
 import { ABILITY_DEFS } from '../game/content';
 import { fuseRemaining, getPlayer, holderCanAct } from '../game/sim';
 import { getSettings, useSettings } from '../state/settings';
-import { Arena } from './Arena';
+import { Arena, FOG } from './Arena';
 import { Creature } from './Creature';
 import { overlay, useGame } from './context';
 
-const ELEVATION = (50 * Math.PI) / 180;
-const CAM_DIST = 40;
+const ELEVATION = (54 * Math.PI) / 180;
+/** Vertical field of view: narrow-ish, so the dock has real depth without fish-eye stretching at the edges. */
+const FOV = 30;
 /** World-space vertical extent kept on screen: full arena depth + headroom. */
-const VIEW_HEIGHT = ARENA.halfDepth * 2 * Math.sin(ELEVATION) + 1.8;
+const VIEW_HEIGHT = ARENA.halfDepth * 2 * Math.sin(ELEVATION) + 7.5;
+/** Camera distance that fits VIEW_HEIGHT at the look-at point with a perspective camera. */
+const CAM_DIST = VIEW_HEIGHT / 2 / Math.tan((FOV * Math.PI) / 360);
 
 // ───────────────────────────── camera ─────────────────────────────
 
 function CameraRig() {
   const { camera, size } = useThree();
   const { session, input, focus, renderPos, shake } = useGame();
-  const state = useRef({ x: 0 });
+  const state = useRef({ x: 0, bob: 0 });
   const ray = useMemo(() => new THREE.Raycaster(), []);
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
   const hit = useMemo(() => new THREE.Vector3(), []);
   const ndc = useMemo(() => new THREE.Vector2(), []);
 
-  useFrame((_, dtRaw) => {
+  useFrame(({ clock }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
-    const cam = camera as THREE.OrthographicCamera;
-    // Fit full vertical depth; width follows aspect (PRD: horizontal tracking only).
-    cam.zoom = size.height / VIEW_HEIGHT;
-    const halfW = size.width / cam.zoom / 2;
+    const cam = camera as THREE.PerspectiveCamera;
+    if (cam.fov !== FOV) { cam.fov = FOV; }
+    cam.aspect = size.width / size.height;
+    // Perspective: the visible half-width at the look-at distance (PRD: horizontal tracking only).
+    const halfW = CAM_DIST * Math.tan((FOV * Math.PI) / 360) * cam.aspect;
 
     const f = renderPos.get(focus.id) ?? getPlayer(session.state, focus.id)?.pos ?? { x: 0, z: 0 };
     const st = state.current;
@@ -49,9 +53,11 @@ function CameraRig() {
     const sh = shake.amount * shake.amount * sMul;
     const ox = (Math.random() - 0.5) * sh * 0.8;
     const oy = (Math.random() - 0.5) * sh * 0.8;
+    // a slow, tiny drift so the harbour never looks frozen (kept well under a degree)
+    const drift = getSettings().reducedShake ? 0 : Math.sin(clock.elapsedTime * 0.25) * 0.18;
 
-    const tz = -0.5; // bias up: heads need headroom at the back edge, feet need none at the front
-    cam.position.set(st.x + ox, Math.sin(ELEVATION) * CAM_DIST + oy, tz + Math.cos(ELEVATION) * CAM_DIST);
+    const tz = -2.6; // aim a little toward the sea, so the quay and harbour show along the top of the screen
+    cam.position.set(st.x + ox + drift, Math.sin(ELEVATION) * CAM_DIST + oy, tz + Math.cos(ELEVATION) * CAM_DIST);
     cam.lookAt(st.x + ox, oy, tz);
     cam.updateProjectionMatrix();
 
@@ -522,7 +528,8 @@ export function Scene() {
 
   return (
     <>
-      <color attach="background" args={['#1d7fb0']} />
+      <color attach="background" args={[FOG.color]} />
+      <fog attach="fog" args={[FOG.color, FOG.near, FOG.far]} />
       <CameraRig />
       <Arena shadows={settings.shadows} />
       {session.state.players.map((p) => (

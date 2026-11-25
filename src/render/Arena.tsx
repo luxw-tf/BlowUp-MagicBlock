@@ -1,142 +1,321 @@
 /**
- * Map 01: The Docks — blockout-plus. Static geometry built from primitives
- * with procedural textures. Visual richness lives outside the playable area;
- * inside it stays clean and readable. Final art replaces this in Phase 04.
+ * Map 01: The Docks. A sunny, chunky harbour in the spirit of cosy party games: a concrete deck with painted
+ * bay markings, a quay over animated water, container stacks, a working crane, boats and gulls.
+ * The playable area and every obstacle come from the authoritative arena definition (game/arena.ts) and keep
+ * their exact footprints; only their look lives here. Everything that moves is decoration.
  */
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { ARENA, OBSTACLES } from '../game/arena';
 
-function makeFloorTexture(): THREE.CanvasTexture {
+// ───────────────────────────── palette ─────────────────────────────
+
+const P = {
+  deck: '#d8cbb4',
+  deckDark: '#c3bcae',
+  quay: '#a9a397',
+  line: '#f5c431',
+  ink: '#2b2a33',
+  orange: '#ec6a3c',
+  blue: '#3f7fd1',
+  teal: '#2fa89b',
+  yellow: '#f4b93a',
+  red: '#d94a43',
+  cream: '#f6efe1',
+  wood: '#c99257',
+  woodDark: '#9c6a39',
+  leaf: '#5fb352',
+  leafDark: '#3f8f3c',
+  steel: '#59616b',
+};
+
+// ───────────────────────────── textures ─────────────────────────────
+
+const rng = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+/** The playable deck: warm concrete slabs, cracks, stains, painted bay markings. 32 px per world unit. */
+function makeDeckTexture(): THREE.CanvasTexture {
+  const U = 32, W = ARENA.halfWidth * 2, D = ARENA.halfDepth * 2;
   const c = document.createElement('canvas');
-  c.width = 1152;
-  c.height = 640;
+  c.width = W * U; c.height = D * U;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#d4d6d3';
-  g.fillRect(0, 0, c.width, c.height);
-  // Slab variation
-  const tile = 64; // 2 units per tile (36×20 → 18×10 tiles)
-  for (let y = 0; y < c.height; y += tile) {
-    for (let x = 0; x < c.width; x += tile) {
-      const shade = 200 + Math.floor(Math.random() * 22);
-      g.fillStyle = `rgb(${shade},${shade + 2},${shade})`;
-      g.fillRect(x + 1, y + 1, tile - 2, tile - 2);
-      // speckle
-      for (let i = 0; i < 18; i++) {
-        g.fillStyle = `rgba(90,90,85,${Math.random() * 0.08})`;
-        g.fillRect(x + Math.random() * tile, y + Math.random() * tile, 2, 2);
-      }
+  const r = rng(7);
+  g.fillStyle = P.deck; g.fillRect(0, 0, c.width, c.height);
+  // slabs, each a hair different, with soft bevelled seams
+  const s = 4 * U;
+  for (let y = 0; y < c.height; y += s / 2) {
+    for (let x = (y / (s / 2)) % 2 ? -s / 2 : 0; x < c.width; x += s) {
+      const v = Math.floor(r() * 14) - 7;
+      g.fillStyle = `rgb(${214 + v},${201 + v},${178 + v})`;
+      g.fillRect(x + 2, y + 2, s - 4, s / 2 - 4);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + 2, y + 2, s - 4, 3);
+      g.fillStyle = 'rgba(60,50,40,0.10)'; g.fillRect(x + 2, y + s / 2 - 6, s - 4, 4);
     }
   }
-  // Grout lines
-  g.strokeStyle = 'rgba(120,124,120,0.55)';
-  g.lineWidth = 2;
-  for (let x = 0; x <= c.width; x += tile) {
-    g.beginPath();
-    g.moveTo(x, 0);
-    g.lineTo(x, c.height);
+  // speckle + a few oil stains and hairline cracks
+  for (let i = 0; i < 5000; i++) { g.fillStyle = `rgba(70,60,50,${r() * 0.07})`; g.fillRect(r() * c.width, r() * c.height, 2, 2); }
+  for (let i = 0; i < 9; i++) {
+    const gx = r() * c.width, gy = r() * c.height, gr = 20 + r() * 50;
+    const grd = g.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    grd.addColorStop(0, 'rgba(70,60,55,0.16)'); grd.addColorStop(1, 'rgba(70,60,55,0)');
+    g.fillStyle = grd; g.beginPath(); g.ellipse(gx, gy, gr, gr * 0.7, r() * 3, 0, Math.PI * 2); g.fill();
+  }
+  g.strokeStyle = 'rgba(80,70,60,0.35)'; g.lineWidth = 1.5;
+  for (let i = 0; i < 14; i++) {
+    let x = r() * c.width, y = r() * c.height; g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 6; k++) { x += (r() - 0.5) * 40; y += (r() - 0.3) * 30; g.lineTo(x, y); }
     g.stroke();
   }
-  for (let y = 0; y <= c.height; y += tile) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(c.width, y);
-    g.stroke();
+  // painted markings: a bay outline, corner brackets, a dashed lane and stencilled bay number
+  g.strokeStyle = P.line; g.lineWidth = 7; g.globalAlpha = 0.9;
+  g.strokeRect(14, 14, c.width - 28, c.height - 28);
+  g.setLineDash([26, 20]); g.lineWidth = 5;
+  g.beginPath(); g.moveTo(40, c.height / 2); g.lineTo(c.width * 0.32, c.height / 2); g.moveTo(c.width * 0.68, c.height / 2); g.lineTo(c.width - 40, c.height / 2); g.stroke();
+  g.setLineDash([]);
+  const hazard = (x: number, y: number, w: number, h: number) => {
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    g.fillStyle = P.line; g.fillRect(x, y, w, h); g.fillStyle = P.ink;
+    for (let k = -h; k < w + h; k += 22) { g.beginPath(); g.moveTo(x + k, y); g.lineTo(x + k + 11, y); g.lineTo(x + k + 11 - h, y + h); g.lineTo(x + k - h, y + h); g.fill(); }
+    g.restore();
+  };
+  hazard(34, 34, 120, 22); hazard(c.width - 154, c.height - 56, 120, 22);
+  hazard(c.width - 154, 34, 120, 22); hazard(34, c.height - 56, 120, 22);
+  g.globalAlpha = 0.55; g.fillStyle = P.cream;
+  g.font = `900 ${U * 2.2}px Arial Black, Impact, sans-serif`; g.textAlign = 'center';
+  g.fillText('BAY 7', c.width * 0.5, c.height * 0.2);
+  g.save(); g.translate(c.width * 0.5, c.height * 0.86); g.rotate(Math.PI); g.fillText('BAY 7', 0, 0); g.restore();
+  g.globalAlpha = 1;
+  // drain grates by the bay number
+  for (const [x, y] of [[c.width * 0.3, c.height * 0.2], [c.width * 0.7, c.height * 0.8]]) {
+    g.fillStyle = '#7c776e'; g.fillRect(x - 22, y - 14, 44, 28);
+    g.fillStyle = '#4c4843'; for (let k = 0; k < 6; k++) g.fillRect(x - 18 + k * 7, y - 10, 4, 20);
   }
-  // Painted yellow markings (stylised dock lines)
-  g.fillStyle = 'rgba(240,190,40,0.7)';
-  for (let i = 0; i < 6; i++) g.fillRect(90 + i * 34, 560, 20, 8);
-  for (let i = 0; i < 6; i++) g.fillRect(860 + i * 34, 70, 20, 8);
   const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   return tex;
 }
 
-function makeConcreteTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
+/** The surrounding quay: bigger, rougher slabs. Tiles. */
+function makeQuayTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d')!; const r = rng(11);
+  g.fillStyle = P.quay; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1600; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '70,64,56' : '235,230,220'},${r() * 0.1})`; g.fillRect(r() * 256, r() * 256, 3, 3); }
+  g.strokeStyle = 'rgba(70,64,56,0.4)'; g.lineWidth = 3; g.strokeRect(1, 1, 254, 254); g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 256); g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(16, 7); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  return tex;
+}
+
+/** Black and yellow hazard stripes for the quay lip. */
+function makeHazardTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 32;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#8d949a';
-  g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 900; i++) {
-    g.fillStyle = `rgba(${Math.random() < 0.5 ? '60,60,70' : '200,200,210'},${Math.random() * 0.12})`;
-    g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
-  }
-  g.strokeStyle = 'rgba(60,64,70,0.4)';
-  g.lineWidth = 2;
-  g.strokeRect(0, 0, 256, 256);
+  g.fillStyle = P.line; g.fillRect(0, 0, 128, 32); g.fillStyle = P.ink;
+  for (let k = -32; k < 160; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 16, 0); g.lineTo(k - 16, 32); g.lineTo(k - 32, 32); g.fill(); }
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(20, 12);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(30, 1); tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
+/** Wooden crate face: planks, a frame and a cross brace. */
 function makeCrateTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#c99a5b';
-  g.fillRect(0, 0, 128, 128);
-  for (let y = 0; y < 128; y += 16) {
-    g.fillStyle = y % 32 === 0 ? '#b88849' : '#d2a566';
-    g.fillRect(0, y, 128, 15);
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d')!; const r = rng(3);
+  for (let y = 0; y < 128; y += 21) {
+    const v = Math.floor(r() * 20) - 10;
+    g.fillStyle = `rgb(${201 + v},${146 + v},${87 + v})`; g.fillRect(0, y, 128, 20);
+    g.fillStyle = 'rgba(90,55,25,0.35)'; g.fillRect(0, y + 19, 128, 2);
+    for (let k = 0; k < 3; k++) { g.fillStyle = 'rgba(120,75,35,0.25)'; g.fillRect(r() * 128, y + 4 + r() * 12, 18, 1.5); }
   }
-  g.strokeStyle = '#7a5428';
-  g.lineWidth = 10;
-  g.strokeRect(5, 5, 118, 118);
-  g.beginPath();
-  g.moveTo(8, 8);
-  g.lineTo(120, 120);
-  g.stroke();
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  g.strokeStyle = P.woodDark; g.lineWidth = 12; g.strokeRect(6, 6, 116, 116);
+  g.lineWidth = 11; g.beginPath(); g.moveTo(10, 118); g.lineTo(118, 10); g.stroke();
+  g.fillStyle = '#5b4a3a'; for (const [x, y] of [[12, 12], [116, 12], [12, 116], [116, 116]]) { g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   return tex;
 }
 
-function Container({ position, rotation = 0, color }: { position: [number, number, number]; rotation?: number; color: string }) {
-  const ribs = useMemo(() => Array.from({ length: 12 }, (_, i) => -2.75 + i * 0.5), []);
+// ───────────────────────────── water ─────────────────────────────
+
+const WATER_VERT = /* glsl */ `
+  uniform float uTime;
+  varying vec3 vWorld;
+  void main() {
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    // gentle swells, two directions
+    w.y += sin(w.x * 0.35 + uTime * 1.1) * 0.08 + cos(w.z * 0.42 + uTime * 0.9) * 0.07;
+    vWorld = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }
+`;
+const WATER_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform vec3 uDeep;
+  uniform vec3 uShallow;
+  uniform vec3 uFoam;
+  uniform float uEdgeZ;      // the quay line (foam hugs it)
+  uniform vec2 uCentre;      // basin mode: centre and radius of the rim
+  uniform float uRadius;
+  uniform float uBasin;
+  uniform vec3 uFogColor;
+  uniform float uFogNear;
+  uniform float uFogFar;
+  varying vec3 vWorld;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+  }
+  void main() {
+    vec2 p = vWorld.xz;
+    float edge = uBasin > 0.5 ? uRadius - length(p - uCentre) : uEdgeZ - p.y;   // distance from the wall
+    float depth = clamp(edge / (uBasin > 0.5 ? 2.0 : 14.0), 0.0, 1.0);
+    vec3 col = mix(uShallow, uDeep, depth);
+    // drifting light streaks
+    float n = noise(p * 0.22 + vec2(uTime * 0.12, uTime * 0.06)) * 0.65 + noise(p * 0.6 - vec2(uTime * 0.1, -uTime * 0.12)) * 0.35;
+    col += smoothstep(0.55, 0.85, n) * 0.07;
+    // thin wavy highlight lines, the way stylised water is painted
+    float lines = smoothstep(0.035, 0.0, abs(fract(p.y * 0.35 + sin(p.x * 0.25 + uTime * 0.8) * 0.35 + uTime * 0.05) - 0.5) - 0.0);
+    col += lines * 0.06;
+    // foam: a soft band against the wall plus little moving bands
+    float band = smoothstep(0.9, 0.0, edge) + smoothstep(0.08, 0.0, abs(edge - 0.9 - sin(uTime * 1.6 + p.x * 0.6) * 0.25)) * 0.55;
+    col = mix(col, uFoam, clamp(band, 0.0, 1.0) * 0.85);
+    // sparkles that blink and drift
+    vec2 cell = floor(p * 2.2 + vec2(uTime * 0.3, 0.0));
+    float sp = step(0.985, hash(cell)) * smoothstep(0.4, 1.0, sin(uTime * 3.0 + hash(cell + 3.1) * 6.28));
+    col += sp * 0.55;
+    // match the scene fog so the far water melts into the sky
+    float d = length(cameraPosition - vWorld);
+    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+export const FOG = { color: '#bfe6f5', near: 70, far: 170 };
+
+function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
+  return useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: WATER_VERT,
+        fragmentShader: WATER_FRAG,
+        uniforms: {
+          uTime: { value: 0 },
+          uDeep: { value: new THREE.Color(basin ? '#2aa9d6' : '#1690c4') },
+          uShallow: { value: new THREE.Color(basin ? '#7fe0f2' : '#46c8e0') },
+          uFoam: { value: new THREE.Color('#f4fbff') },
+          uEdgeZ: { value: -13.3 },
+          uCentre: { value: new THREE.Vector2(basin?.x ?? 0, basin?.z ?? 0) },
+          uRadius: { value: basin?.r ?? 0 },
+          uBasin: { value: basin ? 1 : 0 },
+          uFogColor: { value: new THREE.Color(FOG.color) },
+          uFogNear: { value: FOG.near },
+          uFogFar: { value: FOG.far },
+        },
+      }),
+    [basin],
+  );
+}
+
+function Sea() {
+  const mat = useWaterMaterial(null);
+  useFrame(({ clock }) => (mat.uniforms.uTime.value = clock.elapsedTime));
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.9, -62]} material={mat}>
+      <planeGeometry args={[260, 98, 130, 50]} />
+    </mesh>
+  );
+}
+
+// ───────────────────────────── props ─────────────────────────────
+
+function Container({ position, rotation = 0, color, len = 6 }: { position: [number, number, number]; rotation?: number; color: string; len?: number }) {
+  const ribs = useMemo(() => Array.from({ length: Math.round(len / 0.45) }, (_, i) => -len / 2 + 0.22 + i * 0.45), [len]);
   return (
     <group position={position} rotation={[0, rotation, 0]}>
       <mesh castShadow receiveShadow position={[0, 1.3, 0]}>
-        <boxGeometry args={[6, 2.6, 2.4]} />
-        <meshStandardMaterial color={color} roughness={0.75} metalness={0.15} />
+        <boxGeometry args={[len, 2.6, 2.4]} />
+        <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
       </mesh>
       {ribs.map((x) => (
-        <mesh key={x} position={[x, 1.3, 1.21]}>
-          <boxGeometry args={[0.12, 2.4, 0.04]} />
-          <meshStandardMaterial color={color} roughness={0.6} />
+        <group key={x}>
+          <mesh position={[x, 1.3, 1.215]}>
+            <boxGeometry args={[0.16, 2.3, 0.05]} />
+            <meshStandardMaterial color={color} roughness={0.55} />
+          </mesh>
+          <mesh position={[x, 1.3, -1.215]}>
+            <boxGeometry args={[0.16, 2.3, 0.05]} />
+            <meshStandardMaterial color={color} roughness={0.55} />
+          </mesh>
+        </group>
+      ))}
+      {/* a dark base rail, a thin frame round the roof (the roof itself stays in colour), a door end with lock bars */}
+      <mesh position={[0, 0.06, 0]}>
+        <boxGeometry args={[len + 0.04, 0.12, 2.45]} />
+        <meshStandardMaterial color="#3d3f46" roughness={0.6} />
+      </mesh>
+      {[-1.2, 1.2].map((z) => (
+        <mesh key={z} position={[0, 2.62, z]}>
+          <boxGeometry args={[len + 0.04, 0.08, 0.1]} />
+          <meshStandardMaterial color="#3d3f46" roughness={0.6} />
         </mesh>
       ))}
-      <mesh position={[0, 2.62, 0]}>
-        <boxGeometry args={[6.05, 0.06, 2.45]} />
-        <meshStandardMaterial color="#3b3f45" />
+      <mesh position={[len / 2 + 0.02, 1.3, 0]}>
+        <boxGeometry args={[0.06, 2.5, 2.3]} />
+        <meshStandardMaterial color={color} roughness={0.6} />
+      </mesh>
+      {[-0.5, -0.2, 0.2, 0.5].map((z) => (
+        <mesh key={z} position={[len / 2 + 0.07, 1.3, z]}>
+          <boxGeometry args={[0.05, 2.2, 0.05]} />
+          <meshStandardMaterial color="#d7d3c8" metalness={0.4} roughness={0.4} />
+        </mesh>
+      ))}
+      {/* a cream stencil band across the side */}
+      <mesh position={[0, 1.75, 1.245]}>
+        <planeGeometry args={[len * 0.55, 0.42]} />
+        <meshStandardMaterial color={P.cream} roughness={0.8} transparent opacity={0.85} />
       </mesh>
     </group>
   );
 }
 
-function Barrel({ position, color = '#2f6fb5' }: { position: [number, number, number]; color?: string }) {
+function Barrel({ position, color = P.blue }: { position: [number, number, number]; color?: string }) {
   return (
-    <mesh castShadow position={[position[0], 0.5, position[2]]}>
-      <cylinderGeometry args={[0.38, 0.38, 1, 14]} />
-      <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
-    </mesh>
+    <group position={[position[0], 0, position[2]]}>
+      <mesh castShadow position={[0, 0.55, 0]}>
+        <cylinderGeometry args={[0.42, 0.42, 1.1, 16]} />
+        <meshStandardMaterial color={color} roughness={0.45} metalness={0.2} />
+      </mesh>
+      {[0.25, 0.85].map((y) => (
+        <mesh key={y} position={[0, y, 0]}>
+          <torusGeometry args={[0.43, 0.035, 6, 20]} />
+          <meshStandardMaterial color="#2e3038" />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.11, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.4, 16]} />
+        <meshStandardMaterial color={color} roughness={0.4} />
+      </mesh>
+    </group>
   );
 }
 
 function Bollard({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      <mesh castShadow position={[0, 0.3, 0]}>
-        <cylinderGeometry args={[0.18, 0.24, 0.6, 10]} />
-        <meshStandardMaterial color="#2c3036" roughness={0.6} />
+      <mesh castShadow position={[0, 0.32, 0]}>
+        <cylinderGeometry args={[0.2, 0.26, 0.64, 12]} />
+        <meshStandardMaterial color={P.ink} roughness={0.5} />
       </mesh>
-      <mesh position={[0, 0.62, 0]}>
-        <cylinderGeometry args={[0.26, 0.18, 0.08, 10]} />
-        <meshStandardMaterial color="#2c3036" />
+      <mesh castShadow position={[0, 0.68, 0]}>
+        <cylinderGeometry args={[0.3, 0.2, 0.12, 12]} />
+        <meshStandardMaterial color={P.ink} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.25, 0.05, 6, 16]} />
+        <meshStandardMaterial color="#d8b77e" roughness={0.9} />
       </mesh>
     </group>
   );
@@ -145,243 +324,536 @@ function Bollard({ position }: { position: [number, number, number] }) {
 function Plant({ position, s = 1 }: { position: [number, number, number]; s?: number }) {
   return (
     <group position={position} scale={s}>
-      <mesh castShadow position={[0, 0.3, 0]}>
-        <sphereGeometry args={[0.45, 10, 8]} />
-        <meshStandardMaterial color="#4f9a3a" roughness={0.9} />
+      <mesh castShadow position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.38, 0.3, 0.5, 12]} />
+        <meshStandardMaterial color="#c96a42" roughness={0.8} />
       </mesh>
-      <mesh castShadow position={[0.35, 0.22, 0.1]}>
-        <sphereGeometry args={[0.3, 10, 8]} />
-        <meshStandardMaterial color="#62b04a" roughness={0.9} />
+      {[
+        [0, 0.75, 0, 0.45, P.leafDark],
+        [0.28, 0.65, 0.12, 0.32, P.leaf],
+        [-0.25, 0.7, -0.05, 0.34, P.leaf],
+        [0.05, 1.0, 0.1, 0.28, P.leaf],
+      ].map(([x, y, z, r, c], i) => (
+        <mesh key={i} castShadow position={[x as number, y as number, z as number]}>
+          <icosahedronGeometry args={[r as number, 1]} />
+          <meshStandardMaterial color={c as string} roughness={0.85} flatShading />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Lamp({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh castShadow position={[0, 2.2, 0]}>
+        <cylinderGeometry args={[0.08, 0.11, 4.4, 8]} />
+        <meshStandardMaterial color={P.steel} roughness={0.5} metalness={0.4} />
+      </mesh>
+      <mesh position={[0.35, 4.35, 0]} rotation={[0, 0, -0.3]}>
+        <boxGeometry args={[0.8, 0.1, 0.1]} />
+        <meshStandardMaterial color={P.steel} />
+      </mesh>
+      <mesh position={[0.7, 4.2, 0]}>
+        <coneGeometry args={[0.28, 0.32, 12]} />
+        <meshStandardMaterial color={P.yellow} emissive="#ffe8a3" emissiveIntensity={0.35} />
       </mesh>
     </group>
   );
 }
 
+function Pallet({ position, rotation = 0, load }: { position: [number, number, number]; rotation?: number; load?: string }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      {[-0.5, 0, 0.5].map((x) => (
+        <mesh key={x} castShadow position={[x, 0.08, 0]}>
+          <boxGeometry args={[0.18, 0.16, 1.3]} />
+          <meshStandardMaterial color={P.woodDark} roughness={0.9} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[0, 0.2, 0]}>
+        <boxGeometry args={[1.3, 0.08, 1.3]} />
+        <meshStandardMaterial color={P.wood} roughness={0.9} />
+      </mesh>
+      {load && (
+        <mesh castShadow position={[0, 0.62, 0]}>
+          <boxGeometry args={[1.1, 0.8, 1.1]} />
+          <meshStandardMaterial color={load} roughness={0.8} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+function LifeRing({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      <mesh castShadow>
+        <torusGeometry args={[0.42, 0.13, 10, 24]} />
+        <meshStandardMaterial color={P.red} roughness={0.6} />
+      </mesh>
+      {[0, 1, 2, 3].map((k) => (
+        <mesh key={k} rotation={[0, 0, (k * Math.PI) / 2 + Math.PI / 4]} position={[Math.cos((k * Math.PI) / 2 + Math.PI / 4) * 0.42, Math.sin((k * Math.PI) / 2 + Math.PI / 4) * 0.42, 0]}>
+          <torusGeometry args={[0.135, 0.02, 6, 12]} />
+          <meshStandardMaterial color={P.cream} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** A dockside crane that slowly swings its boom, a container dangling from the hook. */
 function Crane({ position }: { position: [number, number, number] }) {
-  const yellow = '#f0b429';
+  const boom = useRef<THREE.Group>(null);
+  const load = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    if (boom.current) boom.current.rotation.y = Math.sin(t * 0.12) * 0.55 - 0.2;
+    if (load.current) { load.current.rotation.z = Math.sin(t * 0.9) * 0.05; load.current.rotation.x = Math.cos(t * 0.7) * 0.04; }
+  });
   return (
     <group position={position}>
-      {[-1.5, 1.5].map((x) =>
-        [-1.2, 1.2].map((z) => (
-          <mesh key={`${x}${z}`} castShadow position={[x, 4, z]}>
-            <boxGeometry args={[0.3, 8, 0.3]} />
-            <meshStandardMaterial color={yellow} roughness={0.5} />
+      {[-1.6, 1.6].map((x) =>
+        [-1.3, 1.3].map((z) => (
+          <mesh key={`${x}${z}`} castShadow position={[x, 4.5, z]}>
+            <boxGeometry args={[0.4, 9, 0.4]} />
+            <meshStandardMaterial color={P.yellow} roughness={0.45} />
           </mesh>
         )),
       )}
-      <mesh castShadow position={[0, 8.2, 0]}>
-        <boxGeometry args={[3.6, 0.6, 2.8]} />
-        <meshStandardMaterial color={yellow} />
-      </mesh>
-      <mesh castShadow position={[4, 8.9, 0]}>
-        <boxGeometry args={[11, 0.4, 0.6]} />
-        <meshStandardMaterial color={yellow} />
-      </mesh>
-      <mesh position={[8, 6.5, 0]}>
-        <cylinderGeometry args={[0.03, 0.03, 4.6, 4]} />
-        <meshStandardMaterial color="#222" />
-      </mesh>
+      {[2.5, 6.5].map((y) => (
+        <mesh key={y} castShadow position={[0, y, 0]}>
+          <boxGeometry args={[3.6, 0.25, 2.9]} />
+          <meshStandardMaterial color={P.yellow} roughness={0.45} />
+        </mesh>
+      ))}
+      <group ref={boom} position={[0, 9.2, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[3.8, 0.9, 3]} />
+          <meshStandardMaterial color={P.yellow} roughness={0.45} />
+        </mesh>
+        <mesh castShadow position={[-1.2, 0.95, 0]}>
+          <boxGeometry args={[1.6, 1.0, 1.6]} />
+          <meshStandardMaterial color={P.cream} roughness={0.6} />
+        </mesh>
+        <mesh castShadow position={[6, 0.4, 0]}>
+          <boxGeometry args={[13, 0.5, 0.8]} />
+          <meshStandardMaterial color={P.yellow} roughness={0.45} />
+        </mesh>
+        <group ref={load} position={[10.5, 0.2, 0]}>
+          <mesh position={[0, -2, 0]}>
+            <cylinderGeometry args={[0.03, 0.03, 4, 4]} />
+            <meshStandardMaterial color="#26262c" />
+          </mesh>
+          <Container position={[0, -6.6, 0]} color={P.teal} len={4.2} />
+        </group>
+      </group>
     </group>
   );
 }
 
-function Boat({ position, rotation = 0, color = '#e8eef2' }: { position: [number, number, number]; rotation?: number; color?: string }) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 0.3, 0]}>
-        <boxGeometry args={[7, 1, 2.4]} />
-        <meshStandardMaterial color="#2c3e50" />
-      </mesh>
-      <mesh position={[0, 0.85, 0]}>
-        <boxGeometry args={[6.6, 0.15, 2.2]} />
-        <meshStandardMaterial color="#b0413e" />
-      </mesh>
-      <mesh position={[-1.5, 1.5, 0]}>
-        <boxGeometry args={[2.4, 1.2, 1.8]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh position={[-1.5, 2.4, 0]}>
-        <boxGeometry args={[1.4, 0.6, 1.4]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-    </group>
-  );
-}
-
-function Water() {
-  const mat = useRef<THREE.MeshStandardMaterial>(null);
+/** Boats bob and roll on the swell. */
+function Boat({ position, rotation = 0, hull = '#2f4a6b', cabin = P.cream, phase = 0 }: { position: [number, number, number]; rotation?: number; hull?: string; cabin?: string; phase?: number }) {
+  const g = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
-    if (mat.current) mat.current.emissiveIntensity = 0.18 + Math.sin(clock.elapsedTime * 0.8) * 0.04;
+    const t = clock.elapsedTime + phase;
+    if (g.current) { g.current.position.y = position[1] + Math.sin(t * 1.1) * 0.12; g.current.rotation.z = Math.sin(t * 0.9) * 0.04; g.current.rotation.x = Math.cos(t * 0.7) * 0.03; }
   });
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, -40]} receiveShadow>
-      <planeGeometry args={[200, 60]} />
-      <meshStandardMaterial ref={mat} color="#1f8fc4" emissive="#0b6a9e" emissiveIntensity={0.18} roughness={0.25} metalness={0.1} />
-    </mesh>
+    <group position={position} rotation={[0, rotation, 0]}>
+      <group ref={g}>
+        <mesh castShadow position={[0, 0.4, 0]}>
+          <boxGeometry args={[8, 1.2, 2.8]} />
+          <meshStandardMaterial color={hull} roughness={0.6} />
+        </mesh>
+        <mesh castShadow position={[4.4, 0.45, 0]} rotation={[0, Math.PI / 4, 0]}>
+          <boxGeometry args={[1.95, 1.1, 1.95]} />
+          <meshStandardMaterial color={hull} roughness={0.6} />
+        </mesh>
+        <mesh position={[0.2, 1.05, 0]}>
+          <boxGeometry args={[8.4, 0.16, 2.95]} />
+          <meshStandardMaterial color={P.red} roughness={0.6} />
+        </mesh>
+        <mesh castShadow position={[-2, 1.8, 0]}>
+          <boxGeometry args={[2.6, 1.4, 2]} />
+          <meshStandardMaterial color={cabin} roughness={0.6} />
+        </mesh>
+        <mesh position={[-2, 1.95, 1.01]}>
+          <planeGeometry args={[2, 0.45]} />
+          <meshStandardMaterial color="#5fb8de" emissive="#2d86b0" emissiveIntensity={0.25} />
+        </mesh>
+        <mesh castShadow position={[-2, 2.8, 0]}>
+          <boxGeometry args={[1.5, 0.6, 1.5]} />
+          <meshStandardMaterial color={cabin} roughness={0.6} />
+        </mesh>
+        <mesh castShadow position={[-2.3, 3.6, 0]}>
+          <cylinderGeometry args={[0.18, 0.22, 1.2, 10]} />
+          <meshStandardMaterial color={P.orange} />
+        </mesh>
+        {[1.2, 2.4].map((x) => (
+          <mesh key={x} castShadow position={[x, 1.45, 0]}>
+            <boxGeometry args={[1, 0.7, 1.6]} />
+            <meshStandardMaterial color={x > 2 ? P.yellow : P.teal} roughness={0.7} />
+          </mesh>
+        ))}
+      </group>
+    </group>
   );
 }
 
-function Basin({ r }: { r: number }) {
-  const water = useRef<THREE.Mesh>(null);
+function Buoy({ position, color = P.red, phase = 0 }: { position: [number, number, number]; color?: string; phase?: number }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime * 1.4 + phase;
+    if (g.current) { g.current.position.y = position[1] + Math.sin(t) * 0.15; g.current.rotation.z = Math.sin(t * 0.8) * 0.15; }
+  });
+  return (
+    <group ref={g} position={position}>
+      <mesh castShadow>
+        <cylinderGeometry args={[0.35, 0.55, 0.9, 12]} />
+        <meshStandardMaterial color={color} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.37, 0.37, 0.2, 12]} />
+        <meshStandardMaterial color={P.cream} />
+      </mesh>
+      <mesh position={[0, 0.8, 0]}>
+        <coneGeometry args={[0.18, 0.6, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Gulls circle lazily over the water, wings flapping now and then. */
+function Gulls() {
+  const birds = useMemo(() => Array.from({ length: 5 }, (_, i) => ({ r: 7 + i * 2.2, h: 9 + (i % 3) * 1.5, s: 0.18 + i * 0.03, p: i * 1.7, cx: -6 + i * 4, cz: -22 - (i % 2) * 5 })), []);
+  const refs = useRef<(THREE.Group | null)[]>([]);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    birds.forEach((b, i) => {
+      const g = refs.current[i]; if (!g) return;
+      const a = t * b.s + b.p;
+      g.position.set(b.cx + Math.cos(a) * b.r, b.h + Math.sin(t * 0.6 + b.p) * 0.4, b.cz + Math.sin(a) * b.r * 0.5);
+      g.rotation.y = -a;
+      const flap = Math.sin(t * 9 + b.p) * (Math.sin(t * 0.5 + b.p) > 0.2 ? 0.6 : 0.08);
+      (g.children[1] as THREE.Object3D).rotation.x = flap; (g.children[2] as THREE.Object3D).rotation.x = -flap;
+    });
+  });
+  return (
+    <>
+      {birds.map((_, i) => (
+        <group key={i} ref={(el) => (refs.current[i] = el)}>
+          <mesh>
+            <capsuleGeometry args={[0.13, 0.4, 4, 8]} />
+            <meshStandardMaterial color="#ffffff" />
+          </mesh>
+          <group>
+            <mesh position={[0, 0, 0.45]} rotation={[0, 0, Math.PI / 2]}>
+              <boxGeometry args={[0.04, 0.3, 0.8]} />
+              <meshStandardMaterial color="#e9eef2" />
+            </mesh>
+          </group>
+          <group>
+            <mesh position={[0, 0, -0.45]} rotation={[0, 0, Math.PI / 2]}>
+              <boxGeometry args={[0.04, 0.3, 0.8]} />
+              <meshStandardMaterial color="#e9eef2" />
+            </mesh>
+          </group>
+        </group>
+      ))}
+    </>
+  );
+}
+
+// ───────────────────────────── in-play obstacles (exact footprints) ─────────────────────────────
+
+/** A strapped stack of crates on the crate's square footprint. */
+function CrateStack({ hw, hd, tex, seed }: { hw: number; hd: number; tex: THREE.Texture; seed: number }) {
+  const turn = ((seed * 37) % 7) * 0.05 - 0.15;
+  return (
+    <group>
+      <mesh castShadow receiveShadow position={[0, 0.7, 0]}>
+        <boxGeometry args={[hw * 2, 1.4, hd * 2]} />
+        <meshStandardMaterial map={tex} roughness={0.85} />
+      </mesh>
+      {/* straps */}
+      {[-0.45, 0.45].map((k) => (
+        <mesh key={k} position={[hw * k, 0.7, 0]}>
+          <boxGeometry args={[0.1, 1.42, hd * 2 + 0.02]} />
+          <meshStandardMaterial color={P.orange} roughness={0.6} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[hw * 0.18, 1.72, -hd * 0.12]} rotation={[0, turn, 0]}>
+        <boxGeometry args={[hw * 1.15, 0.64, hd * 1.15]} />
+        <meshStandardMaterial map={tex} roughness={0.85} />
+      </mesh>
+      {seed % 2 === 0 && <Plant position={[-hw * 0.55, 1.4, hd * 0.55]} s={0.45} />}
+    </group>
+  );
+}
+
+/** A short shipping container on the long side obstacles' footprint. */
+function MiniContainer({ hw, hd, color }: { hw: number; hd: number; color: string }) {
+  const ribs = useMemo(() => Array.from({ length: Math.round((hd * 2) / 0.4) }, (_, i) => -hd + 0.2 + i * 0.4), [hd]);
+  return (
+    <group>
+      <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
+        <boxGeometry args={[hw * 2, 1.7, hd * 2]} />
+        <meshStandardMaterial color={color} roughness={0.65} metalness={0.1} />
+      </mesh>
+      {ribs.map((z) =>
+        [-1, 1].map((sx) => (
+          <mesh key={`${z}${sx}`} position={[sx * (hw + 0.02), 0.85, z]}>
+            <boxGeometry args={[0.05, 1.5, 0.14]} />
+            <meshStandardMaterial color={color} roughness={0.5} />
+          </mesh>
+        )),
+      )}
+      {/* a thin dark frame round the base and the roof edge, the roof itself in the container's colour */}
+      <mesh position={[0, 0.05, 0]}>
+        <boxGeometry args={[hw * 2 + 0.04, 0.1, hd * 2 + 0.04]} />
+        <meshStandardMaterial color="#3d3f46" />
+      </mesh>
+      {[-1, 1].map((sx) => (
+        <mesh key={`rx${sx}`} position={[sx * (hw - 0.03), 1.72, 0]}>
+          <boxGeometry args={[0.1, 0.06, hd * 2 + 0.04]} />
+          <meshStandardMaterial color="#3d3f46" />
+        </mesh>
+      ))}
+      {[-1, 1].map((sz) => (
+        <mesh key={`rz${sz}`} position={[0, 1.72, sz * (hd - 0.03)]}>
+          <boxGeometry args={[hw * 2 + 0.04, 0.06, 0.1]} />
+          <meshStandardMaterial color="#3d3f46" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Basin({ x, z, r }: { x: number; z: number; r: number }) {
+  const spec = useMemo(() => ({ x, z, r: r - 0.3 }), [x, z, r]);
+  const mat = useWaterMaterial(spec);
+  const ripples = useRef<(THREE.Mesh | null)[]>([]);
   const spout = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    if (water.current) water.current.position.y = 0.42 + Math.sin(t * 1.6) * 0.02;
-    if (spout.current) spout.current.scale.y = 1 + Math.sin(t * 7) * 0.08;
+    mat.uniforms.uTime.value = t;
+    ripples.current.forEach((m, i) => {
+      if (!m) return;
+      const k = (t * 0.45 + i / 3) % 1;
+      m.scale.setScalar(0.4 + k * (r - 0.6));
+      (m.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.55;
+    });
+    if (spout.current) spout.current.scale.set(1, 1 + Math.sin(t * 6) * 0.1, 1);
   });
   return (
     <group>
-      {/* Outer wall, inner wall and basin floor: open so the water reads from above */}
-      <mesh castShadow receiveShadow position={[0, 0.26, 0]}>
-        <cylinderGeometry args={[r, r + 0.1, 0.52, 40, 1, true]} />
-        <meshStandardMaterial color="#9aa3a8" roughness={0.85} />
+      {/* chunky stone rim, open so the water reads from above */}
+      <mesh castShadow receiveShadow position={[0, 0.3, 0]}>
+        <cylinderGeometry args={[r, r + 0.12, 0.6, 48, 1, true]} />
+        <meshStandardMaterial color="#b7b0a2" roughness={0.85} />
       </mesh>
-      <mesh position={[0, 0.41, 0]}>
-        <cylinderGeometry args={[r - 0.3, r - 0.3, 0.22, 40, 1, true]} />
-        <meshStandardMaterial color="#7d878c" roughness={0.9} side={THREE.BackSide} />
+      <mesh position={[0, 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <ringGeometry args={[r - 0.34, r + 0.02, 48]} />
+        <meshStandardMaterial color="#e5ded0" roughness={0.75} />
       </mesh>
-      <mesh position={[0, 0.15, 0]}>
-        <cylinderGeometry args={[r - 0.3, r - 0.3, 0.3, 40]} />
-        <meshStandardMaterial color="#5f7f8a" roughness={0.9} />
+      <mesh position={[0, 0.42, 0]}>
+        <cylinderGeometry args={[r - 0.32, r - 0.32, 0.36, 48, 1, true]} />
+        <meshStandardMaterial color="#8f897c" roughness={0.9} side={THREE.BackSide} />
       </mesh>
-      <mesh position={[0, 0.52, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[r - 0.3, r, 40]} />
-        <meshStandardMaterial color="#b9c0c3" roughness={0.8} />
+      <mesh position={[0, 0.4, 0]} rotation={[-Math.PI / 2, 0, 0]} material={mat}>
+        <circleGeometry args={[r - 0.3, 48, ]} />
       </mesh>
-      <mesh ref={water} position={[0, 0.42, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[r - 0.3, 40]} />
-        <meshStandardMaterial color="#3fb7e6" emissive="#1a8fc0" emissiveIntensity={0.35} roughness={0.15} transparent opacity={0.92} />
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} ref={(el) => (ripples.current[i] = el)} position={[0, 0.42, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.92, 1, 40]} />
+          <meshBasicMaterial color="#ffffff" transparent depthWrite={false} />
+        </mesh>
+      ))}
+      {/* the fountain: a little stone plinth and a playful anchor statue */}
+      <mesh castShadow position={[0, 0.75, 0]}>
+        <cylinderGeometry args={[0.45, 0.6, 0.7, 16]} />
+        <meshStandardMaterial color="#cfc8b9" roughness={0.8} />
       </mesh>
-      <mesh castShadow position={[0, 0.7, 0]}>
-        <cylinderGeometry args={[0.35, 0.5, 0.9, 16]} />
-        <meshStandardMaterial color="#8d969b" roughness={0.8} />
-      </mesh>
-      <mesh ref={spout} position={[0, 1.4, 0]}>
-        <coneGeometry args={[0.25, 0.8, 12]} />
-        <meshStandardMaterial color="#a9e6ff" transparent opacity={0.6} emissive="#7fd6ff" emissiveIntensity={0.4} />
+      <group position={[0, 1.15, 0]}>
+        <mesh castShadow position={[0, 0.55, 0]}>
+          <cylinderGeometry args={[0.09, 0.09, 1.1, 8]} />
+          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
+        </mesh>
+        <mesh castShadow position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.16, 0.05, 8, 16]} />
+          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
+        </mesh>
+        <mesh castShadow position={[0, 0.12, 0]} rotation={[0, 0, Math.PI]}>
+          <torusGeometry args={[0.42, 0.07, 8, 20, Math.PI]} />
+          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
+        </mesh>
+        <mesh castShadow position={[0, 0.8, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.06, 0.06, 0.7, 8]} />
+          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
+        </mesh>
+      </group>
+      <mesh ref={spout} position={[0, 2.55, 0]}>
+        <coneGeometry args={[0.22, 0.55, 12]} />
+        <meshStandardMaterial color="#c9f1ff" transparent opacity={0.65} emissive="#8fe3ff" emissiveIntensity={0.4} />
       </mesh>
     </group>
   );
 }
 
+// ───────────────────────────── the map ─────────────────────────────
+
 export function Arena({ shadows }: { shadows: boolean }) {
-  const floorTex = useMemo(makeFloorTexture, []);
-  const concreteTex = useMemo(makeConcreteTexture, []);
+  const deckTex = useMemo(makeDeckTexture, []);
+  const quayTex = useMemo(makeQuayTexture, []);
+  const hazardTex = useMemo(makeHazardTexture, []);
   const crateTex = useMemo(makeCrateTexture, []);
   const W = ARENA.halfWidth * 2;
   const D = ARENA.halfDepth * 2;
+  const QUAY_Z = -13.3; // the quay lip: the sea starts beyond it
+  const sideColors = [P.blue, P.orange];
 
   return (
     <group>
-      <hemisphereLight args={['#dff2ff', '#7a6a55', 0.85]} />
+      {/* warm late-morning sun, cool sky fill */}
+      <hemisphereLight args={['#d9f1ff', '#8b7a60', 1.0]} />
+      <ambientLight intensity={0.15} />
       <directionalLight
-        position={[-14, 24, 12]}
-        intensity={1.9}
-        color="#fff1d6"
+        position={[-20, 30, 6]}
+        intensity={2.3}
+        color="#fff0d2"
         castShadow={shadows}
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
+        shadow-camera-left={-34}
+        shadow-camera-right={34}
+        shadow-camera-top={26}
+        shadow-camera-bottom={-26}
         shadow-camera-near={1}
-        shadow-camera-far={80}
-        shadow-bias={-0.0006}
+        shadow-camera-far={90}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
 
-      {/* Surrounding dock */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 2]} receiveShadow>
-        <planeGeometry args={[80, 30]} />
-        <meshStandardMaterial map={concreteTex} roughness={0.95} />
-      </mesh>
-      {/* Dock edge / quay wall at the back */}
-      <mesh position={[0, -0.32, -13]} receiveShadow>
-        <boxGeometry args={[80, 0.6, 0.4]} />
-        <meshStandardMaterial color="#6d747b" />
-      </mesh>
-      <Water />
+      <Sea />
 
-      {/* Playable floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
-        <planeGeometry args={[W, D]} />
-        <meshStandardMaterial map={floorTex} roughness={0.9} />
+      {/* the quay around the bay */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 3]} receiveShadow>
+        <planeGeometry args={[90, 32.6]} />
+        <meshStandardMaterial map={quayTex} roughness={0.95} />
       </mesh>
-      {/* Hazard-yellow boundary trim (low so it never occludes play) */}
+      {/* quay wall face down to the water, its lip painted in hazard stripes */}
+      <mesh position={[0, -0.5, QUAY_Z - 0.05]} receiveShadow>
+        <boxGeometry args={[90, 1, 0.3]} />
+        <meshStandardMaterial color="#8c867a" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.02, QUAY_Z + 0.25]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[90, 0.5]} />
+        <meshStandardMaterial map={hazardTex} roughness={0.7} />
+      </mesh>
+      {/* tyre fenders hanging over the edge */}
+      {[-30, -21, -12, -3, 6, 15, 24, 33].map((x) => (
+        <mesh key={x} position={[x, -0.45, QUAY_Z - 0.32]} rotation={[0, 0, 0]} castShadow>
+          <torusGeometry args={[0.42, 0.18, 10, 18]} />
+          <meshStandardMaterial color="#25252b" roughness={0.9} />
+        </mesh>
+      ))}
+
+      {/* the playable bay */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+        <planeGeometry args={[W, D]} />
+        <meshStandardMaterial map={deckTex} roughness={0.9} />
+      </mesh>
+      {/* a low painted kerb around the bay (never tall enough to hide anyone) */}
       {[
-        [0, -ARENA.halfDepth - 0.12, W + 0.48, 0.24],
-        [0, ARENA.halfDepth + 0.12, W + 0.48, 0.24],
+        [0, -ARENA.halfDepth - 0.14, W + 0.56, 0.28],
+        [0, ARENA.halfDepth + 0.14, W + 0.56, 0.28],
       ].map(([x, z, w, d], i) => (
-        <mesh key={`h${i}`} position={[x, 0.08, z]} receiveShadow>
-          <boxGeometry args={[w, 0.16, d]} />
-          <meshStandardMaterial color="#f0b429" roughness={0.6} />
+        <mesh key={`h${i}`} position={[x, 0.07, z]} receiveShadow castShadow>
+          <boxGeometry args={[w, 0.14, d]} />
+          <meshStandardMaterial map={hazardTex} roughness={0.6} />
         </mesh>
       ))}
       {[-1, 1].map((sx) => (
-        <mesh key={`v${sx}`} position={[sx * (ARENA.halfWidth + 0.12), 0.08, 0]} receiveShadow>
-          <boxGeometry args={[0.24, 0.16, D]} />
-          <meshStandardMaterial color="#f0b429" roughness={0.6} />
+        <mesh key={`v${sx}`} position={[sx * (ARENA.halfWidth + 0.14), 0.07, 0]} receiveShadow castShadow>
+          <boxGeometry args={[0.28, 0.14, D]} />
+          <meshStandardMaterial color={P.line} roughness={0.6} />
         </mesh>
       ))}
-      {/* Back railing */}
-      {Array.from({ length: 19 }, (_, i) => -18 + i * 2).map((x) => (
-        <mesh key={`rail${x}`} position={[x, 0.45, -ARENA.halfDepth - 0.6]} castShadow>
-          <boxGeometry args={[0.08, 0.9, 0.08]} />
-          <meshStandardMaterial color="#4a5560" />
+      {/* back railing along the quay */}
+      {Array.from({ length: 23 }, (_, i) => -22 + i * 2).map((x) => (
+        <mesh key={`rail${x}`} position={[x, 0.5, QUAY_Z + 0.7]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 1, 6]} />
+          <meshStandardMaterial color={P.blue} roughness={0.5} />
         </mesh>
       ))}
-      <mesh position={[0, 0.9, -ARENA.halfDepth - 0.6]}>
-        <boxGeometry args={[36.2, 0.08, 0.08]} />
-        <meshStandardMaterial color="#4a5560" />
-      </mesh>
+      {[0.98, 0.55].map((y) => (
+        <mesh key={y} position={[0, y, QUAY_Z + 0.7]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.045, 0.045, 44, 6]} />
+          <meshStandardMaterial color={P.blue} roughness={0.5} />
+        </mesh>
+      ))}
 
-      {/* Obstacles from the authoritative arena definition */}
+      {/* obstacles: exact footprints from the authoritative arena */}
       {OBSTACLES.map((o, i) =>
         o.kind === 'circle' ? (
           <group key={i} position={[o.x, 0, o.z]}>
-            <Basin r={o.r} />
+            <Basin x={o.x} z={o.z} r={o.r} />
           </group>
         ) : (
           <group key={i} position={[o.x, 0, o.z]}>
-            <mesh castShadow receiveShadow position={[0, 0.65, 0]}>
-              <boxGeometry args={[o.hw * 2, 1.3, o.hd * 2]} />
-              <meshStandardMaterial map={crateTex} roughness={0.85} />
-            </mesh>
-            <mesh castShadow position={[o.hw * 0.25, 1.5, -o.hd * 0.2]} rotation={[0, 0.4, 0]}>
-              <boxGeometry args={[Math.min(0.8, o.hw * 1.1), 0.4, Math.min(0.8, o.hd * 1.1)]} />
-              <meshStandardMaterial map={crateTex} roughness={0.85} />
-            </mesh>
+            {o.hd > o.hw * 1.5 ? <MiniContainer hw={o.hw} hd={o.hd} color={sideColors[i % 2]} /> : <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />}
           </group>
         ),
       )}
 
-      {/* Decoration — outside the playable area */}
-      <Container position={[-23, 0, -6]} rotation={Math.PI / 2} color="#c4502f" />
-      <Container position={[-23, 0, 3]} rotation={Math.PI / 2} color="#2f5fa8" />
-      <Container position={[-23, 2.6, -1.5]} rotation={Math.PI / 2} color="#d9822b" />
-      <Container position={[23, 0, -5]} rotation={Math.PI / 2} color="#2f5fa8" />
-      <Container position={[23, 0, 4]} rotation={Math.PI / 2} color="#c4502f" />
-      <Container position={[-14, 0, -15.5]} color="#2f5fa8" />
-      <Container position={[22, 0, -13]} color="#7f8c3a" />
-      <Crane position={[-6, 0, -16]} />
-      <Boat position={[10, -0.4, -24]} rotation={0.15} />
-      <Boat position={[-22, -0.4, -30]} rotation={-0.3} color="#f4d35e" />
+      {/* container yards either side */}
+      <Container position={[-24.5, 0, -7]} rotation={Math.PI / 2} color={P.orange} />
+      <Container position={[-24.5, 0, 0]} rotation={Math.PI / 2} color={P.blue} />
+      <Container position={[-24.5, 2.6, -3.5]} rotation={Math.PI / 2} color={P.yellow} />
+      <Container position={[-27.5, 0, -3.5]} rotation={Math.PI / 2} color={P.teal} />
+      <Container position={[-24.5, 0, 7]} rotation={Math.PI / 2} color={P.red} />
+      <Container position={[24.5, 0, -6]} rotation={Math.PI / 2} color={P.blue} />
+      <Container position={[24.5, 2.6, -6]} rotation={Math.PI / 2} color={P.orange} />
+      <Container position={[24.5, 0, 1.5]} rotation={Math.PI / 2} color={P.teal} />
+      <Container position={[27.5, 0, 5]} rotation={Math.PI / 2} color={P.yellow} />
+      <Container position={[-16, 0, -11.4]} color={P.blue} len={5} />
+      <Container position={[17, 0, -11.4]} color={P.orange} len={5} />
+
+      <Crane position={[-6, 0, -16.5]} />
+
+      {/* the harbour */}
+      <Boat position={[12, -0.9, -21]} rotation={0.08} phase={0} />
+      <Boat position={[-24, -0.9, -27]} rotation={-0.25} hull="#b8453a" cabin={P.cream} phase={1.7} />
+      <Boat position={[30, -0.9, -33]} rotation={0.4} hull="#2f7a6e" cabin="#fff3d6" phase={3.1} />
+      <Buoy position={[2, -0.7, -17]} phase={0} />
+      <Buoy position={[-14, -0.7, -19]} color={P.yellow} phase={1.3} />
+      <Buoy position={[22, -0.7, -16.5]} phase={2.2} />
+      <Gulls />
+
+      {/* dressing on the quay (outside the bay) */}
       {[
-        [-20, 0, -10.6],
-        [-19.6, 0, -9.6],
-        [20.2, 0, 9],
-        [19.8, 0, 10],
-        [21, 0, -9.5],
-      ].map((p, i) => (
-        <Barrel key={i} position={p as [number, number, number]} color={i % 2 ? '#2f6fb5' : '#c4502f'} />
+        [-21, -11.6, P.blue], [-20.2, -12.2, P.red], [-21.2, -10.6, P.blue],
+        [20.4, 10.4, P.orange], [21.2, 9.6, P.blue], [20.6, -11.4, P.red],
+      ].map(([x, z, c], i) => (
+        <Barrel key={i} position={[x as number, 0, z as number]} color={c as string} />
       ))}
+      <Pallet position={[-20.8, 0, 9.6]} rotation={0.3} load={P.teal} />
+      <Pallet position={[21.4, 0, -2.4]} rotation={-0.2} />
       {[-15, -9, -3, 3, 9, 15].map((x) => (
-        <Bollard key={x} position={[x, 0, ARENA.halfDepth + 1.1]} />
+        <Bollard key={x} position={[x, 0, ARENA.halfDepth + 1.3]} />
       ))}
-      <Plant position={[-19.5, 0, 7.5]} s={1.2} />
-      <Plant position={[19.8, 0, -1]} s={1.1} />
-      <Plant position={[-19.8, 0, -3]} />
-      <Plant position={[-8, 1.3, 4.6]} s={0.5} />
-      <Plant position={[8, 1.3, -3.8]} s={0.5} />
+      {[-12, 0, 12].map((x) => (
+        <Bollard key={`q${x}`} position={[x + 4.5, 0, QUAY_Z + 0.4]} />
+      ))}
+      <Lamp position={[-19.6, 0, -9]} />
+      <Lamp position={[19.6, 0, 8]} />
+      <LifeRing position={[-8.5, 0.62, QUAY_Z + 0.76]} />
+      <LifeRing position={[9.5, 0.62, QUAY_Z + 0.76]} />
+      <Plant position={[-20.6, 0, 6.6]} s={1.2} />
+      <Plant position={[20.4, 0, -0.6]} s={1.1} />
+      <Plant position={[-20.2, 0, -2.8]} />
+      <Plant position={[19.8, 0, -9.6]} s={0.9} />
     </group>
   );
 }

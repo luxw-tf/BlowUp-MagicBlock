@@ -259,11 +259,10 @@ export function GameView({ session, onRematch, onMenu }: Props) {
     <GameContext.Provider value={ctx}>
       <div ref={wrap} className="game-wrap" onPointerDown={() => audio.unlock()}>
         <Canvas
-          orthographic
-          shadows={settings.shadows}
+          shadows={settings.shadows ? 'soft' : false}
           dpr={[1, 2]}
-          gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
-          camera={{ position: [0, 30, 25], near: 0.1, far: 200, zoom: 40 }}
+          gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
+          camera={{ position: [0, 30, 25], near: 0.5, far: 400, fov: 30 }}
         >
           <Scene />
         </Canvas>
