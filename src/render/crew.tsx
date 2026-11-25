@@ -25,9 +25,26 @@ export const HEROES: Record<CharacterId, string> = {
 /** Bots are the undead: one of these, by seat. */
 export const SKELETONS = ['kaykit/Skeleton_Warrior.glb', 'kaykit/Skeleton_Rogue.glb', 'kaykit/Skeleton_Mage.glb', 'kaykit/Skeleton_Minion.glb'];
 
+/**
+ * Each model's build: how tall it stands, its idle, and how quick its stride is. Big and heavy, small and quick,
+ * so the silhouettes differ from the high match camera too, not just the colours.
+ */
+const BUILD: Record<string, { height: number; idle: string; stride: number }> = {
+  'kaykit/Barbarian.glb': { height: 2.15, idle: 'Idle_B', stride: 0.88 },
+  'kaykit/Knight.glb': { height: 2.05, idle: 'Idle_A', stride: 0.94 },
+  'kaykit/Mage.glb': { height: 1.95, idle: 'Idle_B', stride: 1.0 },
+  'kaykit/Ranger.glb': { height: 1.95, idle: 'Idle_A', stride: 1.06 },
+  'kaykit/Rogue.glb': { height: 1.82, idle: 'Idle_B', stride: 1.14 },
+  'kaykit/Rogue_Hooded.glb': { height: 1.85, idle: 'Idle_A', stride: 1.12 },
+  'kaykit/Skeleton_Warrior.glb': { height: 2.12, idle: 'Skeletons_Idle', stride: 0.9 },
+  'kaykit/Skeleton_Mage.glb': { height: 1.98, idle: 'Skeletons_Idle', stride: 1.0 },
+  'kaykit/Skeleton_Rogue.glb': { height: 1.86, idle: 'Skeletons_Idle', stride: 1.12 },
+  'kaykit/Skeleton_Minion.glb': { height: 1.68, idle: 'Skeletons_Idle', stride: 1.2 },
+};
+
 /** An ink outline: a back-face copy of each mesh pushed out along its (skinned) normals. Our look, not stock KayKit. */
-function outlineMaterial(width: number) {
-  const m = new THREE.MeshBasicMaterial({ color: '#16110d', side: THREE.BackSide });
+function outlineMaterial(width: number, color = '#16110d') {
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, toneMapped: false });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace(
       '#include <project_vertex>',
@@ -40,6 +57,8 @@ function outlineMaterial(width: number) {
     );
   };
   m.customProgramCacheKey = () => `outline-${width.toFixed(5)}`;
+  // a fog-free edge: in rain, fog or night the outline is what still says who this is
+  m.fog = false;
   return m;
 }
 
@@ -47,24 +66,31 @@ function outlineMaterial(width: number) {
 const OUTFIT = /(Cloak|Cape|Hood|Hat|Helmet)$/;
 
 /**
- * Recolour a textured mesh in a player's colour, keeping its shading: the texture's brightness drives the shade,
- * the hue and saturation come from the player. One material per figure, so each seat can have its own colour.
+ * A figure's material in a player's colour: a soft rim light in that colour round the silhouette (so each figure
+ * glows its own identity, even in dark weather), and for a skeleton's clothes a full recolour that keeps the shading
+ * (texture brightness drives the shade, hue and saturation come from the player). One material per figure.
  */
-function tinted(base: THREE.Material, color: string): THREE.Material {
+function identity(base: THREE.Material, color: string, recolour: boolean): THREE.Material {
   const m = base.clone() as THREE.MeshStandardMaterial;
   const tint = { value: new THREE.Color(color) };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTint = tint;
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uTint;')
-      .replace(
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTint;');
+    if (recolour)
+      sh.fragmentShader = sh.fragmentShader.replace(
         '#include <map_fragment>',
         `#include <map_fragment>
         float tl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
         diffuseColor.rgb = uTint * clamp(0.45 + tl * 2.4, 0.0, 1.25);`,
       );
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      float rimF = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      totalEmissiveRadiance += uTint * pow(rimF, 3.0) * 0.55;`,
+    );
   };
-  m.customProgramCacheKey = () => 'crew-tint';
+  m.customProgramCacheKey = () => (recolour ? 'crew-id-tint' : 'crew-id');
   return m;
 }
 
@@ -82,7 +108,7 @@ const SKELETON_CLIPS: Record<Move, string> = {
 };
 const ONCE: Move[] = ['dash', 'throw', 'tag', 'hit', 'death', 'hello'];
 
-/** Characters are scaled to this height (world units), so the whole cast stands the same size. */
+/** Default height (world units) for a model missing from BUILD. */
 const HEIGHT = 1.9;
 
 /**
@@ -101,17 +127,26 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
 
   const rig = useMemo(() => {
     const scene = skeletonClone(gltf.scene);
-    let outfit: THREE.Material | null = null;
+    const build = BUILD[src] ?? { height: HEIGHT, idle: bot ? 'Skeletons_Idle' : 'Idle_A', stride: 1 };
+    // in a match every figure wears its player's colour: rim light on everything, full recolour on a skeleton's clothes
+    const swapped = new Map<THREE.Material, THREE.Material>();
     scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;
-      if (bot && tint && OUTFIT.test(m.name) && !Array.isArray(m.material)) m.material = outfit ??= tinted(m.material, tint);
+      if (!tint || Array.isArray(m.material)) return;
+      const recolour = bot && OUTFIT.test(m.name);
+      const key = m.material;
+      if (recolour) m.material = identity(key, tint, true);
+      else {
+        if (!swapped.has(key)) swapped.set(key, identity(key, tint, false));
+        m.material = swapped.get(key)!;
+      }
     });
     const box = new THREE.Box3().setFromObject(gltf.scene);
-    const k = HEIGHT / Math.max(0.001, box.max.y - box.min.y);
-    // the ink outline, about 1% of the figure's height
-    const ink = outlineMaterial((box.max.y - box.min.y) * 0.008);
+    const k = build.height / Math.max(0.001, box.max.y - box.min.y);
+    // the outline: thin ink on the menu, a bolder edge in the player's own colour in a match
+    const ink = tint ? outlineMaterial((box.max.y - box.min.y) * 0.011, tint) : outlineMaterial((box.max.y - box.min.y) * 0.008);
     const meshes: THREE.Mesh[] = [];
     scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     for (const m of meshes) {
@@ -137,7 +172,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       }
     }
     const mixer = new THREE.AnimationMixer(scene);
-    const names = bot ? SKELETON_CLIPS : HERO_CLIPS;
+    const names = { ...(bot ? SKELETON_CLIPS : HERO_CLIPS), idle: build.idle };
     const all = new Map(anims.flatMap((a) => a.animations).map((c) => [c.name, c]));
     const actions = new Map<Move, THREE.AnimationAction>();
     for (const move of Object.keys(names) as Move[]) {
@@ -148,7 +183,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       actions.set(move, a);
     }
     const dur = (m: Move) => (actions.get(m)?.getClip().duration ?? 1) * 1000;
-    return { scene, k, minY: box.min.y, mixer, actions, dur, current: null as Move | null, hitUntil: 0, actUntil: 0, actKind: 'throw' as 'throw' | 'tag', helloUntil: 0, helloOn: false };
+    return { scene, k, minY: box.min.y, mixer, actions, dur, stride: build.stride, current: null as Move | null, hitUntil: 0, actUntil: 0, actKind: 'throw' as 'throw' | 'tag', helloUntil: 0, helloOn: false };
   }, [gltf, anims, bomb, bot, tint]);
 
   useFrame((_, dtRaw) => {
@@ -181,8 +216,10 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
     }
     // cadence follows the real speed; the one-shots play quick so they read in a fast game
     const run = rig.actions.get('run'), walk = rig.actions.get('walk');
-    if (run) run.timeScale = THREE.MathUtils.clamp(d.speed / 4.6, 0.85, 1.4);
-    if (walk) walk.timeScale = THREE.MathUtils.clamp(d.speed / 1.8, 0.8, 1.4);
+    // each build has its own stride: the heavy ones lumber, the small ones scurry
+    if (run) run.timeScale = THREE.MathUtils.clamp(d.speed / 4.6, 0.85, 1.4) * rig.stride;
+    if (walk) walk.timeScale = THREE.MathUtils.clamp(d.speed / 1.8, 0.8, 1.4) * rig.stride;
+    const idle = rig.actions.get('idle'); if (idle) idle.timeScale = 0.85 + 0.3 * (rig.stride - 0.88) / 0.32;
     for (const m of ['throw', 'tag'] as Move[]) { const a = rig.actions.get(m); if (a) a.timeScale = 2; }
     const dash = rig.actions.get('dash'); if (dash) dash.timeScale = 1.6;
     const hit = rig.actions.get('hit'); if (hit) hit.timeScale = 1.4;
