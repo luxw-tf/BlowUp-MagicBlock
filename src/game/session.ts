@@ -12,6 +12,7 @@ import { CONFIG, TICK_DT } from './config';
 import { BOT_NAMES, CHARACTERS } from './content';
 import { add, scale } from './math';
 import { createMatch, drainEvents, fulfillRandomness, step, type ParticipantSetup } from './sim';
+import { LAYOUTS, MOODS, selectLayout, selectMood } from './arena';
 import { LocalDevRandomness, toHex, type RandomFulfillment, type RandomnessProvider } from './randomness';
 import type { InputSampler, SessionLike, SessionListener as Listener, VerificationEntry } from './sessionTypes';
 import type { CharacterId, InputFrame, MatchState, PlayerId, Vec2 } from './types';
@@ -65,6 +66,11 @@ export class GameSession implements SessionLike {
     participants: ParticipantSetup[],
     readonly provider: RandomnessProvider = new LocalDevRandomness(),
   ) {
+    // a different yard and time of day each match; ?layout=alley&mood=night pins them (handy for recording)
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout')), mi = MOODS.indexOf((q?.get('mood') ?? '') as (typeof MOODS)[number]);
+    selectLayout(li >= 0 ? li : Math.floor(Math.random() * LAYOUTS.length));
+    selectMood(mi >= 0 ? mi : Math.floor(Math.random() * MOODS.length));
     this.state = createMatch(participants);
     for (const p of this.state.players) {
       this.prevPos.set(p.id, { ...p.pos });

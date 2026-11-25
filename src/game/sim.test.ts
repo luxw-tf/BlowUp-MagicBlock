@@ -219,3 +219,33 @@ describe('full bot match', () => {
     }
   });
 });
+
+
+describe('layouts', () => {
+  it('keep every spawn and pickup clear and the whole yard reachable', async () => {
+    const { LAYOUTS, SPAWNS, selectLayout, circleBlocked, PICKUP_SPOTS, ARENA, selectLayoutFor } = await import('./arena');
+    const R = 0.55; // a little more than a player's radius
+    for (let i = 0; i < LAYOUTS.length; i++) {
+      selectLayout(i);
+      for (const sp of SPAWNS) expect(circleBlocked(sp, R), `${LAYOUTS[i].id}: spawn ${sp.x},${sp.z}`).toBe(false);
+      for (const pk of PICKUP_SPOTS) expect(circleBlocked(pk, R), `${LAYOUTS[i].id}: pickup ${pk.x},${pk.z}`).toBe(false);
+      // flood fill on a 0.5 grid from the first spawn: every spawn and pickup must be reachable
+      const step = 0.5, key = (x: number, z: number) => `${Math.round(x / step)},${Math.round(z / step)}`;
+      const seen = new Set<string>([key(SPAWNS[0].x, SPAWNS[0].z)]);
+      const q = [{ ...SPAWNS[0] }];
+      while (q.length) {
+        const c = q.pop()!;
+        for (const [dx, dz] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+          const n = { x: c.x + dx, z: c.z + dz };
+          const k = key(n.x, n.z);
+          if (seen.has(k) || Math.abs(n.x) > ARENA.halfWidth || Math.abs(n.z) > ARENA.halfDepth || circleBlocked(n, R)) continue;
+          seen.add(k); q.push(n);
+        }
+      }
+      for (const t of [...SPAWNS, ...PICKUP_SPOTS]) expect(seen.has(key(t.x, t.z)), `${LAYOUTS[i].id}: reach ${t.x},${t.z}`).toBe(true);
+    }
+    // the same match address always gives the same layout
+    expect(selectLayoutFor('Match111').id).toBe(selectLayoutFor('Match111').id);
+    selectLayout(0);
+  });
+});

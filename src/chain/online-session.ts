@@ -130,7 +130,7 @@ export class OnlineSession implements SessionLike {
     this.clock = new SlotClock(this.er, info.slotMs);
     this.clock.start();
     this.ix = instructions(this.er);
-    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]));
+    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]), info.matchPda);
     rememberActiveMatch(info.id);
     if (rejoin) void this.reclaim();
     this.online = {

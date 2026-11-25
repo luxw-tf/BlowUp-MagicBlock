@@ -14,17 +14,92 @@ export type Obstacle =
   | { kind: 'circle'; x: number; z: number; r: number; tag: string }
   | { kind: 'box'; x: number; z: number; hw: number; hd: number; tag: string };
 
-export const OBSTACLES: Obstacle[] = [
-  // Central water basin: blocks movement and projectiles.
-  { kind: 'circle', x: 0, z: 0, r: 2.8, tag: 'basin' },
-  // Side crates for juking.
-  { kind: 'box', x: -8, z: -4.2, hw: 0.9, hd: 0.9, tag: 'crate' },
-  { kind: 'box', x: 8, z: -4.2, hw: 0.9, hd: 0.9, tag: 'crate' },
-  { kind: 'box', x: -8, z: 4.2, hw: 0.9, hd: 0.9, tag: 'crate' },
-  { kind: 'box', x: 8, z: 4.2, hw: 0.9, hd: 0.9, tag: 'crate' },
-  { kind: 'box', x: -13.6, z: 0, hw: 0.7, hd: 1.4, tag: 'crate' },
-  { kind: 'box', x: 13.6, z: 0, hw: 0.7, hd: 1.4, tag: 'crate' },
+/**
+ * Layouts. Spawns are shared by every layout (the on-chain program knows them); obstacles and pickup spots vary.
+ * Obstacles are client-side only (not enforced on-chain), so a layout only has to be the same for everyone in a match:
+ * offline it is picked at random, online it is derived from the match address (see selectLayoutFor).
+ * Tags decide the look: basin / tub (water), barrels, crate, container, stack (stacked containers), stall.
+ */
+export interface Layout { id: string; name: string; obstacles: Obstacle[]; pickups: Vec2[] }
+
+const box = (x: number, z: number, hw: number, hd: number, tag: string): Obstacle => ({ kind: 'box', x, z, hw, hd, tag });
+const circle = (x: number, z: number, r: number, tag: string): Obstacle => ({ kind: 'circle', x, z, r, tag });
+
+export const LAYOUTS: Layout[] = [
+  {
+    id: 'fountain',
+    name: 'Fountain Square',
+    obstacles: [
+      circle(0, 0, 2.8, 'basin'),
+      box(-8, -4.2, 0.9, 0.9, 'crate'), box(8, -4.2, 0.9, 0.9, 'crate'), box(-8, 4.2, 0.9, 0.9, 'crate'), box(8, 4.2, 0.9, 0.9, 'crate'),
+      box(-13.6, 0, 0.7, 1.4, 'container'), box(13.6, 0, 0.7, 1.4, 'container'),
+    ],
+    pickups: [{ x: -5.5, z: 0 }, { x: 5.5, z: 0 }, { x: -16, z: -7.5 }, { x: 16, z: 7.5 }],
+  },
+  {
+    id: 'alley',
+    name: 'Container Alley',
+    obstacles: [
+      box(-7, -3, 3.2, 0.75, 'container'), box(7, 3, 3.2, 0.75, 'container'),
+      box(0, 0, 0.9, 0.9, 'crate'),
+      box(-14, 2.6, 0.8, 0.8, 'crate'), box(14, -2.6, 0.8, 0.8, 'crate'),
+      circle(-3.4, 3.6, 0.7, 'barrels'), circle(3.4, -3.6, 0.7, 'barrels'),
+    ],
+    pickups: [{ x: -3.2, z: 0 }, { x: 3.2, z: 0 }, { x: -16, z: -7.5 }, { x: 16, z: 7.5 }],
+  },
+  {
+    id: 'crane',
+    name: 'Crane Yard',
+    obstacles: [
+      box(0, 0, 2.4, 1.2, 'stack'),
+      circle(-7, -3.4, 0.9, 'barrels'), circle(7, 3.4, 0.9, 'barrels'), circle(-7, 3.4, 0.9, 'barrels'), circle(7, -3.4, 0.9, 'barrels'),
+      box(-14, 0, 0.7, 1.4, 'crate'), box(14, 0, 0.7, 1.4, 'container'),
+    ],
+    pickups: [{ x: -4.5, z: 0 }, { x: 4.5, z: 0 }, { x: -16, z: -7.5 }, { x: 16, z: 7.5 }],
+  },
+  {
+    id: 'market',
+    name: 'Fish Market',
+    obstacles: [
+      circle(0, 0, 1.5, 'tub'),
+      box(-5, -2.6, 1.3, 0.55, 'stall'), box(5, -2.6, 1.3, 0.55, 'stall'), box(-5, 2.6, 1.3, 0.55, 'stall'), box(5, 2.6, 1.3, 0.55, 'stall'),
+      box(-11, 0, 0.8, 0.8, 'crate'), box(11, 0, 0.8, 0.8, 'crate'),
+      circle(-15.5, -3, 0.7, 'barrels'), circle(15.5, 3, 0.7, 'barrels'),
+    ],
+    pickups: [{ x: 0, z: -3.4 }, { x: 0, z: 3.4 }, { x: -16, z: -7.5 }, { x: 16, z: 7.5 }],
+  },
 ];
+
+/** The live layout. These arrays are swapped in place, so everything that imported them sees the current map. */
+export const OBSTACLES: Obstacle[] = [...LAYOUTS[0].obstacles];
+let layoutIndex = 0;
+
+/** Time of day: purely visual, but picked with the layout so everyone in a match sees the same sky. */
+export const MOODS = ['morning', 'noon', 'sunset', 'night'] as const;
+export type Mood = (typeof MOODS)[number];
+let moodIndex = 1;
+export const currentMood = (): Mood => MOODS[moodIndex];
+export function selectMood(index: number): Mood {
+  moodIndex = ((index % MOODS.length) + MOODS.length) % MOODS.length;
+  return MOODS[moodIndex];
+}
+
+export function selectLayout(index: number): Layout {
+  layoutIndex = ((index % LAYOUTS.length) + LAYOUTS.length) % LAYOUTS.length;
+  const l = LAYOUTS[layoutIndex];
+  OBSTACLES.splice(0, OBSTACLES.length, ...l.obstacles);
+  PICKUP_SPOTS.splice(0, PICKUP_SPOTS.length, ...l.pickups.map((q) => ({ ...q })));
+  return l;
+}
+export const currentLayout = (): Layout => LAYOUTS[layoutIndex];
+
+/** Same key, same layout: online matches use the match address, so every client and the lobby's bots agree. */
+export function selectLayoutFor(key: string): Layout {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  selectMood(Math.abs(h >> 8));
+  return selectLayout(Math.abs(h));
+}
 
 export const SPAWNS: Vec2[] = [
   { x: -12, z: -6 },
@@ -35,12 +110,7 @@ export const SPAWNS: Vec2[] = [
   { x: -12, z: 6 },
 ];
 
-export const PICKUP_SPOTS: Vec2[] = [
-  { x: -5.5, z: 0 },
-  { x: 5.5, z: 0 },
-  { x: -16, z: -7.5 },
-  { x: 16, z: 7.5 },
-];
+export const PICKUP_SPOTS: Vec2[] = LAYOUTS[0].pickups.map((q) => ({ ...q }));
 
 /** Push a circle of radius r out of all obstacles and keep it inside bounds. */
 export function resolveCircle(p: Vec2, r: number): Vec2 {

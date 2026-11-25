@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import { Suspense, useMemo, useRef, type ReactNode } from 'react';
 import { MODEL, Prop } from './models';
 import * as THREE from 'three';
-import { ARENA, OBSTACLES } from '../game/arena';
+import { ARENA, OBSTACLES, currentMood, type Mood } from '../game/arena';
 
 // ───────────────────────────── palette ─────────────────────────────
 
@@ -164,6 +164,7 @@ const WATER_FRAG = /* glsl */ `
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
+  uniform vec3 uTint;
   varying vec3 vWorld;
 
   vec2 hash2(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
@@ -229,6 +230,7 @@ const WATER_FRAG = /* glsl */ `
     float sp = step(0.988, hash(cell)) * smoothstep(0.5, 1.0, sin(uTime * 3.2 + hash(cell + 3.1) * 6.28));
     col += sp * 0.6 * (1.0 - depth * 0.4);
 
+    col *= uTint;   // the time of day
     // match the scene fog so the far water melts into the sky
     float d = length(cameraPosition - vWorld);
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
@@ -244,6 +246,21 @@ export const SEA_RINGS: [number, number, number][] = [
 ];
 
 export const FOG = { color: '#bfe6f5', near: 70, far: 170 };
+
+/** Light for each time of day. Sun position is where the light comes from; water tint multiplies the sea. */
+export interface Light {
+  sky: string; fogNear: number; fogFar: number;
+  sun: string; sunI: number; sunPos: [number, number, number];
+  hemiSky: string; hemiGround: string; hemiI: number;
+  water: [number, number, number]; lamps: boolean; exposure: number;
+}
+export const LIGHT: Record<Mood, Light> = {
+  morning: { sky: '#cfe8f4', fogNear: 60, fogFar: 160, sun: '#ffe1b5', sunI: 2.0, sunPos: [30, 20, 14], hemiSky: '#dcefff', hemiGround: '#74706a', hemiI: 0.85, water: [1, 1, 1], lamps: false, exposure: 1.05 },
+  noon: { sky: '#bfe6f5', fogNear: 70, fogFar: 170, sun: '#fff0d2', sunI: 2.3, sunPos: [-20, 30, 6], hemiSky: '#cfeaff', hemiGround: '#6a7684', hemiI: 0.8, water: [1, 1, 1], lamps: false, exposure: 1.08 },
+  sunset: { sky: '#f4c09a', fogNear: 55, fogFar: 150, sun: '#ffa463', sunI: 2.4, sunPos: [-36, 11, -12], hemiSky: '#ffd0ad', hemiGround: '#574657', hemiI: 0.7, water: [1.05, 0.82, 0.78], lamps: true, exposure: 1.02 },
+  night: { sky: '#0e1a33', fogNear: 40, fogFar: 120, sun: '#9db8ff', sunI: 0.45, sunPos: [14, 30, 10], hemiSky: '#2c4170', hemiGround: '#0e0e16', hemiI: 0.38, water: [0.24, 0.33, 0.52], lamps: true, exposure: 1.0 },
+};
+export const lightNow = () => LIGHT[currentMood()];
 
 function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
   return useMemo(() => {
@@ -265,9 +282,10 @@ function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
         uRadius: { value: basin?.r ?? 0 },
         uBasin: { value: basin ? 1 : 0 },
         uRings: { value: rings },
-        uFogColor: { value: new THREE.Color(FOG.color) },
-        uFogNear: { value: FOG.near },
-        uFogFar: { value: FOG.far },
+        uFogColor: { value: new THREE.Color(lightNow().sky) },
+        uFogNear: { value: lightNow().fogNear },
+        uFogFar: { value: lightNow().fogFar },
+        uTint: { value: new THREE.Vector3(...lightNow().water) },
       },
     });
   }, [basin]);
@@ -390,7 +408,7 @@ function Lamp({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0.7, 4.2, 0]}>
         <coneGeometry args={[0.28, 0.32, 12]} />
-        <meshStandardMaterial color={P.yellow} emissive="#ffe8a3" emissiveIntensity={0.35} />
+        <meshStandardMaterial color={P.yellow} emissive="#ffd27a" emissiveIntensity={lightNow().lamps ? 3 : 0.35} toneMapped={!lightNow().lamps} />
       </mesh>
     </group>
   );
@@ -628,7 +646,7 @@ function MiniContainer({ hw, hd, color }: { hw: number; hd: number; color: strin
   );
 }
 
-function Basin({ x, z, r }: { x: number; z: number; r: number }) {
+function Basin({ x, z, r, statue = true }: { x: number; z: number; r: number; statue?: boolean }) {
   const spec = useMemo(() => ({ x, z, r: r - 0.3 }), [x, z, r]);
   const mat = useWaterMaterial(spec);
   const ripples = useRef<(THREE.Mesh | null)[]>([]);
@@ -668,40 +686,71 @@ function Basin({ x, z, r }: { x: number; z: number; r: number }) {
           <meshBasicMaterial color="#ffffff" transparent depthWrite={false} />
         </mesh>
       ))}
-      {/* the fountain: a little stone plinth and a playful anchor statue */}
-      <mesh castShadow position={[0, 0.75, 0]}>
-        <cylinderGeometry args={[0.45, 0.6, 0.7, 16]} />
-        <meshStandardMaterial color="#cfc8b9" roughness={0.8} />
-      </mesh>
-      <group position={[0, 1.15, 0]}>
-        <mesh castShadow position={[0, 0.55, 0]}>
-          <cylinderGeometry args={[0.09, 0.09, 1.1, 8]} />
-          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
-        </mesh>
-        <mesh castShadow position={[0, 1.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.16, 0.05, 8, 16]} />
-          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
-        </mesh>
-        <mesh castShadow position={[0, 0.12, 0]} rotation={[0, 0, Math.PI]}>
-          <torusGeometry args={[0.42, 0.07, 8, 20, Math.PI]} />
-          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
-        </mesh>
-        <mesh castShadow position={[0, 0.8, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.06, 0.06, 0.7, 8]} />
-          <meshStandardMaterial color={P.steel} metalness={0.5} roughness={0.35} />
-        </mesh>
-      </group>
-      <mesh ref={spout} position={[0, 2.55, 0]}>
-        <coneGeometry args={[0.22, 0.55, 12]} />
-        <meshStandardMaterial color="#c9f1ff" transparent opacity={0.65} emissive="#8fe3ff" emissiveIntensity={0.4} />
-      </mesh>
+      {/* the fountain: a stone plinth with the anchor statue from the pirate kit (not on the market's ice tub) */}
+      {statue && (
+        <>
+          <mesh castShadow position={[0, 0.75, 0]}>
+            <cylinderGeometry args={[0.45, 0.6, 0.7, 16]} />
+            <meshStandardMaterial color="#cfc8b9" roughness={0.8} />
+          </mesh>
+          <Suspense fallback={null}>
+            <Prop src={MODEL.anchor} position={[0, 1.1, 0]} size={1.3} rotation={0.6} />
+          </Suspense>
+        </>
+      )}
     </group>
+  );
+}
+
+/** One obstacle, dressed by its tag. The footprint always matches the collision shape exactly. */
+function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number; crateTex: THREE.Texture }) {
+  const colors = [P.blue, P.orange, P.teal, P.red];
+  if (o.kind === 'circle') {
+    if (o.tag === 'basin' || o.tag === 'tub') return <Basin x={o.x} z={o.z} r={o.r} statue={o.tag === 'basin'} />;
+    // barrels: a tight cluster inside the circle
+    const n = o.r > 0.8 ? 4 : 3;
+    return (
+      <Suspense fallback={null}>
+        {Array.from({ length: n }, (_, k) => {
+          const a = (k / n) * Math.PI * 2 + i, d = n === 4 ? o.r * 0.42 : o.r * 0.38;
+          return <Prop key={k} src={MODEL.barrel} position={[Math.cos(a) * d, 0, Math.sin(a) * d]} size={o.r * 0.95} rotation={k * 1.3} />;
+        })}
+      </Suspense>
+    );
+  }
+  const w = o.hw * 2, d = o.hd * 2;
+  if (o.tag === 'crate') return <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />;
+  if (o.tag === 'stall') {
+    // a fish stall: a crate counter under a striped awning
+    return (
+      <group>
+        <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i + 7} />
+        <Suspense fallback={null}>
+          <Prop src={MODEL.fishBucket} position={[o.hw * 0.45, 1.4, 0]} size={0.7} rotation={i} />
+        </Suspense>
+      </group>
+    );
+  }
+  if (o.tag === 'stack') {
+    return (
+      <Suspense fallback={<MiniContainer hw={o.hw} hd={o.hd} color={colors[i % 4]} />}>
+        <Prop src={MODEL.container[i % 3]} fit={[w, 2.1, d]} stretch />
+        <Prop src={MODEL.container[(i + 1) % 3]} position={[0.12, 2.1, 0]} rotation={0.05} fit={[w * 0.92, 2.1, d * 0.92]} stretch />
+      </Suspense>
+    );
+  }
+  // container: the model stretched to the footprint, at a container's height
+  return (
+    <Suspense fallback={<MiniContainer hw={o.hw} hd={o.hd} color={colors[i % 4]} />}>
+      <Prop src={MODEL.container[i % 3]} fit={[w, Math.min(2.4, 1.2 + Math.max(w, d) * 0.18), d]} stretch />
+    </Suspense>
   );
 }
 
 // ───────────────────────────── the map ─────────────────────────────
 
 export function Arena({ shadows }: { shadows: boolean }) {
+  const L = lightNow();
   const deckTex = useMemo(makeDeckTexture, []);
   const quayTex = useMemo(makeQuayTexture, []);
   const hazardTex = useMemo(makeHazardTexture, []);
@@ -709,17 +758,16 @@ export function Arena({ shadows }: { shadows: boolean }) {
   const W = ARENA.halfWidth * 2;
   const D = ARENA.halfDepth * 2;
   const QUAY_Z = -13.3; // the quay lip: the sea starts beyond it
-  const sideColors = [P.blue, P.orange];
 
   return (
     <group>
-      {/* warm late-morning sun, cool sky fill */}
-      <hemisphereLight args={['#cfeaff', '#6a7684', 0.8]} />
+      {/* the light for this match's time of day */}
+      <hemisphereLight args={[L.hemiSky, L.hemiGround, L.hemiI]} />
       <ambientLight intensity={0.06} />
       <directionalLight
-        position={[-20, 30, 6]}
-        intensity={2.3}
-        color="#fff0d2"
+        position={L.sunPos}
+        intensity={L.sunI}
+        color={L.sun}
         castShadow={shadows}
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-34}
@@ -727,10 +775,17 @@ export function Arena({ shadows }: { shadows: boolean }) {
         shadow-camera-top={26}
         shadow-camera-bottom={-26}
         shadow-camera-near={1}
-        shadow-camera-far={90}
+        shadow-camera-far={110}
         shadow-bias={-0.0005}
         shadow-normalBias={0.02}
       />
+      {L.lamps && (
+        <>
+          {[[-19, -9], [19, 8], [-6, -12.4], [8, 11.6]].map(([x, z]) => (
+            <pointLight key={`${x}${z}`} position={[x, 4.2, z]} color="#ffc777" intensity={L.sunI < 1 ? 110 : 25} distance={18} decay={2} />
+          ))}
+        </>
+      )}
 
       <Sea />
 
@@ -791,24 +846,12 @@ export function Arena({ shadows }: { shadows: boolean }) {
         </mesh>
       ))}
 
-      {/* obstacles: exact footprints from the authoritative arena, dressed with the model packs */}
-      {OBSTACLES.map((o, i) =>
-        o.kind === 'circle' ? (
-          <group key={i} position={[o.x, 0, o.z]}>
-            <Basin x={o.x} z={o.z} r={o.r} />
-          </group>
-        ) : (
-          <group key={i} position={[o.x, 0, o.z]}>
-            <Suspense fallback={o.hd > o.hw * 1.5 ? <MiniContainer hw={o.hw} hd={o.hd} color={sideColors[i % 2]} /> : <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />}>
-              {o.hd > o.hw * 1.5 ? (
-                <Prop src={MODEL.container[i % 3]} fit={[o.hw * 2, 0, o.hd * 2]} stretch />
-              ) : (
-                <CrateStack hw={o.hw} hd={o.hd} tex={crateTex} seed={i} />
-              )}
-            </Suspense>
-          </group>
-        ),
-      )}
+      {/* obstacles: exact footprints from the live layout, dressed by tag */}
+      {OBSTACLES.map((o, i) => (
+        <group key={`${o.tag}${i}`} position={[o.x, 0, o.z]}>
+          <Obstacle o={o} i={i} crateTex={crateTex} />
+        </group>
+      ))}
 
       <Suspense fallback={null}>
         {/* container yards either side */}
@@ -869,6 +912,8 @@ export function Arena({ shadows }: { shadows: boolean }) {
       ))}
       <Lamp position={[-19.6, 0, -9]} />
       <Lamp position={[19.6, 0, 8]} />
+      <Lamp position={[-6.6, 0, -12.6]} />
+      <Lamp position={[7.4, 0, 11.8]} />
       <LifeRing position={[-8.5, 0.62, QUAY_Z + 0.76]} />
       <LifeRing position={[9.5, 0.62, QUAY_Z + 0.76]} />
       <Plant position={[-20.6, 0, 6.6]} s={1.2} />

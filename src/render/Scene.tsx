@@ -6,7 +6,8 @@ import { CONFIG, TICK_DT } from '../game/config';
 import { ABILITY_DEFS, characterDef } from '../game/content';
 import { fuseRemaining, getPlayer, holderCanAct } from '../game/sim';
 import { getSettings, useSettings } from '../state/settings';
-import { Arena, FOG } from './Arena';
+import { Arena, lightNow } from './Arena';
+import { currentLayout, currentMood } from '../game/arena';
 import { Creature } from './Creature';
 import { overlay, useGame } from './context';
 
@@ -672,16 +673,19 @@ function Effects() {
 export function Scene() {
   const { session } = useGame();
   const settings = useSettings();
+  const L = lightNow();
+  const { gl } = useThree();
+  useEffect(() => { gl.toneMappingExposure = L.exposure; }, [gl, L.exposure]);
 
   // Drive the simulation from the render loop (fixed-step inside).
   useFrame((_, dt) => session.update(dt), -2);
 
   return (
     <>
-      <color attach="background" args={[FOG.color]} />
-      <fog attach="fog" args={[FOG.color, FOG.near, FOG.far]} />
+      <color attach="background" args={[L.sky]} />
+      <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
       <CameraRig />
-      <Arena shadows={settings.shadows} />
+      <Arena key={`${currentLayout().id}-${currentMood()}`} shadows={settings.shadows} />
       {session.state.players.map((p) => (
         <Creature key={p.id} id={p.id} />
       ))}

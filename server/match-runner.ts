@@ -290,7 +290,7 @@ export class MatchRunner {
   private async play() {
     const er = this.er!;
     const clock = this.clock!;
-    const mirror = new ChainMirror(this.roster, clock, this.localIndices);
+    const mirror = new ChainMirror(this.roster, clock, this.localIndices, this.match.toBase58());
     this.mirror = mirror;
 
     this.subs.push(

@@ -7,7 +7,7 @@
  * player, or the server's bots) are predicted here and pushed to the chain;
  * everyone else's positions come from their PlayerState accounts.
  */
-import { SPAWNS } from '../game/arena';
+import { SPAWNS, selectLayoutFor } from '../game/arena';
 import { createMatch, type ParticipantSetup } from '../game/sim';
 import type { GameEvent, MatchState, Phase, PlayerState } from '../game/types';
 import { mmToUnits, NO_PLAYER, PHASE, type ChainMatch, type ChainPlayer, type SlotClock } from './program';
@@ -34,7 +34,10 @@ export class ChainMirror {
     private readonly clock: SlotClock,
     /** Indices whose positions are simulated locally (not overwritten from chain). */
     readonly localIndices: Set<number>,
+    /** the match address: picks the layout, so every client and the lobby's bots see the same yard */
+    layoutKey?: string,
   ) {
+    if (layoutKey) selectLayoutFor(layoutKey);
     const ordered = [...roster].sort((a, b) => a.index - b.index);
     this.state = createMatch(
       ordered.map((r) => ({ id: playerId(r.index), name: r.name, character: r.character, isBot: r.isBot })),
