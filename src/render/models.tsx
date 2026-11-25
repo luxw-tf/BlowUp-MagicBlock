@@ -120,7 +120,8 @@ export const RIG: Record<string, string> = {
   creature: 'pirate/Characters_Skeleton.gltf',
 };
 
-export type RigState = 'idle' | 'run' | 'dash' | 'hit' | 'death' | 'win';
+/** 'pose': one wave hello, then idle (the menu); 'win': wave and nod in turn, each played through to the end. */
+export type RigState = 'idle' | 'run' | 'dash' | 'hit' | 'death' | 'win' | 'pose';
 /** Written by the creature every frame, read by its rig. */
 export interface RigDrive { state: RigState; speed: number; hitAt: number; actAt: number; }
 /** A seat's wardrobe: coat in the player's colour, a hat/hair colour of its own, trousers a deeper shade. */
@@ -218,11 +219,19 @@ export function Rig({ id, drive, outfit }: { id: string; drive: { current: RigDr
     const mixer = new THREE.AnimationMixer(scene);
     const actions = new Map<string, THREE.AnimationAction>();
     for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
-    for (const name of ['HitReact', 'Death', 'Punch', 'Yes']) {
+    // a wave that plays once through, for greetings and celebrations (the clip itself loops)
+    const wave = gltf.animations.find((c) => c.name === 'Wave');
+    if (wave) {
+      const once = wave.clone();
+      once.name = 'WaveOnce';
+      actions.set('WaveOnce', mixer.clipAction(once));
+    }
+    for (const name of ['HitReact', 'Death', 'Punch', 'Yes', 'WaveOnce']) {
       const a = actions.get(name);
       if (a) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
     }
-    return { scene, k, minY: box.min.y, mixer, actions, current: '', hitUntil: 0, actUntil: 0, winSince: 0 };
+    const dur = (n: string) => (actions.get(n)?.getClip().duration ?? 1.5) * 1000;
+    return { scene, k, minY: box.min.y, mixer, actions, dur, current: '', hitUntil: 0, actUntil: 0, seq: '', seqName: '', seqEnd: 0 };
   }, [gltf, outfit?.coat, outfit?.hat, outfit?.keepBody]);
 
   useFrame((_, dt) => {
@@ -233,19 +242,24 @@ export function Rig({ id, drive, outfit }: { id: string; drive: { current: RigDr
     if (d.hitAt > now - 50) rig.hitUntil = now + 420;
     let name: string;
     if (d.state === 'death') name = 'Death';
-    else if (d.state === 'win') {
-      if (!rig.winSince) rig.winSince = now;
-      name = Math.floor((now - rig.winSince) / 2200) % 2 ? 'Yes' : 'Wave'; // celebrate: a wave, then a big nod, and again
+    else if (d.state === 'win' || d.state === 'pose') {
+      // each move plays through to its end before the next starts, so nothing is cut off mid-gesture
+      if (rig.seq !== d.state) { rig.seq = d.state; rig.seqName = 'WaveOnce'; rig.seqEnd = now + rig.dur('WaveOnce') - 200; }
+      else if (now >= rig.seqEnd) {
+        if (d.state === 'pose') { rig.seqName = 'Idle'; rig.seqEnd = Infinity; }
+        else { rig.seqName = rig.seqName === 'WaveOnce' ? 'Yes' : 'WaveOnce'; rig.seqEnd = now + rig.dur(rig.seqName) - 200; }
+      }
+      name = rig.seqName;
     } else if (now < rig.actUntil) name = 'Punch';
     else if (now < rig.hitUntil) name = 'HitReact';
     else if (d.state === 'dash') name = 'Jump';
     else if (d.state === 'run') name = d.speed > 2.4 ? 'Run' : 'Walk';
     else name = 'Idle';
-    if (d.state !== 'win') rig.winSince = 0;
+    if (d.state !== 'win' && d.state !== 'pose') rig.seq = '';
     const next = rig.actions.get(name) ?? rig.actions.get('Idle');
     if (next && rig.current !== name) {
       const prev = rig.actions.get(rig.current);
-      const fade = name === 'Punch' ? 0.06 : 0.15;
+      const fade = name === 'Punch' ? 0.06 : rig.current === 'WaveOnce' || rig.current === 'Yes' ? 0.3 : 0.15;
       next.reset().setEffectiveWeight(1).fadeIn(fade).play();
       if (prev) prev.fadeOut(fade);
       rig.current = name;

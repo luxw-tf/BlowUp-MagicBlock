@@ -47,12 +47,10 @@ function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
   const cam = camFor(id);
   useEffect(() => {
     if (!active) return;
-    // wave as the camera comes round to them
-    const t1 = setTimeout(() => (drive.current.state = 'win'), 500);
-    const t2 = setTimeout(() => (drive.current.state = 'idle'), 2700);
+    // one wave hello as the camera comes round to them, then back to idle (the rig plays it through)
+    const t = setTimeout(() => (drive.current.state = 'pose'), 450);
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      clearTimeout(t);
       drive.current.state = 'idle';
     };
   }, [active]);

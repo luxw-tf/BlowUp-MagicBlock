@@ -8,18 +8,24 @@ import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 
 
-/** The "o" of the wordmark: a bomb drawn in the same yellow and ink as the letters, fuse lit. */
+/** The "O" of the wordmark: a bomb engraved in the same gold as the letters, fuse lit. */
 function BombO() {
   return (
-    <svg className="logo-o" viewBox="0 0 100 120" aria-hidden>
-      <g stroke="#1d1b24" strokeWidth="15" strokeLinejoin="round" strokeLinecap="round">
-        <path d="M62 34 C 70 14, 84 16, 88 6" fill="none" />
-        <rect x="47" y="30" width="22" height="16" rx="4" fill="#1d1b24" transform="rotate(32 58 38)" />
-        <circle cx="46" cy="80" r="33" fill="#ffc832" />
-      </g>
-      <path d="M30 66 A 20 20 0 0 1 44 56" fill="none" stroke="#fff6d6" strokeWidth="8" strokeLinecap="round" />
+    <svg className="logo-o" viewBox="0 0 100 118" aria-hidden>
+      <defs>
+        <linearGradient id="logo-gold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f7e2a8" />
+          <stop offset="0.55" stopColor="#d4ae62" />
+          <stop offset="1" stopColor="#8f6c2c" />
+        </linearGradient>
+      </defs>
+      <path d="M66 30 C 72 14, 84 12, 90 6" fill="none" stroke="url(#logo-gold)" strokeWidth="6" strokeLinecap="round" />
+      <rect x="50" y="28" width="20" height="13" rx="2" fill="url(#logo-gold)" transform="rotate(32 60 34)" />
+      <circle cx="46" cy="76" r="34" fill="none" stroke="url(#logo-gold)" strokeWidth="15" />
+      <path d="M27 66 A 20 20 0 0 1 40 54" fill="none" stroke="#fff4d0" strokeWidth="4" strokeLinecap="round" opacity="0.55" />
       <g className="logo-spark">
-        <path d="M88 -6 L92 2 L101 4 L93 9 L95 18 L88 12 L80 17 L83 8 L76 2 L85 2 Z" fill="#ff6b35" stroke="#1d1b24" strokeWidth="3.5" strokeLinejoin="round" />
+        <circle cx="90" cy="6" r="7" fill="#ffb347" opacity="0.35" />
+        <path d="M90 -2 L92 4 L98 6 L92 8 L90 14 L88 8 L82 6 L88 4 Z" fill="#ffe2a0" />
       </g>
     </svg>
   );
@@ -87,11 +93,12 @@ export function Landing({
 
       <div className="menu-left">
         <h1 className="logo" aria-label={GAME_TITLE}>
-          <span className="logo-word">Bl</span>
+          <span className="logo-word">BL</span>
           <BombO />
-          <span className="logo-word">wUp</span>
+          <span className="logo-word">WUP</span>
         </h1>
         <p className="tagline">Pass the bomb. Nobody knows how long the fuse is.</p>
+        <div className="rule" aria-hidden />
 
         <nav className="menu-list">
           {onRejoin && (
@@ -105,7 +112,6 @@ export function Landing({
             </button>
           )}
           <button className="mbtn primary" onClick={go(onPlay)} disabled={!clean} autoFocus>
-            <Icon name="next" size={30} fill="#1d1b24" />
             Play
             <small>vs bots</small>
           </button>

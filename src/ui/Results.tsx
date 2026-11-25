@@ -43,9 +43,10 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
   return (
     <div className="modal-backdrop">
       <div className="panel results">
-        <div className="results-title">{localWon ? 'You win!' : `${winner.name} wins`}</div>
+        <div className="results-kicker">{localWon ? 'Victory' : 'Match over'}</div>
+        <div className="results-title">{localWon ? 'Last one standing' : `${winner.name} takes it`}</div>
         <div className="results-sub">
-          {localWon ? 'Last pirate standing' : local?.placement ? `You came ${ordinal(local.placement)}` : 'Last pirate standing'} · {Math.round(s.time)}s
+          {localWon ? 'You outlasted the whole crew' : local?.placement ? `You finished ${ordinal(local.placement)}` : 'The last pirate standing'} · {Math.round(s.time)}s
         </div>
 
         <div className="podium">
@@ -53,7 +54,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
             p ? (
               <div key={p.id} className={`step ${place[i]} ${p.id === session.localId ? 'is-local' : ''}`}>
                 <div className="step-who">
-                  {i === 1 && <Icon name="crown" size={30} fill="#ffc832" style={{ marginBottom: -6 }} />}
+                  {i === 1 && <Icon name="crown" size={26} fill="rgba(212,174,98,0.25)" style={{ color: "#d4ae62", marginBottom: -4 }} />}
                   <Portrait id={p.character} size={i === 1 ? 84 : 64} className="step-badge" />
                   <span className="step-name">{p.name}</span>
                 </div>
