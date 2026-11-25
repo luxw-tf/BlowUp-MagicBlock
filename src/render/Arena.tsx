@@ -13,9 +13,9 @@ import { ARENA, OBSTACLES } from '../game/arena';
 // ───────────────────────────── palette ─────────────────────────────
 
 const P = {
-  deck: '#d8cbb4',
+  deck: '#c9cfd3',
   deckDark: '#c3bcae',
-  quay: '#a9a397',
+  quay: '#a3aab0',
   line: '#f5c431',
   ink: '#2b2a33',
   orange: '#ec6a3c',
@@ -48,7 +48,7 @@ function makeDeckTexture(): THREE.CanvasTexture {
   for (let y = 0; y < c.height; y += s / 2) {
     for (let x = (y / (s / 2)) % 2 ? -s / 2 : 0; x < c.width; x += s) {
       const v = Math.floor(r() * 14) - 7;
-      g.fillStyle = `rgb(${214 + v},${201 + v},${178 + v})`;
+      g.fillStyle = `rgb(${198 + v},${204 + v},${209 + v})`;
       g.fillRect(x + 2, y + 2, s - 4, s / 2 - 4);
       g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + 2, y + 2, s - 4, 3);
       g.fillStyle = 'rgba(60,50,40,0.10)'; g.fillRect(x + 2, y + s / 2 - 6, s - 4, 4);
@@ -515,6 +515,52 @@ function Bob({ children, position, phase = 0, amp = 0.12 }: { children: ReactNod
   return <group position={position}><group ref={g}>{children}</group></group>;
 }
 
+/** A stack of old tyres. */
+function Tyres({ position, n = 3 }: { position: [number, number, number]; n?: number }) {
+  return (
+    <group position={position}>
+      {Array.from({ length: n }, (_, i) => (
+        <mesh key={i} castShadow receiveShadow position={[(i % 2) * 0.06, 0.16 + i * 0.3, 0]} rotation={[Math.PI / 2, 0, i * 0.4]}>
+          <torusGeometry args={[0.42, 0.17, 10, 20]} />
+          <meshStandardMaterial color="#45464f" roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** A coil of mooring rope lying on the quay. */
+function RopeCoil({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {[0.42, 0.32, 0.22].map((r, i) => (
+        <mesh key={r} castShadow position={[0, 0.07 + i * 0.07, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[r, 0.07, 8, 22]} />
+          <meshStandardMaterial color="#d8b77e" roughness={0.95} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Weeds and ivy pushing up through the cracks and round the bottoms of things. */
+function Weeds({ position, s = 1, seed = 1 }: { position: [number, number, number]; s?: number; seed?: number }) {
+  const leaves = useMemo(() => {
+    const r = rng(seed * 97 + 13);
+    return Array.from({ length: 6 }, () => ({ x: (r() - 0.5) * 0.9, z: (r() - 0.5) * 0.6, y: 0.08 + r() * 0.18, k: 0.14 + r() * 0.16, c: r() < 0.5 ? P.leaf : P.leafDark }));
+  }, [seed]);
+  return (
+    <group position={position} scale={s}>
+      {leaves.map((l, i) => (
+        <mesh key={i} castShadow position={[l.x, l.y, l.z]}>
+          <icosahedronGeometry args={[l.k, 0]} />
+          <meshStandardMaterial color={l.c} roughness={0.9} flatShading />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 // ───────────────────────────── in-play obstacles (exact footprints) ─────────────────────────────
 
 /** A strapped stack of crates on the crate's square footprint. */
@@ -666,8 +712,8 @@ export function Arena({ shadows }: { shadows: boolean }) {
   return (
     <group>
       {/* warm late-morning sun, cool sky fill */}
-      <hemisphereLight args={['#d9f1ff', '#8b7a60', 1.0]} />
-      <ambientLight intensity={0.15} />
+      <hemisphereLight args={['#cfeaff', '#6a7684', 0.8]} />
+      <ambientLight intensity={0.06} />
       <directionalLight
         position={[-20, 30, 6]}
         intensity={2.3}
@@ -798,6 +844,21 @@ export function Arena({ shadows }: { shadows: boolean }) {
       </Suspense>
       <Crane position={[-6, 0, -16.5]} />
       <Gulls />
+
+      {/* edge clutter: tyres, rope, weeds in the cracks and at the feet of the containers */}
+      <Tyres position={[-21.4, 0, -6.6]} n={3} />
+      <Tyres position={[21.6, 0, 7.2]} n={2} />
+      <Tyres position={[-7.2, 0, -12.4]} n={2} />
+      <RopeCoil position={[-14.2, 0, -12.2]} />
+      <RopeCoil position={[16.6, 0, 11.6]} />
+      <RopeCoil position={[-10.8, 0, 11.7]} />
+      {[
+        [-18.6, -10.2, 1.2, 1], [18.4, -10.4, 1, 2], [-18.7, 10.2, 1.1, 3], [18.5, 10.1, 0.9, 4],
+        [-22.9, -9.9, 1.3, 5], [-22.9, 4.1, 1, 6], [23, -2.6, 1.2, 7], [26.2, 7.9, 1, 8],
+        [-4.5, -10.6, 0.7, 9], [6.2, 10.7, 0.7, 10], [-12.6, 10.6, 0.6, 11], [13.8, -10.6, 0.6, 12],
+      ].map(([x, z, k, sd]) => (
+        <Weeds key={sd} position={[x, 0, z]} s={k} seed={sd} />
+      ))}
       {[-15, -9, -3, 3, 9, 15].map((x) => (
         <Bollard key={x} position={[x, 0, ARENA.halfDepth + 1.3]} />
       ))}
