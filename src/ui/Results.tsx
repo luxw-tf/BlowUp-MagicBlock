@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { CALLOUTS, characterDef } from '../game/content';
-import type { GameSession } from '../game/session';
+import type { SessionLike } from '../game/sessionTypes';
 
 const ord = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
 
-export function Results({ session, onRematch, onMenu, onVerify }: { session: GameSession; onRematch: () => void; onMenu: () => void; onVerify: () => void }) {
+export function Results({ session, onRematch, onMenu, onVerify }: { session: SessionLike; onRematch: () => void; onMenu: () => void; onVerify: () => void }) {
   const s = session.state;
   const ranked = [...s.players].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99));
   const winner = ranked[0];

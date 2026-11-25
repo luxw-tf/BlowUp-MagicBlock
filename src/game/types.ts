@@ -120,7 +120,8 @@ export type GameEvent =
   | { type: 'swap'; a: PlayerId; b: PlayerId }
   | { type: 'elimination'; id: PlayerId; by: PlayerId | null; at: Vec2; survivors: number }
   | { type: 'matchEnd'; winner: PlayerId }
-  | { type: 'inputRejected'; id: PlayerId; reason: string };
+  | { type: 'inputRejected'; id: PlayerId; reason: string }
+  | { type: 'transferRejected'; id: PlayerId; reason: string };
 
 export interface MatchState {
   tick: number;

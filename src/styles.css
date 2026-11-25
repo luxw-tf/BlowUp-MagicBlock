@@ -850,3 +850,15 @@ kbd {
 .verify-table {
   user-select: text;
 }
+
+.online-details {
+  display: grid;
+  gap: 3px;
+  user-select: text;
+}
+.online-details a {
+  color: var(--accent);
+}
+.verify-status code {
+  font-size: 0.8em;
+}

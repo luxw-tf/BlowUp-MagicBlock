@@ -1,10 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { GameSession } from '../game/session';
+import type { SessionLike } from '../game/sessionTypes';
 import type { InputController } from '../input/input';
 import type { PlayerId } from '../game/types';
 
 export interface GameCtx {
-  session: GameSession;
+  session: SessionLike;
   input: InputController;
   /** Who the camera follows (local player, or a survivor while spectating). */
   focus: { id: PlayerId };

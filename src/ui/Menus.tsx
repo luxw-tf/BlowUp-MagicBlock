@@ -14,7 +14,15 @@ const ICON: Record<CharacterId, string> = {
   creature: '👾',
 };
 
-export function Landing({ initial, onPlay }: { initial: Profile | null; onPlay: (p: Profile) => void }) {
+export function Landing({
+  initial,
+  onPlay,
+  onPlayOnline,
+}: {
+  initial: Profile | null;
+  onPlay: (p: Profile) => void;
+  onPlayOnline: (p: Profile) => void;
+}) {
   const [name, setName] = useState(initial?.name ?? `guest${Math.floor(1000 + Math.random() * 9000)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
   const clean = name.trim().slice(0, 18);
@@ -23,6 +31,11 @@ export function Landing({ initial, onPlay }: { initial: Profile | null; onPlay: 
     if (!clean) return;
     audio.unlock();
     onPlay({ name: clean, character });
+  };
+  const playOnline = () => {
+    if (!clean) return;
+    audio.unlock();
+    onPlayOnline({ name: clean, character });
   };
 
   return (
@@ -57,11 +70,16 @@ export function Landing({ initial, onPlay }: { initial: Profile | null; onPlay: 
             <button className="btn primary big" onClick={play} disabled={!clean}>
               Quick Play
             </button>
+            <button className="btn big" onClick={playOnline} disabled={!clean} title="Live match on a MagicBlock rollup (Solana devnet)">
+              Play online <small>devnet</small>
+            </button>
             <button className="btn ghost" disabled title="Private rooms arrive with live multiplayer">
               Private room <small>soon</small>
             </button>
           </div>
-          <p className="fine">No wallet needed. Identical stats for everyone — only skill (and the fuse) decides.</p>
+          <p className="fine">
+            No wallet needed. Identical stats for everyone — only skill (and the fuse) decides. Online matches have no pickups yet.
+          </p>
         </div>
 
         <div className="how">

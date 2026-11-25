@@ -9,7 +9,7 @@ import { segmentClear } from '../src/game/arena';
 import { BotBrain } from '../src/game/bots';
 import { CONFIG } from '../src/game/config';
 import { BOT_NAMES, CHARACTERS } from '../src/game/content';
-import { add, dist, dot, norm, scale, sub } from '../src/game/math';
+import { add, dist, norm, scale, sub } from '../src/game/math';
 import { holderCanAct, predictMovement, tagCandidates } from '../src/game/sim';
 import type { CharacterId, PlayerState } from '../src/game/types';
 import { ChainMirror, indexOf, playerId, type RosterEntry } from '../src/chain/mirror';
@@ -92,6 +92,7 @@ export class MatchRunner {
   private subs: (() => void)[] = [];
   private loop: ReturnType<typeof setInterval> | null = null;
   private lastCrankAt = 0;
+  private crankLagMs: number[] = [];
   private lastRetryAt = 0;
   private lastTickAt = 0;
 
@@ -304,9 +305,14 @@ export class MatchRunner {
     // Elimination crank: permissionless on-chain; the lobby runs it promptly.
     const clock = this.clock!;
     const deadline = Math.min(m.fuseDeadlineSlot || Infinity, m.roundDeadlineSlot || Infinity);
-    if (m.phase === PHASE.ACTIVE && m.holder !== 255 && clock.now() >= deadline && nowMs - this.lastCrankAt > 400) {
+    // Start 2 slots early and retry every 150 ms: an early attempt just fails
+    // with FuseNotExpired (ER transactions are free), a late one delays play.
+    if (m.phase === PHASE.ACTIVE && m.holder !== 255 && clock.now() >= deadline - 2 && nowMs - this.lastCrankAt > 150) {
       this.lastCrankAt = nowMs;
-      void this.er_([this.ix.eliminate(this.authority.publicKey, this.match)], this.authority);
+      const slotMs = m.slotMs;
+      void this.er_([this.ix.eliminate(this.authority.publicKey, this.match)], this.authority).then((r) => {
+        if (r && !r.err) this.crankLagMs.push(Math.max(0, (this.clock!.now() - deadline) * slotMs));
+      });
     }
     // Bounded pending randomness.
     if (
@@ -354,23 +360,27 @@ export class MatchRunner {
     }
   }
 
-  /** Server-side projectile trace for bot throws: first eligible player along the aim ray. */
+  /**
+   * Server-side projectile trace for bot throws. Like the offline projectile,
+   * targets keep moving during the flight (extrapolated along their velocity),
+   * so a bot's lead aim can connect. Returns the first eligible player struck.
+   */
   private traceThrow(p: PlayerState, aim: { x: number; z: number }) {
     const s = this.mirror!.state;
     const dir = norm(sub(aim, p.pos));
-    let best: { index: number; distance: number } | null = null;
-    for (const q of s.players) {
-      if (!q.alive || q.id === p.id) continue;
-      if (s.bomb.protectedId === q.id && s.time < s.bomb.protectedUntil) continue;
-      const rel = sub(q.pos, p.pos);
-      const along = dot(rel, dir);
-      if (along <= 0 || along > CONFIG.throwRange) continue;
-      const closest = add(p.pos, scale(dir, along));
-      if (dist(closest, q.pos) > CONFIG.playerRadius + CONFIG.bombRadius) continue;
-      if (!segmentClear(p.pos, closest, CONFIG.bombRadius)) continue;
-      if (!best || along < best.distance) best = { index: indexOf(q.id), distance: along };
+    const hitR = CONFIG.playerRadius + CONFIG.bombRadius;
+    const flight = CONFIG.throwRange / CONFIG.throwSpeed;
+    for (let t = 0.025; t <= flight; t += 0.025) {
+      const bomb = add(p.pos, scale(dir, CONFIG.throwSpeed * t));
+      if (!segmentClear(p.pos, bomb, CONFIG.bombRadius)) return null; // hit an obstacle
+      for (const q of s.players) {
+        if (!q.alive || q.id === p.id) continue;
+        if (s.bomb.protectedId === q.id && s.time + t < s.bomb.protectedUntil) continue;
+        const qPos = add(q.pos, scale(q.vel, t));
+        if (dist(bomb, qPos) <= hitR) return { index: indexOf(q.id), distance: CONFIG.throwSpeed * t };
+      }
     }
-    return best;
+    return null;
   }
 
   private botTransfer(bot: Bot, p: PlayerState, target: number, method: 0 | 1, delayMs: number) {
@@ -438,6 +448,7 @@ export class MatchRunner {
       placements: final.placements,
       transfers: final.transfers,
       vrfFulfilled: final.vrfFulfilled,
+      crankLagMs: this.crankLagMs.map(Math.round),
       lastRandomness: Buffer.from(final.lastRandomness).toString('hex'),
       commitSig,
       recordSig: rec.sig,

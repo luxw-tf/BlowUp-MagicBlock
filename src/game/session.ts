@@ -13,28 +13,15 @@ import { BOT_NAMES, CHARACTERS } from './content';
 import { add, scale } from './math';
 import { createMatch, drainEvents, fulfillRandomness, step, type ParticipantSetup } from './sim';
 import { LocalDevRandomness, toHex, type RandomFulfillment, type RandomnessProvider } from './randomness';
-import type { CharacterId, GameEvent, InputFrame, MatchState, PlayerId, RandomRequest, Vec2 } from './types';
+import type { InputSampler, SessionLike, SessionListener as Listener, VerificationEntry } from './sessionTypes';
+import type { CharacterId, InputFrame, MatchState, PlayerId, Vec2 } from './types';
 
-export interface VerificationEntry {
-  requestId: number;
-  purpose: RandomRequest['purpose'];
-  subject: PlayerId | null;
-  valueHex: string;
-  source: string;
-  proof: string | null;
-  latencyMs: number;
-  applied: boolean;
-  attempts: number;
-}
+export type { InputSampler, VerificationEntry } from './sessionTypes';
 
 export interface LocalPlayerSetup {
   name: string;
   character: CharacterId;
 }
-
-export type InputSampler = () => Omit<InputFrame, 'seq'>;
-
-type Listener = (events: GameEvent[], s: MatchState) => void;
 
 function shuffle<T>(a: T[]): T[] {
   const r = [...a];
@@ -56,11 +43,12 @@ export function buildParticipants(local: LocalPlayerSetup, total = 6): Participa
   return shuffle(list);
 }
 
-export class GameSession {
+export class GameSession implements SessionLike {
   readonly state: MatchState;
   private static counter = 0;
   readonly id = ++GameSession.counter;
   readonly localId: PlayerId = 'p0';
+  readonly online = null;
   readonly verification: VerificationEntry[] = [];
   readonly prevPos = new Map<PlayerId, Vec2>();
 

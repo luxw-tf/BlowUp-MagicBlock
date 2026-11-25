@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { audio } from '../audio/audio';
 import { ABILITY_DEFS, CALLOUTS, characterDef } from '../game/content';
 import { CONFIG } from '../game/config';
-import { GameSession } from '../game/session';
+import type { SessionLike } from '../game/sessionTypes';
 import { alivePlayers, fuseRemaining, getPlayer } from '../game/sim';
 import type { GameEvent, MatchState, PlayerId } from '../game/types';
 import { InputController } from '../input/input';
@@ -32,7 +32,7 @@ function Name({ s, id }: { s: MatchState; id: PlayerId | null }) {
 }
 
 interface Props {
-  session: GameSession;
+  session: SessionLike;
   onRematch: () => void;
   onMenu: () => void;
 }
@@ -56,7 +56,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
 
   // Dev-only debugging handle.
   useEffect(() => {
-    if (import.meta.env.DEV) (window as unknown as { __session: GameSession }).__session = session;
+    if (import.meta.env.DEV) (window as unknown as { __session: SessionLike }).__session = session;
   }, [session]);
 
   // Wire input + session.
@@ -194,6 +194,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             break;
           }
           case 'abilityFailed':
+          case 'transferRejected':
             if (e.id === local) {
               audio.denied();
               shout(e.reason, 'neutral', true);
@@ -297,8 +298,8 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         )}
 
         <div className="top-right">
-          <span className="net-pill" title="Running the authoritative simulation locally">
-            local sim · {CONFIG.tickRate} tps
+          <span className="net-pill" title={session.online ? 'Bomb ownership, fuses and eliminations are decided on a MagicBlock rollup' : 'Running the authoritative simulation locally'}>
+            {session.online ? 'online · devnet rollup' : `local sim · ${CONFIG.tickRate} tps`}
           </span>
           <button className="icon-btn" title="Match details" onClick={() => setShowVerify(true)}>
             ⓘ
@@ -318,7 +319,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   );
 }
 
-function NameTags({ session }: { session: GameSession }) {
+function NameTags({ session }: { session: SessionLike }) {
   return (
     <div className="name-layer">
       {session.state.players.map((p) => (
@@ -341,7 +342,7 @@ function NameTags({ session }: { session: GameSession }) {
 }
 
 /** HUD: high-frequency values are written to refs from a rAF loop. */
-function Hud({ session }: { session: GameSession }) {
+function Hud({ session }: { session: SessionLike }) {
   const fuseText = useRef<HTMLDivElement>(null);
   const fuseBar = useRef<HTMLDivElement>(null);
   const roundBar = useRef<HTMLDivElement>(null);
