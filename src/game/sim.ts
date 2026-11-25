@@ -503,6 +503,22 @@ function updateProjectile(s: MatchState) {
   }
 }
 
+/**
+ * Movement-only step for one player (dash + acceleration + collisions), with
+ * the exact physics of `step`. Used for client-side prediction in online
+ * matches and for server-driven bots, where bomb rules live on-chain.
+ */
+export function predictMovement(s: MatchState, p: PlayerState, inp: InputFrame) {
+  p.aim = { ...inp.aim };
+  if (inp.dash && s.time >= p.dashReadyAt && s.time >= p.dashUntil) {
+    startDash(s, p, inp, CONFIG.dashDistance, CONFIG.dashDuration);
+    p.dashReadyAt = s.time + CONFIG.dashCooldown;
+    p.stats.dashes++;
+    emit(s, { type: 'dash', id: p.id, emergency: false });
+  }
+  movePlayer(s, p, inp);
+}
+
 // ───────────────────────────── tick ─────────────────────────────
 
 /** Returns and clears events produced since the last drain (ticks and fulfilments). */

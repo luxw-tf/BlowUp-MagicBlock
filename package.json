@@ -8,21 +8,30 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "server": "tsx server/index.ts"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
     "@react-three/fiber": "^8.18.0",
+    "@solana/web3.js": "^1.99.0",
+    "buffer": "^6.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.18.0",
+    "@types/node": "^22.20.7",
     "@types/react": "^18.3.32",
     "@types/react-dom": "^18.3.7",
     "@types/three": "^0.187.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.7.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^5.4.21",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "ws": "^8.23.0"
   }
 }

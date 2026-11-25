@@ -1,0 +1,1591 @@
+{
+  "address": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob",
+  "metadata": {
+    "name": "blowup",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "BlowUp match program: authoritative bomb ownership, fuse and eliminations on a MagicBlock Ephemeral Rollup"
+  },
+  "instructions": [
+    {
+      "name": "abort_match",
+      "docs": [
+        "Terminate without a false winner (ER outage / abandoned match)."
+      ],
+      "discriminator": [
+        165,
+        210,
+        81,
+        124,
+        173,
+        175,
+        87,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "callback_randomness",
+      "docs": [
+        "VRF callback. Bound to (purpose, nonce): anything else is a stale or",
+        "duplicate fulfilment and is ignored without error."
+      ],
+      "discriminator": [
+        38,
+        174,
+        207,
+        182,
+        57,
+        53,
+        157,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Signer proves the VRF program issued this callback for this program."
+          ],
+          "signer": true,
+          "address": "iqnMnKeFa42JQ3UTap341RSqNEx1vwo1J7UUPHaNAGr"
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "purpose_id",
+          "type": "u8"
+        },
+        {
+          "name": "nonce",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_match",
+      "discriminator": [
+        107,
+        2,
+        184,
+        145,
+        70,
+        142,
+        17,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "match_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "match_id",
+          "type": "u64"
+        },
+        {
+          "name": "slot_ms",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "delegate_match",
+      "discriminator": [
+        30,
+        116,
+        9,
+        69,
+        147,
+        61,
+        133,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buffer_match_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "match_state"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                226,
+                194,
+                158,
+                139,
+                68,
+                57,
+                36,
+                69,
+                1,
+                178,
+                184,
+                241,
+                67,
+                193,
+                229,
+                65,
+                85,
+                48,
+                196,
+                100,
+                189,
+                32,
+                57,
+                252,
+                206,
+                3,
+                164,
+                151,
+                69,
+                1,
+                142
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_match_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "match_state"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_match_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "match_state"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "match_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "match_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "match_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "delegate_player",
+      "docs": [
+        "Delegate a player account. Do this for every player BEFORE delegating the match."
+      ],
+      "discriminator": [
+        235,
+        159,
+        245,
+        102,
+        161,
+        199,
+        254,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state"
+        },
+        {
+          "name": "buffer_player_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player_state"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                118,
+                226,
+                194,
+                158,
+                139,
+                68,
+                57,
+                36,
+                69,
+                1,
+                178,
+                184,
+                241,
+                67,
+                193,
+                229,
+                65,
+                85,
+                48,
+                196,
+                100,
+                189,
+                32,
+                57,
+                252,
+                206,
+                3,
+                164,
+                151,
+                69,
+                1,
+                142
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_player_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player_state"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_player_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player_state"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "player_state",
+          "writable": true
+        },
+        {
+          "name": "owner_program",
+          "address": "915f4aBTkrJaZ4ym6D85AoNLHQwazUC3vmbjgQNyhyob"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "eliminate",
+      "docs": [
+        "Permissionless crank: eliminates the holder once the fuse (or round",
+        "deadline) has passed, then draws the next holder via VRF."
+      ],
+      "discriminator": [
+        138,
+        4,
+        105,
+        239,
+        88,
+        144,
+        95,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "finalize",
+      "docs": [
+        "Commit final state to Solana and undelegate. Remaining accounts: every",
+        "PlayerState of this match (writable)."
+      ],
+      "discriminator": [
+        171,
+        61,
+        218,
+        56,
+        127,
+        115,
+        12,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "join_match",
+      "docs": [
+        "Sponsored join: the lobby authority pays rent; the guest needs no SOL."
+      ],
+      "discriminator": [
+        244,
+        8,
+        47,
+        130,
+        192,
+        59,
+        179,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "match_state"
+          ]
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "player_state",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        },
+        {
+          "name": "player",
+          "type": "pubkey"
+        },
+        {
+          "name": "session_key",
+          "type": "pubkey"
+        },
+        {
+          "name": "session_expiry",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record_result",
+      "docs": [
+        "Durable result on Solana after `finalize` committed and undelegated.",
+        "`init` makes this naturally idempotent: a second call fails, never overwrites."
+      ],
+      "discriminator": [
+        208,
+        243,
+        63,
+        218,
+        63,
+        116,
+        76,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state"
+        },
+        {
+          "name": "result",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "match_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "renew_session",
+      "docs": [
+        "Guest identity rotates/renews its own session key (no wallet involved)."
+      ],
+      "discriminator": [
+        247,
+        4,
+        156,
+        37,
+        60,
+        16,
+        86,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "player_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "session_key",
+          "type": "pubkey"
+        },
+        {
+          "name": "session_expiry",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "retry_randomness",
+      "docs": [
+        "Bounded pending state: re-request randomness that hasn't arrived.",
+        "The nonce changes, so a late callback for the old request is ignored."
+      ],
+      "discriminator": [
+        150,
+        38,
+        239,
+        219,
+        143,
+        192,
+        79,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "start_match",
+      "discriminator": [
+        100,
+        246,
+        223,
+        181,
+        176,
+        101,
+        255,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "submit_input",
+      "docs": [
+        "Gameplay input from a player's scoped session key."
+      ],
+      "discriminator": [
+        56,
+        184,
+        154,
+        91,
+        173,
+        63,
+        21,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "match_state"
+        },
+        {
+          "name": "player_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seq",
+          "type": "u32"
+        },
+        {
+          "name": "x",
+          "type": "i32"
+        },
+        {
+          "name": "z",
+          "type": "i32"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "docs": [
+        "Bomb transfer. method 0 = tag (1.5u), 1 = throw hit (10u).",
+        "Requests a fresh fuse from VRF; the fuse is \"arming\" until the callback."
+      ],
+      "discriminator": [
+        163,
+        52,
+        200,
+        231,
+        140,
+        3,
+        69,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "The holder's session key (also pays the fee-exempt ephemeral VRF request)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state",
+          "writable": true
+        },
+        {
+          "name": "holder_state"
+        },
+        {
+          "name": "target_state"
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "target_index",
+          "type": "u8"
+        },
+        {
+          "name": "method",
+          "type": "u8"
+        },
+        {
+          "name": "client_seed",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MatchResult",
+      "discriminator": [
+        234,
+        166,
+        33,
+        250,
+        153,
+        92,
+        223,
+        196
+      ]
+    },
+    {
+      "name": "MatchState",
+      "discriminator": [
+        250,
+        209,
+        137,
+        70,
+        235,
+        96,
+        121,
+        216
+      ]
+    },
+    {
+      "name": "PlayerState",
+      "discriminator": [
+        56,
+        3,
+        60,
+        86,
+        174,
+        16,
+        244,
+        195
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotAuthority",
+      "msg": "Only the match authority may do this"
+    },
+    {
+      "code": 6001,
+      "name": "WrongPhase",
+      "msg": "Instruction not allowed in the current match phase"
+    },
+    {
+      "code": 6002,
+      "name": "BadPlayerIndex",
+      "msg": "Invalid player index or slot already taken"
+    },
+    {
+      "code": 6003,
+      "name": "BadConfig",
+      "msg": "Invalid configuration value"
+    },
+    {
+      "code": 6004,
+      "name": "NotSessionKey",
+      "msg": "Signer is not this player's session key"
+    },
+    {
+      "code": 6005,
+      "name": "SessionExpired",
+      "msg": "Session key has expired"
+    },
+    {
+      "code": 6006,
+      "name": "BadSessionExpiry",
+      "msg": "Session expiry out of range"
+    },
+    {
+      "code": 6007,
+      "name": "StaleSequence",
+      "msg": "Input sequence number is stale or duplicated"
+    },
+    {
+      "code": 6008,
+      "name": "OutOfBounds",
+      "msg": "Position outside the arena"
+    },
+    {
+      "code": 6009,
+      "name": "ImpossibleMovement",
+      "msg": "Movement is not physically possible in the elapsed time"
+    },
+    {
+      "code": 6010,
+      "name": "PlayerEliminated",
+      "msg": "Player is eliminated"
+    },
+    {
+      "code": 6011,
+      "name": "WrongMatch",
+      "msg": "Player state does not belong to this match"
+    },
+    {
+      "code": 6012,
+      "name": "NotHolder",
+      "msg": "Signer does not hold the bomb"
+    },
+    {
+      "code": 6013,
+      "name": "FuseArming",
+      "msg": "Fuse is arming; awaiting randomness"
+    },
+    {
+      "code": 6014,
+      "name": "FuseExpired",
+      "msg": "Fuse has expired; expiration takes precedence"
+    },
+    {
+      "code": 6015,
+      "name": "FuseNotExpired",
+      "msg": "Fuse has not expired yet"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidTarget",
+      "msg": "Target cannot receive the bomb"
+    },
+    {
+      "code": 6017,
+      "name": "TargetProtected",
+      "msg": "Target is protected after a transfer"
+    },
+    {
+      "code": 6018,
+      "name": "OutOfRange",
+      "msg": "Target is out of range"
+    },
+    {
+      "code": 6019,
+      "name": "NothingPending",
+      "msg": "No randomness request is pending"
+    },
+    {
+      "code": 6020,
+      "name": "RetryTooEarly",
+      "msg": "Randomness request is not old enough to retry"
+    },
+    {
+      "code": 6021,
+      "name": "BadOracleQueue",
+      "msg": "Oracle queue is not a MagicBlock VRF queue"
+    }
+  ],
+  "types": [
+    {
+      "name": "MatchResult",
+      "docs": [
+        "Durable result on the Solana base layer, written after undelegation."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "match_id",
+            "type": "u64"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "players",
+            "type": {
+              "array": [
+                "pubkey",
+                6
+              ]
+            }
+          },
+          {
+            "name": "placements",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "rounds",
+            "type": "u8"
+          },
+          {
+            "name": "transfers",
+            "type": "u32"
+          },
+          {
+            "name": "vrf_fulfilled",
+            "type": "u32"
+          },
+          {
+            "name": "last_randomness",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "recorded_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MatchState",
+      "docs": [
+        "Authoritative match state. Delegated to the ER for the whole match."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Lobby service key: sponsors rent, starts and finalizes matches, cranks eliminations."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "match_id",
+            "type": "u64"
+          },
+          {
+            "name": "phase",
+            "type": "u8"
+          },
+          {
+            "name": "player_count",
+            "type": "u8"
+          },
+          {
+            "name": "alive_mask",
+            "type": "u8"
+          },
+          {
+            "name": "holder",
+            "type": "u8"
+          },
+          {
+            "name": "round",
+            "type": "u8"
+          },
+          {
+            "name": "slot_ms",
+            "docs": [
+              "Nominal ER slot duration used to convert ms ↔ slots."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "round_start_slot",
+            "type": "u64"
+          },
+          {
+            "name": "round_deadline_slot",
+            "type": "u64"
+          },
+          {
+            "name": "fuse_deadline_slot",
+            "docs": [
+              "0 while the fuse awaits randomness (\"arming\")."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fuse_ms",
+            "type": "u32"
+          },
+          {
+            "name": "protected_player",
+            "type": "u8"
+          },
+          {
+            "name": "protected_until_slot",
+            "type": "u64"
+          },
+          {
+            "name": "vrf_nonce",
+            "docs": [
+              "Incremented per randomness request; callbacks carrying an older nonce are ignored."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vrf_purpose",
+            "type": "u8"
+          },
+          {
+            "name": "vrf_requested_slot",
+            "type": "u64"
+          },
+          {
+            "name": "vrf_fulfilled",
+            "type": "u32"
+          },
+          {
+            "name": "last_randomness",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "transfers",
+            "type": "u32"
+          },
+          {
+            "name": "last_giver",
+            "type": "u8"
+          },
+          {
+            "name": "placements",
+            "docs": [
+              "Placement per player index (1 = winner, 0 = undecided)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "winner",
+            "type": "u8"
+          },
+          {
+            "name": "players",
+            "type": {
+              "array": [
+                "pubkey",
+                6
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerState",
+      "docs": [
+        "Per-player state. Inputs only write this account, so players don't contend",
+        "on MatchState for movement."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "match_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Guest identity (no wallet). Can renew its own session key."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "session_key",
+            "docs": [
+              "Scoped signer for gameplay inputs; valid until `session_expiry`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "session_expiry",
+            "type": "i64"
+          },
+          {
+            "name": "x",
+            "docs": [
+              "Position in millimetres."
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "z",
+            "type": "i32"
+          },
+          {
+            "name": "seq",
+            "type": "u32"
+          },
+          {
+            "name": "last_input_slot",
+            "type": "u64"
+          },
+          {
+            "name": "inputs_accepted",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
