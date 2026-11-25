@@ -7,7 +7,7 @@ import { ABILITY_DEFS, characterDef } from '../game/content';
 import { fuseRemaining, getPlayer, holderCanAct } from '../game/sim';
 import { getSettings, useSettings } from '../state/settings';
 import { Arena, lightNow } from './Arena';
-import { currentLayout, currentMood } from '../game/arena';
+import { currentLayout, currentMood, currentWeather } from '../game/arena';
 import { Creature } from './Creature';
 import { MODEL, Prop } from './models';
 import { overlay, useGame } from './context';
@@ -735,7 +735,7 @@ export function Scene() {
       <color attach="background" args={[L.sky]} />
       <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
       <CameraRig />
-      <Arena key={`${currentLayout().id}-${currentMood()}`} shadows={settings.shadows} />
+      <Arena key={`${currentLayout().id}-${currentMood()}-${currentWeather()}`} shadows={settings.shadows} />
       {session.state.players.map((p) => (
         <Creature key={p.id} id={p.id} />
       ))}

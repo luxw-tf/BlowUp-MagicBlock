@@ -84,6 +84,50 @@ export function selectMood(index: number): Mood {
   return MOODS[moodIndex];
 }
 
+/**
+ * Weather: sky, rain, snow, fog, wind in the trees, picked with the time of day from the same key so every client
+ * sees the same sky. Offline it also moves people and bombs (WEATHER_FX, CONFIG.weatherGameplay). Online it is looks
+ * only: the on-chain program knows nothing about weather, so it never touches the rules there.
+ */
+export const WEATHERS = ['clear', 'breezy', 'rain', 'fog', 'storm', 'snow'] as const;
+export type Weather = (typeof WEATHERS)[number];
+let weatherIndex = 0;
+export const currentWeather = (): Weather => WEATHERS[weatherIndex];
+export function selectWeather(w: Weather): Weather {
+  weatherIndex = Math.max(0, WEATHERS.indexOf(w));
+  return currentWeather();
+}
+/** What each time of day can bring (repeats are weights). Storms only come at night; fog likes mornings. */
+const WEATHER_TABLE: Record<Mood, Weather[]> = {
+  morning: ['clear', 'clear', 'breezy', 'fog', 'fog', 'rain', 'snow'],
+  noon: ['clear', 'clear', 'breezy', 'breezy', 'rain', 'snow'],
+  sunset: ['clear', 'breezy', 'breezy', 'rain', 'fog', 'snow'],
+  night: ['clear', 'breezy', 'rain', 'fog', 'storm', 'storm', 'snow'],
+};
+/** Pick the weather for a time of day from any non-negative integer (a hash or a random draw). */
+export const weatherFor = (mood: Mood, n: number): Weather => {
+  const t = WEATHER_TABLE[mood];
+  return t[Math.abs(Math.floor(n)) % t.length];
+};
+
+/**
+ * Gameplay weather, for offline matches only (online play is mirrored from a program that has no weather). The same
+ * for everyone, and steady (no random gusts), so it is fair and the simulation stays deterministic:
+ * - `wind`: sideways push on a thrown bomb (units/s²); the wind blows from the west, a little off the sea
+ * - `push`: how fast the wind drifts anyone on the deck downwind (units/s, added to their walking)
+ * - `grip`: how quickly anyone speeds up or stops (1 = dry deck; lower slides)
+ * - `speed`: top running speed (1 = normal; snow is heavy going)
+ */
+export interface WeatherFx { wind: Vec2; push: Vec2; grip: number; speed: number }
+export const WEATHER_FX: Record<Weather, WeatherFx | null> = {
+  clear: null,
+  breezy: { wind: { x: 2.6, z: 0.6 }, push: { x: 0.55, z: 0.13 }, grip: 1, speed: 1 },
+  rain: { wind: { x: 1, z: 0.25 }, push: { x: 0.2, z: 0.05 }, grip: 0.6, speed: 1 },
+  fog: null,
+  storm: { wind: { x: 4, z: 1 }, push: { x: 1, z: 0.25 }, grip: 0.5, speed: 1 },
+  snow: { wind: { x: 1.2, z: 0.3 }, push: { x: 0.3, z: 0.07 }, grip: 0.55, speed: 0.86 },
+};
+
 export function selectLayout(index: number): Layout {
   layoutIndex = ((index % LAYOUTS.length) + LAYOUTS.length) % LAYOUTS.length;
   const l = LAYOUTS[layoutIndex];
@@ -97,7 +141,8 @@ export const currentLayout = (): Layout => LAYOUTS[layoutIndex];
 export function selectLayoutFor(key: string): Layout {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
-  selectMood(Math.abs(h >> 8));
+  const mood = selectMood(Math.abs(h >> 8));
+  selectWeather(weatherFor(mood, Math.imul(h ^ 0x9e3779b9, 0x85ebca6b) >>> 7)); // its own mix of the hash
   return selectLayout(Math.abs(h));
 }
 

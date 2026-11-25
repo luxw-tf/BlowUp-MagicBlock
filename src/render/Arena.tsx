@@ -9,6 +9,9 @@ import { Suspense, useMemo, useRef, type ReactNode } from 'react';
 import { MODEL, Prop } from './models';
 import * as THREE from 'three';
 import { ARENA, OBSTACLES, currentMood, type Mood } from '../game/arena';
+import { AMBIENT, resolveWeather, type Light } from './weatherLook';
+import { AmbientClock, Motes, Smoke, Windy, groundMaterial } from './ambient';
+import { WeatherLayer } from './Weather';
 
 // ───────────────────────────── palette ─────────────────────────────
 
@@ -165,6 +168,9 @@ const WATER_FRAG = /* glsl */ `
   uniform float uFogNear;
   uniform float uFogFar;
   uniform vec3 uTint;
+  uniform float uRain;       // rings where the drops land
+  uniform float uWind;       // choppier foam in a wind
+  uniform float uFlash;      // lightning
   varying vec3 vWorld;
 
   vec2 hash2(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
@@ -200,7 +206,7 @@ const WATER_FRAG = /* glsl */ `
     vec2 c = cells(p * scale + vec2(uTime * 0.05, uTime * 0.03), uTime * 0.6);
     float web = smoothstep(0.05, 0.012, c.y - c.x);
     float patchy = smoothstep(0.5, 0.78, noise(p * 0.09 + vec2(uTime * 0.025, -uTime * 0.018)));
-    float foamAmt = basin > 0.5 ? 0.0 : web * patchy * mix(0.95, 0.35, depth);   // the basin is too small for foam patches
+    float foamAmt = basin > 0.5 ? 0.0 : web * patchy * mix(0.95, 0.35, depth) * (0.8 + 0.35 * uWind);   // the basin is too small for foam patches
     // in the basin: soft bands of light rippling out from the fountain instead
     if (basin > 0.5) col += smoothstep(0.55, 1.0, sin(length(p - uCentre) * 5.5 - uTime * 2.2)) * 0.05;
     // subtle darker cell centres give the surface a hammered, moving feel
@@ -208,8 +214,18 @@ const WATER_FRAG = /* glsl */ `
 
     // foam hugging the wall, with a second line that swells in and out
     float lap = sin(uTime * 1.4 + (basin > 0.5 ? atan(p.y - uCentre.y, p.x - uCentre.x) * 6.0 : p.x * 0.45)) * 0.22;
-    foamAmt += smoothstep(0.55, 0.05, edge);
-    foamAmt += basin > 0.5 ? 0.0 : smoothstep(0.07, 0.0, abs(edge - 0.95 - lap)) * 0.7;
+    if (basin > 0.5) foamAmt += smoothstep(0.55, 0.05, edge);
+    else {
+      // at the quay: waves roll along the wall and slap against it, the foam surging out and draining back in
+      float surge = max(0.0, sin(uTime * 0.85 - p.x * 0.22)) ;
+      float broken = noise(p * vec2(1.6, 2.4) + vec2(uTime * 0.4, 0.0));
+      float band = 0.45 + surge * (0.55 + 0.25 * uWind) + (broken - 0.5) * 0.3;
+      foamAmt += smoothstep(band, band - 0.35, edge);
+      // the wash running back out: a broken line that leaves the wall and fades
+      float wash = fract(uTime * 0.17 - p.x * 0.015);
+      foamAmt += smoothstep(0.08, 0.0, abs(edge - 0.6 - wash * 2.2 - lap * 0.5)) * (1.0 - wash) * smoothstep(0.35, 0.6, broken) * 0.9;
+      foamAmt += smoothstep(0.07, 0.0, abs(edge - 0.95 - lap)) * 0.45;
+    }
 
     // foam rings round everything floating: a hugging ring plus slow ripples spreading out
     if (basin < 0.5) {
@@ -223,14 +239,25 @@ const WATER_FRAG = /* glsl */ `
       }
     }
 
+    // rain: a ring where each drop lands, spreading and fading (one per cell, each at its own moment)
+    if (uRain > 0.0) {
+      vec2 rp = p * (basin > 0.5 ? 3.2 : 1.9);
+      vec2 ci = floor(rp);
+      vec2 off = hash2(ci + 5.0) - 0.5;
+      float ph = fract(uTime * (0.9 + 0.4 * uRain) + hash(ci + 9.1));
+      float rr = length(fract(rp) - 0.5 - off * 0.45);
+      foamAmt += smoothstep(0.035, 0.0, abs(rr - ph * 0.32)) * (1.0 - ph) * (1.0 - ph) * 0.5 * min(uRain, 1.0);
+    }
+
     col = mix(col, uFoam, clamp(foamAmt, 0.0, 1.0));
 
-    // sun glints: tiny diamonds that wink on and off
+    // sun glints: tiny diamonds that wink on and off (fewer under cloud)
     vec2 cell = floor(p * 2.4 + vec2(uTime * 0.25, 0.0));
     float sp = step(0.988, hash(cell)) * smoothstep(0.5, 1.0, sin(uTime * 3.2 + hash(cell + 3.1) * 6.28));
-    col += sp * 0.6 * (1.0 - depth * 0.4);
+    col += sp * 0.6 * (1.0 - depth * 0.4) * (1.0 - min(uRain, 1.0) * 0.8);
 
     col *= uTint;   // the time of day
+    col += vec3(0.55, 0.62, 0.8) * uFlash * 0.45;   // lightning lights up the sea
     // match the scene fog so the far water melts into the sky
     float d = length(cameraPosition - vWorld);
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
@@ -247,20 +274,18 @@ export const SEA_RINGS: [number, number, number][] = [
 
 export const FOG = { color: '#bfe6f5', near: 70, far: 170 };
 
-/** Light for each time of day. Sun position is where the light comes from; water tint multiplies the sea. */
-export interface Light {
-  sky: string; fogNear: number; fogFar: number;
-  sun: string; sunI: number; sunPos: [number, number, number];
-  hemiSky: string; hemiGround: string; hemiI: number;
-  water: [number, number, number]; lamps: boolean; exposure: number;
-}
+export type { Light };
+/** Light for each time of day in clear weather (weatherLook.ts darkens, fogs or cools it for the match's weather). */
 export const LIGHT: Record<Mood, Light> = {
   morning: { sky: '#cfe8f4', fogNear: 60, fogFar: 160, sun: '#ffe1b5', sunI: 2.0, sunPos: [30, 20, 14], hemiSky: '#dcefff', hemiGround: '#74706a', hemiI: 0.85, water: [1, 1, 1], lamps: false, exposure: 1.05 },
   noon: { sky: '#bfe6f5', fogNear: 70, fogFar: 170, sun: '#fff0d2', sunI: 2.3, sunPos: [-20, 30, 6], hemiSky: '#cfeaff', hemiGround: '#6a7684', hemiI: 0.8, water: [1, 1, 1], lamps: false, exposure: 1.08 },
   sunset: { sky: '#f4c09a', fogNear: 55, fogFar: 150, sun: '#ffa463', sunI: 2.4, sunPos: [-36, 11, -12], hemiSky: '#ffd0ad', hemiGround: '#574657', hemiI: 0.7, water: [1.05, 0.82, 0.78], lamps: true, exposure: 1.02 },
   night: { sky: '#0e1a33', fogNear: 40, fogFar: 120, sun: '#9db8ff', sunI: 0.45, sunPos: [14, 30, 10], hemiSky: '#2c4170', hemiGround: '#0e0e16', hemiI: 0.38, water: [0.24, 0.33, 0.52], lamps: true, exposure: 1.0 },
 };
-export const lightNow = () => LIGHT[currentMood()];
+/** The light of this match: its time of day under its weather. */
+export const lightNow = (): Light => resolveWeather(LIGHT).light;
+/** What moves in this match's weather (wind, rain, clouds, motes). */
+export const lookNow = () => resolveWeather(LIGHT).look;
 
 function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
   return useMemo(() => {
@@ -286,6 +311,9 @@ function useWaterMaterial(basin: { x: number; z: number; r: number } | null) {
         uFogNear: { value: lightNow().fogNear },
         uFogFar: { value: lightNow().fogFar },
         uTint: { value: new THREE.Vector3(...lightNow().water) },
+        uRain: AMBIENT.uRain,
+        uWind: AMBIENT.uWind,
+        uFlash: AMBIENT.uFlash,
       },
     });
   }, [basin]);
@@ -386,7 +414,8 @@ function Plant({ position, s = 1, seed = 0 }: { position: [number, number, numbe
   );
 }
 
-function Lamp({ position }: { position: [number, number, number] }) {
+function Lamp({ position, head }: { position: [number, number, number]; head: (m: THREE.MeshStandardMaterial | null) => void }) {
+  const on = lightNow().lamps || lookNow().glow;
   return (
     <group position={position}>
       <mesh castShadow position={[0, 2.2, 0]}>
@@ -399,9 +428,49 @@ function Lamp({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0.7, 4.2, 0]}>
         <coneGeometry args={[0.28, 0.32, 12]} />
-        <meshStandardMaterial color={P.yellow} emissive="#ffd27a" emissiveIntensity={lightNow().lamps ? 3 : 0.35} toneMapped={!lightNow().lamps} />
+        <meshStandardMaterial ref={head} color={P.yellow} emissive="#ffd27a" emissiveIntensity={on ? 3 : 0.35} toneMapped={!on} />
       </mesh>
     </group>
+  );
+}
+
+const LAMPS: [number, number][] = [[-19.6, -9], [19.6, 8], [-6.6, -12.6], [7.4, 11.8]];
+
+/**
+ * The quay lamps and, after dark, their light. Old harbour lamps: each one breathes a little and now and then one
+ * stutters (a single useFrame for all four, heads and lights together).
+ */
+function Lamps() {
+  const L = lightNow();
+  const on = L.lamps || lookNow().glow;
+  const heads = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
+  const lights = useRef<(THREE.PointLight | null)[]>([]);
+  const base = L.sunI < 1 ? 110 : 25;
+  useFrame(({ clock }) => {
+    if (!on) return;
+    const t = clock.elapsedTime;
+    for (let i = 0; i < LAMPS.length; i++) {
+      // a slow breath, and a stutter: a few quick dips every so often, at a different moment for each lamp
+      const breath = 0.94 + 0.06 * Math.sin(t * 2.3 + i * 1.9) * Math.sin(t * 0.7 + i);
+      const cyc = (t * 0.13 + i * 0.29) % 1;
+      const stutter = cyc > 0.93 ? (Math.sin(t * 47 + i) > 0.1 ? 0.35 : 1) : 1;
+      const k = breath * stutter;
+      const h = heads.current[i];
+      if (h) h.emissiveIntensity = 3 * k;
+      const l = lights.current[i];
+      if (l) l.intensity = base * k;
+    }
+  });
+  return (
+    <>
+      {LAMPS.map(([x, z], i) => (
+        <Lamp key={`${x}${z}`} position={[x, 0, z]} head={(m) => (heads.current[i] = m)} />
+      ))}
+      {L.lamps &&
+        LAMPS.map(([x, z], i) => (
+          <pointLight key={`l${x}${z}`} ref={(l) => (lights.current[i] = l)} position={[x + 0.6, 4.2, z]} color="#ffc777" intensity={base} distance={18} decay={2} />
+        ))}
+    </>
   );
 }
 
@@ -783,13 +852,20 @@ function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number
 
 // ───────────────────────────── the map ─────────────────────────────
 
+/** The funnel tops of the tug and the cargo ship, in world space (from their models' placement below). */
+const SMOKE_FROM: [number, number, number][] = [[17, 4.3, -20.7], [31, 7.5, -33.3]];
+
 /** `town`: the houses behind the near quay, which only the menu's camera ever turns round to see. */
 export function Arena({ shadows, town = false }: { shadows: boolean; town?: boolean }) {
   const L = lightNow();
+  const look = lookNow();
   const deckTex = useMemo(makeDeckTexture, []);
   const quayTex = useMemo(makeQuayTexture, []);
   const hazardTex = useMemo(makeHazardTexture, []);
   const crateTex = useMemo(makeCrateTexture, []);
+  // the deck and quay drift with cloud shadows by day and shine wet in the rain
+  const deckMat = useMemo(() => groundMaterial(deckTex, L.sky), [deckTex, L.sky]);
+  const quayMat = useMemo(() => groundMaterial(quayTex, L.sky), [quayTex, L.sky]);
   const W = ARENA.halfWidth * 2;
   const D = ARENA.halfDepth * 2;
   const QUAY_Z = -13.3; // the quay lip: the sea starts beyond it
@@ -814,25 +890,18 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
         shadow-bias={-0.0005}
         shadow-normalBias={0.02}
       />
-      {L.lamps && (
-        <>
-          {[[-19, -9], [19, 8], [-6, -12.4], [8, 11.6]].map(([x, z]) => (
-            <pointLight key={`${x}${z}`} position={[x, 4.2, z]} color="#ffc777" intensity={L.sunI < 1 ? 110 : 25} distance={18} decay={2} />
-          ))}
-        </>
-      )}
+      <AmbientClock look={look} />
+      <WeatherLayer look={look} night={currentMood() === 'night'} quiet={town} />
 
       <Sea />
 
       {/* the quay around the bay */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 3]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 3]} receiveShadow material={quayMat}>
         <planeGeometry args={[90, 32.6]} />
-        <meshStandardMaterial map={quayTex} roughness={0.95} />
       </mesh>
       {/* the ground the town stands on, behind the near quay */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 32]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 32]} receiveShadow material={quayMat}>
         <planeGeometry args={[90, 26]} />
-        <meshStandardMaterial map={quayTex} roughness={0.95} />
       </mesh>
       {/* quay wall face down to the water, its lip painted in hazard stripes */}
       <mesh position={[0, -0.5, QUAY_Z - 0.05]} receiveShadow>
@@ -852,9 +921,8 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
       ))}
 
       {/* the playable bay */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow material={deckMat}>
         <planeGeometry args={[W, D]} />
-        <meshStandardMaterial map={deckTex} roughness={0.9} />
       </mesh>
       {/* a low painted kerb around the bay (never tall enough to hide anyone) */}
       {[
@@ -913,9 +981,9 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
         <Bob phase={4.2} amp={0.09} position={[-34, -0.9, -31]}><Prop src={MODEL.pirateShip} size={14} rotation={0.5} /></Bob>
 
         {/* flags along the quay, cannons pointing out to sea */}
-        <Prop src={MODEL.flagPirate} position={[-23.2, 0, -12.4]} size={2.2} rotation={-0.3} />
-        <Prop src={MODEL.flagPennant} position={[23.4, 0, -12.2]} size={2.2} rotation={0.4} />
-        <Prop src={MODEL.flagPennant} position={[-23.4, 0, 10.8]} size={2} rotation={2.6} />
+        <Windy amp={0.12} flutter={0.09} phase={0.3}><Prop src={MODEL.flagPirate} position={[-23.2, 0, -12.4]} size={2.2} rotation={-0.3} /></Windy>
+        <Windy amp={0.12} flutter={0.09} phase={1.6}><Prop src={MODEL.flagPennant} position={[23.4, 0, -12.2]} size={2.2} rotation={0.4} /></Windy>
+        <Windy amp={0.12} flutter={0.09} phase={2.9}><Prop src={MODEL.flagPennant} position={[-23.4, 0, 10.8]} size={2} rotation={2.6} /></Windy>
         <Prop src={MODEL.cannon} position={[1.2, 0, -12.1]} size={1.5} rotation={Math.PI / 2} />
         <Prop src={MODEL.cannon} position={[13.2, 0, -12.1]} size={1.5} rotation={Math.PI / 2 - 0.15} />
         <Bob phase={0.6} amp={0.15} position={[3, -0.9, -17.5]}><Prop src={MODEL.buoyFlag} size={1.1} /></Bob>
@@ -934,17 +1002,17 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
         <Prop src={MODEL.sack} position={[20.6, 0, 2.6]} size={0.7} rotation={1} shadow={false} />
         <Prop src={MODEL.fishBones} position={[-9.4, 0, 11.2]} size={0.6} rotation={0.8} shadow={false} />
         <Prop src={MODEL.anchor} position={[-11.2, 0, -12.3]} size={1.6} rotation={0.2} />
-        <Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} />
-        <Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} />
+        <Windy amp={0.45} flutter={0.025} phase={0}><Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} /></Windy>
+        <Windy amp={0.45} flutter={0.025} phase={2.2}><Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} /></Windy>
         {town && (
           <>
           {/* the harbour town behind the near quay: only the menu's camera ever turns round to see it */}
           {([[-27, 2, 0.1], [-14.5, 0, -0.05], [-4, 1, 0], [3.5, 2, 0.06], [16, 0, 0.04], [27.5, 1, -0.1]] as const).map(([x, k, r], i) => (
             <Prop key={`h${i}`} src={MODEL.house[k]} position={[x, 0, 25.5 + (i % 2) * 1.2]} rotation={Math.PI + r} />
           ))}
-          <Prop src={MODEL.palm3} position={[-8.6, 0, 22.4]} size={4} rotation={0.5} />
-          <Prop src={MODEL.palm1} position={[10.2, 0, 22.8]} size={4.4} rotation={2.1} />
-          <Prop src={MODEL.palm2} position={[22, 0, 22]} size={4} rotation={1.2} />
+          <Windy amp={0.4} flutter={0.025} phase={0.9}><Prop src={MODEL.palm3} position={[-8.6, 0, 22.4]} size={4} rotation={0.5} /></Windy>
+          <Windy amp={0.4} flutter={0.025} phase={3.1}><Prop src={MODEL.palm1} position={[10.2, 0, 22.8]} size={4.4} rotation={2.1} /></Windy>
+          <Windy amp={0.4} flutter={0.025} phase={4.4}><Prop src={MODEL.palm2} position={[22, 0, 22]} size={4} rotation={1.2} /></Windy>
           </>
         )}
         <Prop src={MODEL.rock} position={[-29, -0.5, -13.4]} size={3} />
@@ -952,6 +1020,9 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
       </Suspense>
       <Crane position={[-6, 0, -16.5]} />
       <Gulls />
+      {/* smoke from the tug's and the cargo ship's funnels; dust and leaves by day, fireflies at night */}
+      <Smoke emitters={SMOKE_FROM} color={currentMood() === 'night' ? '#5b6170' : '#e9ecef'} opacity={currentMood() === 'night' ? 0.45 : 0.6} />
+      {look.motes !== 'none' && <Motes night={look.motes === 'night'} amount={look.moteAmt} />}
 
       {/* edge clutter: tyres, rope, weeds in the cracks and at the feet of the containers */}
       <Tyres position={[-21.4, 0, -6.6]} n={3} />
@@ -973,10 +1044,7 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
       {[-12, 0, 12].map((x) => (
         <Bollard key={`q${x}`} position={[x + 4.5, 0, QUAY_Z + 0.4]} />
       ))}
-      <Lamp position={[-19.6, 0, -9]} />
-      <Lamp position={[19.6, 0, 8]} />
-      <Lamp position={[-6.6, 0, -12.6]} />
-      <Lamp position={[7.4, 0, 11.8]} />
+      <Lamps />
       <LifeRing position={[-8.5, 0.62, QUAY_Z + 0.76]} />
       <LifeRing position={[9.5, 0.62, QUAY_Z + 0.76]} />
       <Plant position={[-20.6, 0, 6.6]} s={1.2} seed={0} />
