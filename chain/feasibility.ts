@@ -15,6 +15,7 @@
 import * as anchor from '@coral-xyz/anchor';
 import { ConnectionMagicRouter, GetCommitmentSignature } from '@magicblock-labs/ephemeral-rollups-sdk';
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
@@ -566,7 +567,9 @@ async function main() {
       const out = m.holder;
       m = await getMatch();
       log(`eliminated ${out}; survivors ${m.aliveMask.toString(2)}`);
-      if (m.phase === 1) {
+      // Measure every holder draw from the eliminate request, even if the
+      // callback already landed before we read the state back.
+      if (m.phase !== 3) {
         m = await awaitVrf((s) => s.phase !== 1, tReq, holderVrfMs);
         log(`round ${m.round}: holder ${m.holder}, fuse ${m.fuseMs}ms`);
       }
@@ -619,9 +622,14 @@ async function main() {
   if (!resultInfo) throw new Error('MatchResult account not readable after recording');
   const res = decode<{ winner: PublicKey; placements: number[] }>('matchResult', resultInfo.data);
   check('on-chain winner matches ER state', res.winner.equals(guests[m.winner].identity.publicKey), res.winner.toBase58());
+  // A distinct compute-price ix makes this a new transaction; an identical one
+  // would just resolve to the first transaction's signature.
   r = await send(
     base,
-    [await program.methods.recordResult().accountsPartial({ payer: authority.publicKey, matchState: match, result: resultPda(match) }).instruction()],
+    [
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_234 }),
+      await program.methods.recordResult().accountsPartial({ payer: authority.publicKey, matchState: match, result: resultPda(match) }).instruction(),
+    ],
     [],
     authority,
     60_000,
