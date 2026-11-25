@@ -62,15 +62,17 @@ type V3 = [number, number, number];
  * - otherwise `scale` is used as given.
  * - `tilt`: roll the model over first (radians about x), e.g. to lay a fish flat.
  */
-export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale = 1, stretch = false, tilt = 0 }: {
+export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale = 1, stretch = false, tilt = 0, shadow = true }: {
   src: string; position?: V3; rotation?: number; fit?: V3; size?: number; scale?: number; stretch?: boolean; tilt?: number;
+  /** cast a shadow (small clutter doesn't need to: it saves a lot in the shadow pass) */
+  shadow?: boolean;
 }) {
   const gltf = useLoader(GLTFLoader, modelUrl(src));
   const { object, s, offset } = useMemo(() => {
     const object = gltf.scene.clone(true);
     object.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; }
+      if (m.isMesh) { m.castShadow = shadow; m.receiveShadow = true; }
     });
     object.rotation.order = 'YXZ'; // tilt first, then any quarter turn
     object.rotation.x = tilt;
@@ -95,7 +97,7 @@ export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale
     const c = box.getCenter(new THREE.Vector3());
     const offset = new THREE.Vector3(-c.x * s.x, -box.min.y * s.y, -c.z * s.z);
     return { object, s, offset };
-  }, [gltf, fit?.[0], fit?.[1], fit?.[2], size, scale, stretch, tilt]);
+  }, [gltf, fit?.[0], fit?.[1], fit?.[2], size, scale, stretch, tilt, shadow]);
 
   return (
     <group position={position} rotation={[0, rotation, 0]}>

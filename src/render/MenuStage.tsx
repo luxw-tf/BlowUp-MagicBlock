@@ -127,7 +127,7 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
     <div className="menu-stage" aria-hidden>
       <Canvas
         shadows="soft"
-        dpr={[1, 1.5]}
+        dpr={[1, 1.25]}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
         camera={{ fov: 40, near: 0.3, far: 400, position: camFor(hero).toArray() }}
       >
@@ -136,7 +136,7 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
         <Exposure />
         <Orbit hero={hero} />
         <Suspense fallback={null}>
-          <Arena key={mood} shadows />
+          <Arena key={mood} shadows town />
           {IDS.map((id) => (
             <Pirate key={id} id={id} active={id === hero} />
           ))}

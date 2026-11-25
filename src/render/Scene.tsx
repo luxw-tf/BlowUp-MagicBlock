@@ -306,7 +306,7 @@ function PickupBox({ index }: { index: number }) {
       </mesh>
       <group ref={g}>
         <Suspense fallback={null}>
-          <Prop src={MODEL.chestGold} size={1.15} rotation={0.4} />
+          <Prop src={MODEL.chestGold} size={1.15} rotation={0.4} shadow={false} />
         </Suspense>
         <mesh ref={glint} position={[0.18, 0.85, 0.2]}>
           <planeGeometry args={[1, 1]} />
@@ -712,6 +712,11 @@ export function Scene() {
   const L = lightNow();
   const { gl } = useThree();
   useEffect(() => { gl.toneMappingExposure = L.exposure; }, [gl, L.exposure]);
+  // ?perf: expose the renderer and scene for frame-time checks in the console
+  const { scene } = useThree();
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('perf')) Object.assign(window, { __gl: gl, __scene: scene });
+  }, [gl, scene]);
 
   // Drive the simulation from the render loop (fixed-step inside).
   useFrame((_, dt) => session.update(dt), -2);

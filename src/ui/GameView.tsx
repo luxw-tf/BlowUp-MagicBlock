@@ -261,7 +261,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
       <div ref={wrap} className="game-wrap" onPointerDown={() => audio.unlock()}>
         <Canvas
           shadows={settings.shadows ? 'soft' : false}
-          dpr={[1, 2]}
+          dpr={[1, 1.25]}
           gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
           camera={{ position: [0, 30, 25], near: 0.5, far: 400, fov: 30 }}
         >

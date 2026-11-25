@@ -380,7 +380,7 @@ function Plant({ position, s = 1, seed = 0 }: { position: [number, number, numbe
       <Suspense fallback={null}>
         <Prop src={MODEL.pot} size={1.3} rotation={seed} />
         <Prop src={MODEL.bush[seed % 2]} position={[0, 0.38, 0]} size={1.25} rotation={seed * 2.1} />
-        {seed % 3 === 0 && <Prop src={MODEL.flower[seed % 3]} position={[0.22, 0.3, 0.12]} size={0.3} />}
+        {seed % 3 === 0 && <Prop src={MODEL.flower[seed % 3]} position={[0.22, 0.3, 0.12]} size={0.3} shadow={false} />}
       </Suspense>
     </group>
   );
@@ -409,7 +409,7 @@ function Lamp({ position }: { position: [number, number, number] }) {
 function LifeRing({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
   return (
     <group position={position} rotation={[0, rotation, 0]}>
-      <mesh castShadow>
+      <mesh>
         <torusGeometry args={[0.42, 0.13, 10, 24]} />
         <meshStandardMaterial color={P.red} roughness={0.6} />
       </mesh>
@@ -545,7 +545,7 @@ function RopeCoil({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
       {[0.42, 0.32, 0.22].map((r, i) => (
-        <mesh key={r} castShadow position={[0, 0.07 + i * 0.07, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh key={r} position={[0, 0.07 + i * 0.07, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[r, 0.07, 8, 22]} />
           <meshStandardMaterial color="#d8b77e" roughness={0.95} />
         </mesh>
@@ -567,7 +567,7 @@ function Weeds({ position, s = 1, seed = 1 }: { position: [number, number, numbe
   return (
     <group position={position} scale={s}>
       <Suspense fallback={null}>
-        {tufts.map((t, i) => <Prop key={i} src={t.src} position={[t.x, 0, t.z]} size={t.k} rotation={t.rot} />)}
+        {tufts.map((t, i) => <Prop key={i} src={t.src} position={[t.x, 0, t.z]} size={t.k} rotation={t.rot} shadow={false} />)}
       </Suspense>
     </group>
   );
@@ -622,17 +622,17 @@ function Crates({ hw, hd, seed, top = 'crate' }: { hw: number; hd: number; seed:
       {top === 'crate' && (
         <>
           <Prop src={r() < 0.5 ? MODEL.crateBottles : MODEL.crate} position={[hw * 0.12, H, -hd * 0.1]} rotation={(r() - 0.5) * 0.5} fit={[Math.min(w, d) * 0.62, 0, Math.min(w, d) * 0.62]} />
-          {r() < 0.5 && <Prop src={MODEL.sack} position={[-hw * 0.45, H, hd * 0.4]} size={Math.min(w, d) * 0.32} rotation={r() * 6} />}
+          {r() < 0.5 && <Prop src={MODEL.sack} position={[-hw * 0.45, H, hd * 0.4]} size={Math.min(w, d) * 0.32} rotation={r() * 6} shadow={false} />}
         </>
       )}
       {top === 'catch' && (
         <>
           {/* fish laid in rows on the ice, a few mussels between them */}
           {Array.from({ length: 6 }, (_, k) => (
-            <Prop key={k} src={MODEL.mackerel} tilt={Math.PI / 2} position={[((k % 3) - 1) * (w / 3.4) - w * 0.04, H * 0.78, (Math.floor(k / 3) - 0.5) * d * 0.36]} size={0.62} rotation={(r() - 0.5) * 0.5} />
+            <Prop key={k} src={MODEL.mackerel} tilt={Math.PI / 2} position={[((k % 3) - 1) * (w / 3.4) - w * 0.04, H * 0.78, (Math.floor(k / 3) - 0.5) * d * 0.36]} size={0.62} rotation={(r() - 0.5) * 0.5} shadow={false} />
           ))}
           {Array.from({ length: 4 }, (_, k) => (
-            <Prop key={`m${k}`} src={MODEL.mussel} position={[(r() - 0.5) * w * 0.7, H * 0.8, (r() - 0.5) * d * 0.6]} size={0.2} rotation={r() * 6} />
+            <Prop key={`m${k}`} src={MODEL.mussel} position={[(r() - 0.5) * w * 0.7, H * 0.8, (r() - 0.5) * d * 0.6]} size={0.2} rotation={r() * 6} shadow={false} />
           ))}
           <Prop src={MODEL.fishBucket} position={[alongX ? w * 0.42 : 0, H, alongX ? 0 : d * 0.42]} size={0.55} rotation={seed} />
         </>
@@ -783,7 +783,8 @@ function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number
 
 // ───────────────────────────── the map ─────────────────────────────
 
-export function Arena({ shadows }: { shadows: boolean }) {
+/** `town`: the houses behind the near quay, which only the menu's camera ever turns round to see. */
+export function Arena({ shadows, town = false }: { shadows: boolean; town?: boolean }) {
   const L = lightNow();
   const deckTex = useMemo(makeDeckTexture, []);
   const quayTex = useMemo(makeQuayTexture, []);
@@ -844,7 +845,7 @@ export function Arena({ shadows }: { shadows: boolean }) {
       </mesh>
       {/* tyre fenders hanging over the edge */}
       {[-30, -21, -12, -3, 6, 15, 24, 33].map((x) => (
-        <mesh key={x} position={[x, -0.45, QUAY_Z - 0.32]} rotation={[0, 0, 0]} castShadow>
+        <mesh key={x} position={[x, -0.45, QUAY_Z - 0.32]} rotation={[0, 0, 0]}>
           <torusGeometry args={[0.42, 0.18, 10, 18]} />
           <meshStandardMaterial color="#25252b" roughness={0.9} />
         </mesh>
@@ -873,7 +874,7 @@ export function Arena({ shadows }: { shadows: boolean }) {
       ))}
       {/* back railing along the quay */}
       {Array.from({ length: 23 }, (_, i) => -22 + i * 2).map((x) => (
-        <mesh key={`rail${x}`} position={[x, 0.5, QUAY_Z + 0.7]} castShadow>
+        <mesh key={`rail${x}`} position={[x, 0.5, QUAY_Z + 0.7]}>
           <cylinderGeometry args={[0.05, 0.05, 1, 6]} />
           <meshStandardMaterial color={P.blue} roughness={0.5} />
         </mesh>
@@ -930,18 +931,22 @@ export function Arena({ shadows }: { shadows: boolean }) {
         <Prop src={MODEL.chest} position={[21.2, 0, -2.4]} size={1.3} rotation={-Math.PI / 2 + 0.2} />
         <Prop src={MODEL.crateBottles} position={[-21.3, 0, 1.4]} size={1.2} rotation={0.3} />
         <Prop src={MODEL.crate} position={[21.4, 0, 1.2]} size={1.2} rotation={-0.2} />
-        <Prop src={MODEL.sack} position={[20.6, 0, 2.6]} size={0.7} rotation={1} />
-        <Prop src={MODEL.fishBones} position={[-9.4, 0, 11.2]} size={0.6} rotation={0.8} />
+        <Prop src={MODEL.sack} position={[20.6, 0, 2.6]} size={0.7} rotation={1} shadow={false} />
+        <Prop src={MODEL.fishBones} position={[-9.4, 0, 11.2]} size={0.6} rotation={0.8} shadow={false} />
         <Prop src={MODEL.anchor} position={[-11.2, 0, -12.3]} size={1.6} rotation={0.2} />
         <Prop src={MODEL.palm1} position={[-21.6, 0, 4.8]} size={4.5} />
         <Prop src={MODEL.palm2} position={[21.8, 0, 4.2]} size={4.5} rotation={1} />
-        {/* the harbour town behind the near quay: only the menu's camera ever turns round to see it */}
-        {([[-27, 2, 0.1], [-14.5, 0, -0.05], [-4, 1, 0], [3.5, 2, 0.06], [16, 0, 0.04], [27.5, 1, -0.1]] as const).map(([x, k, r], i) => (
-          <Prop key={`h${i}`} src={MODEL.house[k]} position={[x, 0, 25.5 + (i % 2) * 1.2]} rotation={Math.PI + r} />
-        ))}
-        <Prop src={MODEL.palm3} position={[-8.6, 0, 22.4]} size={4} rotation={0.5} />
-        <Prop src={MODEL.palm1} position={[10.2, 0, 22.8]} size={4.4} rotation={2.1} />
-        <Prop src={MODEL.palm2} position={[22, 0, 22]} size={4} rotation={1.2} />
+        {town && (
+          <>
+          {/* the harbour town behind the near quay: only the menu's camera ever turns round to see it */}
+          {([[-27, 2, 0.1], [-14.5, 0, -0.05], [-4, 1, 0], [3.5, 2, 0.06], [16, 0, 0.04], [27.5, 1, -0.1]] as const).map(([x, k, r], i) => (
+            <Prop key={`h${i}`} src={MODEL.house[k]} position={[x, 0, 25.5 + (i % 2) * 1.2]} rotation={Math.PI + r} />
+          ))}
+          <Prop src={MODEL.palm3} position={[-8.6, 0, 22.4]} size={4} rotation={0.5} />
+          <Prop src={MODEL.palm1} position={[10.2, 0, 22.8]} size={4.4} rotation={2.1} />
+          <Prop src={MODEL.palm2} position={[22, 0, 22]} size={4} rotation={1.2} />
+          </>
+        )}
         <Prop src={MODEL.rock} position={[-29, -0.5, -13.4]} size={3} />
         <Prop src={MODEL.rock} position={[30, -0.5, -13.6]} size={3.4} rotation={2} />
       </Suspense>
