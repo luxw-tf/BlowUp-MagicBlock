@@ -62,6 +62,12 @@ function Pirate({ id, active }: { id: CharacterId; active: boolean }) {
 }
 
 /**
+ * While the title card is up the camera flies a slow, wide circle round the whole harbour instead (the title screen
+ * sets this); when it goes, the camera glides down to the picked hero.
+ */
+export const titleView = { on: false };
+
+/**
  * The camera lives in polar coordinates round the middle of the bay and eases its angle and distance towards the
  * picked pirate, so moving between them sweeps round the dock (always the short way) instead of cutting across it.
  */
@@ -69,6 +75,10 @@ function Orbit({ hero }: { hero: CharacterId }) {
   const { camera } = useThree();
   const cur = useRef(polar(hero));
   const look = useMemo(() => new THREE.Vector3(), []);
+  // title fly-around: how much of it is in the shot (0..1), and where it has got to
+  const fly = useRef({ w: titleView.on ? 1 : 0, a: 0.5 });
+  const flyPos = useMemo(() => new THREE.Vector3(), []);
+  const flyLook = useMemo(() => new THREE.Vector3(), []);
   const key = useRef<THREE.SpotLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   // a key light that travels with the camera, so the picked pirate's face always reads (stronger after dark)
@@ -87,6 +97,18 @@ function Orbit({ hero }: { hero: CharacterId }) {
     const right = new THREE.Vector3(-f.z, 0, f.x);
     camera.position.copy(f).multiplyScalar(cur.current.r - DIST).setY(EYE + Math.sin(t * 0.2) * 0.05);
     look.copy(f).multiplyScalar(cur.current.r).addScaledVector(right, -SIDE).setY(1.45);
+    // the title's fly-around: a slow, high circle round the harbour, looking in over the bay and out to sea
+    const fl = fly.current;
+    fl.w += ((titleView.on ? 1 : 0) - fl.w) * (1 - Math.exp(-Math.min(dt, 0.05) * (titleView.on ? 6 : 1.4)));
+    if (fl.w > 0.001) {
+      fl.a += Math.min(dt, 0.05) * 0.045;
+      const fa = fl.a;
+      flyPos.set(Math.sin(fa) * 30, 9.5 + Math.sin(t * 0.13) * 1.2, -6 + Math.cos(fa) * 26);
+      flyLook.set(Math.sin(fa + 2.2) * 6, 1.5, -9 + Math.cos(fa + 2.2) * 5);
+      const w = fl.w * fl.w * (3 - 2 * fl.w); // smoothstep, so the glide down to the hero eases in and out
+      camera.position.lerp(flyPos, w);
+      look.lerp(flyLook, w);
+    }
     camera.lookAt(look);
     if (key.current) {
       key.current.position.copy(camera.position).addScaledVector(right, 1.6).setY(EYE + 2.2);

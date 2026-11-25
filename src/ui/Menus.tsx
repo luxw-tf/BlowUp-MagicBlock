@@ -6,6 +6,7 @@ import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
+import { titleView } from '../render/MenuStage';
 
 
 /** The title sign: carved driftwood letters with the bomb as the O, its fuse spark animated. */
@@ -21,12 +22,22 @@ function Wordmark({ className = '' }: { className?: string }) {
 /** The title card shows once per visit, before the menu. */
 let titleSeen = false;
 
-/** Title screen: the wordmark over the dock, waiting for any key or tap. */
+/**
+ * Title screen: the wordmark over the live harbour (the 3D dock behind, flying a slow circle round the bay in this
+ * match's weather and time of day), waiting for any key or tap. On start the camera glides down to your hero.
+ */
 function TitleScreen({ onStart }: { onStart: () => void }) {
   const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    titleView.on = true;
+    return () => {
+      titleView.on = false;
+    };
+  }, []);
   const start = () => {
     if (leaving) return;
     audio.unlock();
+    titleView.on = false; // start the glide while the title fades
     setLeaving(true);
     setTimeout(onStart, 450);
   };
@@ -41,9 +52,6 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
   });
   return (
     <div className={`title-screen ${leaving ? 'leaving' : ''}`} onPointerDown={start} role="button" tabIndex={-1} aria-label="Start">
-      <div className="title-art" aria-hidden>
-        <span className="title-spark" />
-      </div>
       <div className="title-shade" aria-hidden />
       <div className="title-center">
         <Wordmark className="title-logo" />
