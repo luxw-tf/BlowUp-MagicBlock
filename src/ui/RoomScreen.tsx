@@ -116,26 +116,30 @@ export function RoomScreen({
       <div className="screen lobby">
         <div className="panel lobby-panel">
           <div className="lobby-head">
-            <h2>private room</h2>
-            <span className="room-code">devnet</span>
+            <h2 className="ribbon">Private room</h2>
+            <span className="room-code">Online · devnet</span>
           </div>
-          <div className="row">
-            <button className="btn primary" onClick={() => void enter('create')}>
-              Create room
-            </button>
-          </div>
-          <div className="row room-join">
-            <input
-              className="code-input"
-              value={codeInput}
-              maxLength={5}
-              placeholder="CODE"
-              onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && codeInput.length === 5 && void enter('join')}
-            />
-            <button className="btn" disabled={codeInput.trim().length !== 5} onClick={() => void enter('join')}>
-              Join
-            </button>
+          <div className="sheet room-start">
+            <p className="sheet-note">Start a room and send your friends the link, or type the five letter code they sent you.</p>
+            <div className="row">
+              <button className="btn primary" onClick={() => void enter('create')}>
+                Create room
+              </button>
+            </div>
+            <div className="or"><span>or join one</span></div>
+            <div className="row room-join">
+              <input
+                className="code-input"
+                value={codeInput}
+                maxLength={5}
+                placeholder="CODE"
+                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && codeInput.length === 5 && void enter('join')}
+              />
+              <button className="btn" disabled={codeInput.trim().length !== 5} onClick={() => void enter('join')}>
+                Join
+              </button>
+            </div>
           </div>
           {error && <p className="verify-status warn">{error}</p>}
           <div className="row">
@@ -154,7 +158,7 @@ export function RoomScreen({
     <div className="screen lobby">
       <div className="panel lobby-panel">
         <div className="lobby-head">
-          <h2>{setup ? 'starting match' : 'private room'}</h2>
+          <h2 className="ribbon">{setup ? 'Starting the match' : 'Private room'}</h2>
           <span className="room-code big-code">{code}</span>
         </div>
         {!setup && (
@@ -172,7 +176,7 @@ export function RoomScreen({
             </button>
           </div>
         )}
-        <div className="slots">
+        <div className="slots sheet">
           {room?.members.map((m, i) => (
             <div key={i} className="slot-row on">
               <Portrait id={m.character} size={38} />
@@ -181,7 +185,7 @@ export function RoomScreen({
                 {m.host && <span className="bot-badge">HOST</span>}
                 {m.you && <span className="you-badge">YOU</span>}
               </span>
-              <span className={m.ready ? 'ready' : 'dim'}>{m.ready ? 'ready' : 'not ready'}</span>
+              <span className={m.ready ? 'ready' : 'dim'}>{m.ready ? 'Ready' : 'Not ready'}</span>
             </div>
           ))}
           {room && room.botFill && room.members.length < 6 && (
@@ -191,10 +195,10 @@ export function RoomScreen({
           )}
         </div>
         {setup && (
-          <div className="slots">
+          <div className="slots sheet">
             {SETUP_STEPS.map((s, i) => (
               <div key={s.status} className={`slot-row ${i <= stepIndex ? 'on' : ''}`}>
-                {i < stepIndex ? <span className="ready"><Icon name="check" size={16} /></span> : i === stepIndex ? <span className="spinner" /> : <span className="dim">·</span>}
+                {i < stepIndex ? <span className="ready"><Icon name="check" size={16} /></span> : i === stepIndex ? <span className="spinner" /> : <span className="dim step-dot" />}
                 <span className="slot-name">{s.label}</span>
               </div>
             ))}

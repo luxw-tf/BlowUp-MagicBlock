@@ -68,13 +68,13 @@ export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; 
     <div className="screen lobby">
       <div className="panel lobby-panel">
         <div className="lobby-head">
-          <h2>{error ? 'could not start' : inQueue ? 'finding players…' : 'joining online match'}</h2>
-          <span className="room-code">devnet</span>
+          <h2 className="ribbon">{error ? 'Could not start' : inQueue ? 'Finding players' : 'Joining the match'}</h2>
+          <span className="room-code">Online · devnet</span>
         </div>
         {error ? (
           <p className="verify-status warn">{error}</p>
         ) : inQueue ? (
-          <div className="slots">
+          <div className="slots sheet">
             <div className="slot-row on">
               <span className="spinner" />
               <span className="slot-name">
@@ -88,10 +88,10 @@ export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; 
             </p>
           </div>
         ) : (
-          <div className="slots">
+          <div className="slots sheet">
             {SETUP_STEPS.map((s, i) => (
               <div key={s.status} className={`slot-row ${i <= stepIndex ? 'on' : ''}`}>
-                {i < stepIndex ? <span className="ready"><Icon name="check" size={16} /></span> : i === stepIndex ? <span className="spinner" /> : <span className="dim">·</span>}
+                {i < stepIndex ? <span className="ready"><Icon name="check" size={16} /></span> : i === stepIndex ? <span className="spinner" /> : <span className="dim step-dot" />}
                 <span className="slot-name">{s.label}</span>
               </div>
             ))}

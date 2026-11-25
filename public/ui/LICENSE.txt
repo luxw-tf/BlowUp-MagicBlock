@@ -1,0 +1,9 @@
+Except for title-art.webp and title-logo.webp (made for BlowUp), the images in this folder (public/ui/*.webp) are adapted from the free "Jungle Cartoon GUI"
+kit by CraftPix (https://craftpix.net). Some pieces are recoloured or resized.
+
+They are CraftPix freebie art and are NOT covered by this repository's licence.
+You may use them as part of this game, but you may not redistribute, resell or share
+the image files on their own, or use them outside this project, without a licence of
+your own from CraftPix.
+
+CraftPix licence terms: https://craftpix.net/file-licenses/

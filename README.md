@@ -121,7 +121,9 @@ All third-party assets are CC0 (public domain), credited anyway:
 - Characters: [KayKit](https://kaylousberg.itch.io) Adventurers (the heroes, recoloured) and Skeletons (the bots), with KayKit Character Animations, by Kay Lousberg.
 - 3D models: [Kenney](https://kenney.nl) (Watercraft, Pirate, Nature and Food kits) and [Quaternius](https://quaternius.com) (Pirate Kit props). See `public/models/CREDITS.md`.
 - Sound effects and jingles: [Kenney](https://kenney.nl) audio packs. See `public/audio/CREDITS.md`.
-- Fonts: Cinzel and Inter (SIL Open Font License), via Fontsource.
+- Menu and HUD art (wooden boards, parchment, buttons, stars): CraftPix "Jungle Cartoon GUI" freebie kit, recoloured. Not covered by this repo's licence and not to be redistributed on its own; see `public/ui/LICENSE.txt` and https://craftpix.net/file-licenses/.
+- Title screen art and the BlowUp logo: made for this game (`public/ui/title-art.webp`, `public/ui/title-logo.webp`).
+- Fonts: Alfa Slab One and Signika (SIL Open Font License), via Fontsource.
 
 ## Not done yet / next steps
 

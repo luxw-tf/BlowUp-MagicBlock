@@ -19,7 +19,8 @@ export function VerificationPanel({ session, onClose }: { session: SessionLike; 
   return (
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="panel verify">
-        <h2>Match details</h2>
+        <h2 className="ribbon">Match details</h2>
+        <button className="x-close" onClick={onClose} aria-label="Close" />
         <div className={`verify-status ${verifiable ? 'ok' : 'warn'}`}>
           {verifiable ? (
             <>
@@ -35,10 +36,10 @@ export function VerificationPanel({ session, onClose }: { session: SessionLike; 
         </div>
         {session.online ? <OnlineDetails info={session.online} /> : (
           <div className="verify-meta">
-            tick {s.tick} · {s.randomRequests.length} request(s) pending
+            Tick {s.tick} · {s.randomRequests.length} request(s) pending
           </div>
         )}
-        <div className="verify-scroll">
+        <div className="verify-scroll sheet">
           <table className="verify-table">
             <thead>
               <tr>
