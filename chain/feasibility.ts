@@ -243,7 +243,7 @@ async function main() {
   const joinIxs = await Promise.all(
     guests.map((g, i) =>
       program.methods
-        .joinMatch(i, g.identity.publicKey, g.session.publicKey, new anchor.BN(nowSec + (i === 1 ? SHORT_SESSION_S : 3_600)))
+        .joinMatch(i, g.identity.publicKey, g.session.publicKey, new anchor.BN(nowSec + (i === 1 ? SHORT_SESSION_S : 3_600)), PublicKey.default)
         .accountsPartial({ authority: authority.publicKey, matchState: match, playerState: playerPda(match, i) })
         .instruction(),
     ),

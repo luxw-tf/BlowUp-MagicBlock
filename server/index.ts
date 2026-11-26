@@ -24,6 +24,7 @@ import { CHARACTERS } from '../src/game/content';
 import type { CharacterId } from '../src/game/types';
 import { Lobby, QUEUE_WINDOW_MS } from './lobby';
 import type { HumanJoin } from './match-runner';
+import { verifyWalletProof } from './wallet-verify';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_ACTIVE = Number(process.env.MAX_ACTIVE_MATCHES ?? 3);
@@ -59,15 +60,25 @@ function parsePubkey(v: unknown): PublicKey | null {
   }
 }
 
-function parseJoin(b: Record<string, unknown>): HumanJoin | null {
+function parseJoin(b: Record<string, unknown>): HumanJoin | { error: string } {
   const name = typeof b.name === 'string' ? b.name.trim().slice(0, 18) : '';
   const character = CHARACTERS.find((c) => c.id === b.character)?.id as CharacterId | undefined;
   const identity = parsePubkey(b.identity);
   const session = parsePubkey(b.session);
   const now = Math.floor(Date.now() / 1000);
   const expiry = Number(b.sessionExpiry);
-  if (!name || !character || !identity || !session || !(expiry > now + 60 && expiry <= now + 24 * 3600)) return null;
-  return { name, character, identity, session, sessionExpiry: expiry };
+  if (!name || !character || !identity || !session || !(expiry > now + 60 && expiry <= now + 24 * 3600)) {
+    return { error: 'Invalid join request.' };
+  }
+  const proof = b.walletProof;
+  if (proof === undefined) return { name, character, identity, session, sessionExpiry: expiry };
+  if (!proof || typeof proof !== 'object' || !('wallet' in proof) || !('message' in proof) || !('signature' in proof)
+    || typeof proof.wallet !== 'string' || typeof proof.message !== 'string' || typeof proof.signature !== 'string') {
+    return { error: 'Invalid wallet proof.' };
+  }
+  const linked = verifyWalletProof({ wallet: proof.wallet, message: proof.message, signature: proof.signature }, identity.toBase58(), now);
+  if (!linked.ok) return { error: linked.reason };
+  return { name, character, identity, session, sessionExpiry: expiry, wallet: linked.wallet };
 }
 
 const server = createServer(async (req, res) => {
@@ -83,7 +94,7 @@ const server = createServer(async (req, res) => {
 
     if (method === 'POST' && path === '/api/quickplay') {
       const human = parseJoin(await readBody(req));
-      if (!human) return json(res, 400, { error: 'invalid join request' });
+      if ('error' in human) return json(res, 400, human);
       return json(res, 202, { ticket: lobby.enqueue(human).id });
     }
 
@@ -96,7 +107,7 @@ const server = createServer(async (req, res) => {
 
     if (method === 'POST' && path === '/api/rooms') {
       const human = parseJoin(await readBody(req));
-      if (!human) return json(res, 400, { error: 'invalid join request' });
+      if ('error' in human) return json(res, 400, human);
       return json(res, 201, lobby.createRoom(human));
     }
 
@@ -112,7 +123,7 @@ const server = createServer(async (req, res) => {
         const ticket = typeof b.ticket === 'string' ? b.ticket : '';
         if (action === 'join') {
           const human = parseJoin(b);
-          if (!human) return json(res, 400, { error: 'invalid join request' });
+          if ('error' in human) return json(res, 400, human);
           const r = lobby.joinRoom(code, human);
           return json(res, 'error' in r ? 409 : 201, r);
         }

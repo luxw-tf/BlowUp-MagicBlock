@@ -44,6 +44,7 @@ export interface HumanJoin {
   identity: PublicKey;
   session: PublicKey;
   sessionExpiry: number;
+  wallet?: PublicKey;
 }
 
 interface Bot {
@@ -212,7 +213,7 @@ export class MatchRunner {
     ]);
 
     const now = Math.floor(Date.now() / 1000);
-    const joins: { index: number; identity: PublicKey; session: PublicKey; expiry: number }[] = [];
+    const joins: { index: number; identity: PublicKey; session: PublicKey; expiry: number; wallet?: PublicKey }[] = [];
     let b = 0;
     for (const i of this.seats) {
       const h = humanSeatList.indexOf(i);
@@ -220,7 +221,7 @@ export class MatchRunner {
         const human = this.humans[h];
         this.humanSeats.set(i, human);
         this.roster.push({ index: i, name: humanNames[h], character: human.character, isBot: false, identity: human.identity.toBase58() });
-        joins.push({ index: i, identity: human.identity, session: human.session, expiry: human.sessionExpiry });
+        joins.push({ index: i, identity: human.identity, session: human.session, expiry: human.sessionExpiry, wallet: human.wallet });
         continue;
       }
       const session = Keypair.generate();
@@ -233,7 +234,7 @@ export class MatchRunner {
     this.roster.sort((a, z) => a.index - z.index);
 
     const auth = this.authority.publicKey;
-    const joinIxs = await Promise.all(joins.map((j) => this.ix.joinMatch(auth, this.match, j.index, j.identity, j.session, j.expiry)));
+    const joinIxs = await Promise.all(joins.map((j) => this.ix.joinMatch(auth, this.match, j.index, j.identity, j.session, j.expiry, j.wallet)));
     await this.base_([await this.ix.createMatch(auth, this.matchId, this.slotMs), ...joinIxs.slice(0, 3)], 'create+join');
     if (joinIxs.length > 3) await this.base_(joinIxs.slice(3), 'join');
 
@@ -574,5 +575,26 @@ export class MatchRunner {
       resultWinner: res?.winner.toBase58() ?? null,
       events: this.events,
     };
+    // Match verification is available even while independent profile writes are pending.
+    void this.recordProfiles(final.wallets);
+  }
+
+  private async recordProfiles(wallets: PublicKey[]) {
+    const payer = this.authority.publicKey;
+    for (const seat of this.seats) {
+      const wallet = wallets[seat];
+      if (wallet.equals(PublicKey.default)) continue;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const info = await this.base.getAccountInfo(pda.result(this.match), 'confirmed');
+          if (info && (decodeResult(info.data).progressRecorded & (1 << seat))) break;
+          await this.base_([await this.ix.recordProgress(payer, this.match, seat, wallet)], 'record progress');
+          break;
+        } catch (error) {
+          if (attempt === 2) this.log(`profile update for seat ${seat} failed: ${String(error)}`);
+          else await sleep(1_000 * (attempt + 1));
+        }
+      }
+    }
   }
 }
