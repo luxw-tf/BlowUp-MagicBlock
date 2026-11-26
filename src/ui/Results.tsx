@@ -98,6 +98,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
                 <div className="r-block">
                   <span className={`medal ${medal[i]}`}>{i === 1 ? 1 : i === 0 ? 2 : 3}</span>
                   <small>{lasted(p)}</small>
+                  {p.id === session.localId && <span className="r-stamp">{verdict(p.placement)}</span>}
                 </div>
               </div>
             ) : (
@@ -115,13 +116,12 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
                 <Portrait id={p.character} bot={p.isBot} seat={seat(p)} size={30} />
                 <span className="r-row-name">{p.id === session.localId ? 'You' : p.name}</span>
                 <span className="r-row-stat">{lasted(p)}</span>
+                {p.id === session.localId && <span className="r-stamp">{verdict(p.placement)}</span>}
               </div>
             ))}
           </div>
         )}
 
-        {/* the roast, by your place */}
-        {local && <div className="r-verdict">{verdict(local.placement)}</div>}
 
         {/* the match's honours, as tiles */}
         {honours.length > 0 && (

@@ -2947,30 +2947,49 @@ kbd {
   background: #7a4210;
 }
 
-/* the roast: a stamp slapped on the corner */
-.r-verdict {
+/* the roast: a red rubber stamp slammed onto your own result (your podium step, or your row) */
+.r-block,
+.r-row {
+  position: relative;
+}
+.r-stamp {
   position: absolute;
   z-index: 2;
-  top: 118px;
-  right: -8px;
   white-space: nowrap;
-  margin: 0;
-  padding: 4px 14px 5px;
+  padding: 2px 9px 3px;
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', 'Arial Black', sans-serif;
-  font-size: 1.1rem;
-  letter-spacing: 0.02em;
-  color: var(--ink);
-  background: #fff3d6;
-  border: 2px solid #3b1f0e;
-  border-radius: 8px;
-  box-shadow: 0 3px 0 rgba(42, 20, 8, 0.6);
-  transform: rotate(7deg);
-  animation: stampIn 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) backwards 0.9s;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: #c0251a;
+  background: rgba(255, 246, 228, 0.9);
+  border: 3px solid #c0251a;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 2px rgba(255, 246, 228, 0.9), inset 0 0 0 3px #c0251a, 0 3px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: stampIn 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) backwards 1s;
+}
+.r-row .r-stamp {
+  right: 112px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-6deg);
+}
+.r-block .r-stamp {
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%) rotate(-6deg);
 }
 @keyframes stampIn {
   from {
-    transform: rotate(18deg) scale(2.2);
     opacity: 0;
+    scale: 2;
+  }
+}
+@media (max-width: 560px) {
+  .r-row .r-stamp {
+    right: 8px;
+    top: -12px;
+    transform: rotate(-5deg);
+    font-size: 0.8rem;
   }
 }
 
@@ -2979,8 +2998,8 @@ kbd {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 12px auto 0;
+  gap: 8px;
+  margin: 10px auto 0;
 }
 .r-award {
   display: grid;
@@ -3062,13 +3081,13 @@ kbd {
   justify-content: center;
   align-items: center;
   gap: 12px;
-  margin: 14px auto 0;
+  margin: 12px auto 0;
 }
 .r-actions .btn {
   min-width: 150px;
 }
 .r-foot {
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--cream-dim);
@@ -3098,12 +3117,6 @@ kbd {
 @media (max-width: 560px) {
   .r-award {
     width: calc(50% - 8px);
-  }
-  .r-verdict {
-    position: static;
-    display: inline-block;
-    margin: 10px auto 0;
-    transform: rotate(-2deg);
   }
   .r-actions {
     flex-wrap: wrap;
