@@ -110,6 +110,6 @@ export function Prop({ src, position = [0, 0, 0], rotation = 0, fit, size, scale
 // ───────────────────────────── the crew (see crew.tsx) ─────────────────────────────
 
 /** 'pose': one wave hello, then idle (the menu); 'win': the victory cheer (heroes) or taunt (skeletons). */
-export type RigState = 'idle' | 'run' | 'dash' | 'hit' | 'death' | 'win' | 'pose';
+export type RigState = 'idle' | 'run' | 'dash' | 'hit' | 'death' | 'win' | 'pose' | 'hold' | 'sit';
 /** Written by the creature every frame, read by its rig. */
 export interface RigDrive { state: RigState; speed: number; hitAt: number; actAt: number; /** what the last action was */ actKind?: 'throw' | 'tag'; }

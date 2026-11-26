@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import * as THREE from 'three';
 import { audio } from '../audio/audio';
 import { CHARACTERS, GAME_TITLE, characterDef } from '../game/content';
 import type { ParticipantSetup } from '../game/sim';
@@ -6,7 +7,7 @@ import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
-import { heroTurn, titleView } from '../render/MenuStage';
+import { heroTurn, stageReady, titleView } from '../render/MenuStage';
 
 
 /** The title sign: carved driftwood letters with the bomb as the O, its fuse spark animated. */
@@ -23,11 +24,66 @@ function Wordmark({ className = '' }: { className?: string }) {
 let titleSeen = false;
 
 /**
+ * How far the 3D harbour has loaded (three.js's shared loading manager sees every model and texture). Done once
+ * everything requested has arrived and nothing new has started for a moment, or after a safety timeout.
+ */
+function useHarbourLoaded(): { done: boolean; progress: number } {
+  const [state, setState] = useState({ done: false, progress: 0 });
+  useEffect(() => {
+    const m = THREE.DefaultLoadingManager;
+    let loaded = 0;
+    let total = 0;
+    let quiet: ReturnType<typeof setTimeout> | null = null;
+    // done = nothing left loading AND the harbour has been drawn (cached models load before the first frame does)
+    const settle = () => {
+      if (quiet) clearTimeout(quiet);
+      quiet = setTimeout(function check() {
+        if (stageReady.drawn) setState({ done: true, progress: 1 });
+        else quiet = setTimeout(check, 100);
+      }, loaded >= total ? 300 : 2500);
+    };
+    m.onProgress = (_url, l, t) => {
+      loaded = l;
+      total = t;
+      setState((s) => (s.done ? s : { done: false, progress: t ? l / t : 0 }));
+      settle();
+    };
+    m.onLoad = settle;
+    settle(); // already loaded before we looked
+    const cap = setTimeout(() => setState({ done: true, progress: 1 }), 12000);
+    return () => {
+      m.onProgress = () => {};
+      m.onLoad = () => {};
+      if (quiet) clearTimeout(quiet);
+      clearTimeout(cap);
+    };
+  }, []);
+  return state;
+}
+
+/** The first thing you see: the logo and a fuse burning along a rope while the harbour loads. */
+function LoadingVeil({ progress, done }: { progress: number; done: boolean }) {
+  const pct = Math.round(Math.max(0.04, progress) * 100);
+  return (
+    <div className={`loading-veil ${done ? 'gone' : ''}`} aria-busy={!done} aria-label="Loading">
+      <Wordmark className="loading-logo" />
+      <div className="loading-rope" aria-hidden>
+        <div className="loading-burnt" style={{ width: `${pct}%` }} />
+        <div className="loading-spark" style={{ left: `${pct}%` }} />
+      </div>
+      <p className="loading-text">Loading the harbour… {pct}%</p>
+    </div>
+  );
+}
+
+/**
  * Title screen: the wordmark over the live harbour (the 3D dock behind, flying a slow circle round the bay in this
- * match's weather and time of day), waiting for any key or tap. On start the camera glides down to your hero.
+ * match's weather and time of day), waiting for any key or tap. On start the logo glides up into its menu spot, the
+ * camera glides down to your hero, and the menu slides in.
  */
 function TitleScreen({ onStart }: { onStart: () => void }) {
   const [leaving, setLeaving] = useState(false);
+  const { done, progress } = useHarbourLoaded();
   useEffect(() => {
     titleView.on = true;
     return () => {
@@ -35,15 +91,16 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
     };
   }, []);
   const start = () => {
-    if (leaving) return;
+    if (leaving || !done) return;
     audio.unlock();
     titleView.on = false; // start the glide while the title fades
     setLeaving(true);
-    setTimeout(onStart, 450);
+    setTimeout(onStart, 650);
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.key === 'Tab') return;
+      // modifier keys alone (Alt-Tabbing back in, say) don't count as "any key"
+      if (e.repeat || ['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'OS'].includes(e.key)) return;
       e.preventDefault();
       start();
     };
@@ -51,14 +108,14 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   });
   return (
-    <div className={`title-screen ${leaving ? 'leaving' : ''}`} onPointerDown={start} role="button" tabIndex={-1} aria-label="Start">
+    <div className={`title-screen ${leaving ? 'leaving' : ''} ${done ? 'ready' : ''}`} onPointerDown={start} role="button" tabIndex={-1} aria-label="Start">
       <div className="title-shade" aria-hidden />
       <div className="title-center">
         <Wordmark className="title-logo" />
         <div className="ribbon title-ribbon">Pass the bomb. Don't be holding it.</div>
       </div>
-      <div className="title-start">Press any key to start</div>
-      <div className="title-foot">A party game for up to six · Live on a MagicBlock rollup</div>
+      <div className="title-start">Click or press any key</div>
+      <LoadingVeil progress={progress} done={done} />
     </div>
   );
 }

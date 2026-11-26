@@ -807,6 +807,30 @@ function SnowTracks() {
 
 // ───────────────────────────── root ─────────────────────────────
 
+/**
+ * Compile every shader early, hidden ones included. The bomb in flight, blasts, rings and particles stay hidden
+ * until first used, and three.js only compiles what is visible, so without this the first throw and the first
+ * blast stall a frame or two mid-play. Runs a couple of times early on (models load in over the first seconds).
+ */
+function Prewarm() {
+  const { gl, scene, camera } = useThree();
+  const frame = useRef(0);
+  useFrame(() => {
+    const f = ++frame.current;
+    if (f !== 8 && f !== 90) return;
+    const hidden: THREE.Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    gl.compile(scene, camera);
+    for (const o of hidden) o.visible = false;
+  });
+  return null;
+}
+
 export function Scene() {
   const { session } = useGame();
   const settings = useSettings();
@@ -837,6 +861,7 @@ export function Scene() {
       <Bomb />
       <AimGuide />
       <Effects />
+      <Prewarm />
       {lookNow().snow > 0 && <SnowTracks />}
       <OverlayProjector />
     </>

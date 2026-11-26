@@ -214,6 +214,9 @@ export class BotBrain {
     } else if (inv === 'skillIssue' && dh < 5) {
       this.pending.use = true;
     }
+    // Time Theft as a runner steals time off the holder's fuse: use it while you're safely away from them
+    const holderFuse = fuseRemaining(s);
+    if (inv === 'timeTheft' && holderFuse !== null && holderFuse > 2.2 && dh > 4 && this.rng() < 0.05) this.pending.use = true;
 
     // Grab a pickup if it is safe-ish.
     if (me.inventory === null && dh > 6) {

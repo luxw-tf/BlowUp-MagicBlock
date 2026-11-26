@@ -124,10 +124,11 @@ function hipBomb(): THREE.Group {
 
 const ANIMS = ['general', 'move', 'dodge', 'social', 'melee', 'skeleton', 'select'].map((n) => modelUrl(`kaykit/anim_${n}.glb`));
 
-type Move = 'idle' | 'walk' | 'run' | 'dash' | 'throw' | 'tag' | 'hit' | 'death' | 'win' | 'hello';
+type Move = 'idle' | 'walk' | 'run' | 'dash' | 'throw' | 'tag' | 'hit' | 'death' | 'win' | 'hello' | 'hold' | 'sit';
 const HERO_CLIPS: Record<Move, string> = {
   idle: 'Idle_A', walk: 'Walking_A', run: 'Running_A', dash: 'Dodge_Forward', throw: 'Throw',
   tag: 'Melee_Unarmed_Attack_Punch_A', hit: 'Hit_A', death: 'Death_A', win: 'Cheering', hello: 'Waving',
+  hold: 'Holding_A', sit: 'Sit_Floor_Idle', // the title crew: holding the bomb in both hands, sitting on the deck
 };
 const SKELETON_CLIPS: Record<Move, string> = {
   ...HERO_CLIPS, idle: 'Skeletons_Idle', walk: 'Skeletons_Walking', death: 'Skeletons_Death', win: 'Skeletons_Taunt', hello: 'Skeletons_Taunt',
@@ -239,6 +240,8 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
     else if (d.state === 'pose' && now < rig.helloUntil) move = 'hello';
     else if (now < rig.actUntil) move = rig.actKind;
     else if (now < rig.hitUntil) move = 'hit';
+    else if (d.state === 'sit') move = 'sit';
+    else if (d.state === 'hold') move = 'hold';
     else if (d.state === 'dash') move = 'dash';
     else if (d.state === 'run') move = d.speed > 2.4 ? 'run' : 'walk';
     else move = 'idle';

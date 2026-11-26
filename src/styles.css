@@ -139,26 +139,6 @@ kbd {
   display: grid;
   place-items: center;
 }
-.landing-bg {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 120%, #e06b2f55, transparent 60%), radial-gradient(ellipse at 20% -10%, #1f8fc4aa, transparent 55%),
-    linear-gradient(180deg, #123048, #0f1a24);
-}
-.landing-bg::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 48px 48px;
-  transform: perspective(600px) rotateX(50deg) translateY(30%);
-  transform-origin: bottom;
-}
-.landing-inner {
-  position: relative;
-  text-align: center;
-  width: min(640px, 92vw);
-}
 .logo {
   font-size: clamp(3rem, 9vw, 6rem);
   margin: 0;
@@ -181,79 +161,6 @@ kbd {
   50% {
     transform: rotate(12deg) scale(1.08);
   }
-}
-.tagline {
-  color: var(--dim);
-  margin: 6px 0 22px;
-  font-size: 1.05rem;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--dim);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.field input {
-  font: inherit;
-  font-size: 1.1rem;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 12px;
-  outline: none;
-}
-.field input:focus {
-  border-color: var(--accent);
-}
-.char-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-  margin-top: 16px;
-}
-.char-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 4px;
-  border-radius: 12px;
-  border: 2px solid transparent;
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-.char-card:hover {
-  transform: translateY(-2px);
-}
-.char-card.selected {
-  border-color: var(--c);
-  background: color-mix(in srgb, var(--c) 22%, transparent);
-}
-.char-icon {
-  display: grid;
-  place-items: center;
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--c, #333);
-}
-.char-icon.small {
-  width: 32px;
-  height: 32px;
-  font-size: 0.78rem;
 }
 .char-name {
   font-size: 0.75rem;

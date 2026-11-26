@@ -6,6 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { LAYOUTS, MOODS, OBSTACLES, WEATHERS, selectLayout, selectMood, selectWeather, weatherFor } from '../game/arena';
+import { CHARACTERS } from '../game/content';
 import type { CharacterId } from '../game/types';
 import { Arena, lightNow } from './Arena';
 import type { RigDrive } from './models';
@@ -17,9 +18,10 @@ import { CrewMember } from './crew';
  */
 const STAGE = new THREE.Vector3(7.2, 0, -11.2);
 /** the camera: a little below head height and back, looking slightly up so the hero stands tall */
-const CAM = new THREE.Vector3(7.2, 1.5, -4.9);
-const LOOK = new THREE.Vector3(7.2, 1.3, -11.2);
-const PEDESTAL_H = 0.42;
+const CAM = new THREE.Vector3(7.2, 1.95, -4.9);
+const LOOK = new THREE.Vector3(7.2, 1.75, -11.2);
+/** A proper podium: tall enough that the crew in front (on the title) never covers the hero standing on it. */
+const PEDESTAL_H = 0.9;
 
 /** A round timber pedestal: planked top, a brass rim, a coil of rope round the foot. */
 function Pedestal() {
@@ -37,6 +39,9 @@ function Pedestal() {
       </mesh>
       <mesh position={[0, PEDESTAL_H - 0.02, 0]} rotation={[Math.PI / 2, 0, 0]} material={brass}>
         <torusGeometry args={[1.14, 0.045, 10, 48]} />
+      </mesh>
+      <mesh position={[0, PEDESTAL_H * 0.55, 0]} rotation={[Math.PI / 2, 0, 0]} material={brass}>
+        <torusGeometry args={[1.2, 0.035, 10, 48]} />
       </mesh>
       {[0.06, 0.15].map((y) => (
         <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={rope}>
@@ -86,6 +91,159 @@ function Hero({ id }: { id: CharacterId }) {
  */
 export const titleView = { on: false };
 
+/** Set once the harbour has actually been drawn (the title's loading cover waits for it). */
+export const stageReady = { drawn: false };
+
+/** Mounted only when everything inside the Suspense has loaded; flags the stage drawn after a couple of frames. */
+function DrawnFlag() {
+  const frames = useRef(0);
+  useFrame(() => {
+    if (stageReady.drawn) return;
+    if (++frames.current > 3) stageReady.drawn = true;
+  });
+  return null;
+}
+
+/** How much of the title shot is on screen (1 on the title, easing to 0 as the camera glides down to the lobby). */
+const titleBlend = { w: 0 };
+
+/**
+ * The rest of the crew round the pedestal for the title shot (offsets from the stage), symmetric: two standing each
+ * side, and one sitting on the deck in front (anyone standing there would hide the hero; anyone behind is hidden).
+ * Every spot stays on the deck side of the harbour railing.
+ */
+const CREW_SPOTS: { x: number; z: number; sit?: boolean }[] = [
+  { x: -4.6, z: -0.6 },
+  { x: -2.7, z: 0.45 },
+  { x: 0, z: 1.55, sit: true }, // right at the pedestal's foot, low in the frame
+  { x: 2.7, z: 0.45 },
+  { x: 4.6, z: -0.6 },
+];
+
+/** The hot potato's state, shared by the crew (who holds it, who's next, and when it was thrown). */
+const potato = { holder: 0, next: 1, thrownAt: -1, landsAt: 0 };
+const FLIGHT = 0.7;
+const HOLD = 1.0;
+
+/** Where a crew member holds the bomb: in both hands in front of them, or in their lap when sitting. */
+function handsOf(i: number, out: THREE.Vector3) {
+  const c = CREW_SPOTS[i];
+  const px = STAGE.x + c.x, pz = STAGE.z + c.z;
+  const a = Math.atan2(TITLE_CAM.x - px, TITLE_CAM.z - pz);
+  return out.set(px + Math.sin(a) * 0.34, c.sit ? 0.62 : 0.9, pz + Math.cos(a) * 0.34);
+}
+
+/** One of the crew on the title: holds the bomb when it's theirs, turns and throws it on, cheers now and then. */
+function CrewMate({ id, i }: { id: CharacterId; i: number }) {
+  const spot = CREW_SPOTS[i];
+  const drive = useRef<RigDrive>({ state: spot.sit ? 'sit' : 'idle', speed: 0, hitAt: 0, actAt: 0 });
+  const g = useRef<THREE.Group>(null);
+  const threw = useRef(-1);
+  const px = STAGE.x + spot.x, pz = STAGE.z + spot.z;
+  const faceCam = Math.atan2(TITLE_CAM.x - px, TITLE_CAM.z - pz);
+  useFrame(({ clock }, dt) => {
+    if (!g.current) return;
+    g.current.visible = titleBlend.w > 0.35; // gone a third of the way into the glide down, while the camera is moving
+    const t = clock.elapsedTime;
+    const holding = potato.holder === i && t >= potato.landsAt;
+    // about to throw: turn to face whoever is next, and play the throw
+    const aboutToThrow = holding && potato.thrownAt > threw.current && potato.thrownAt <= t + 0.18;
+    if (aboutToThrow && !spot.sit) {
+      threw.current = potato.thrownAt;
+      drive.current.actKind = 'throw';
+      drive.current.actAt = performance.now();
+    }
+    if (spot.sit) drive.current.state = 'sit';
+    else if (holding) drive.current.state = 'hold';
+    else drive.current.state = Math.sin(t * 0.7 + spot.x * 1.3) > 0.88 ? 'win' : 'idle';
+    let want = faceCam;
+    if (holding && !spot.sit && potato.thrownAt - t < 0.45) {
+      const n = CREW_SPOTS[potato.next];
+      want = Math.atan2(STAGE.x + n.x - px, STAGE.z + n.z - pz);
+    }
+    let d = want - g.current.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    g.current.rotation.y += d * (1 - Math.exp(-dt * 10));
+  });
+  return (
+    <group ref={g} position={[px, 0, pz]} rotation={[0, faceCam, 0]}>
+      <CrewMember id={id} drive={drive} />
+    </group>
+  );
+}
+
+/** The lit bomb: held, then thrown in an arc to the next of the crew (never to the hero on the pedestal). */
+function HotPotato() {
+  const g = useRef<THREE.Group>(null);
+  const spark = useRef<THREE.Mesh>(null);
+  const a = useMemo(() => new THREE.Vector3(), []);
+  const c = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ clock }) => {
+    const b = g.current;
+    if (!b) return;
+    b.visible = titleBlend.w > 0.35;
+    const t = clock.elapsedTime;
+    if (potato.thrownAt < 0) {
+      potato.thrownAt = t + HOLD;
+      potato.landsAt = 0;
+    }
+    if (t >= potato.thrownAt + FLIGHT) {
+      // landed: the next one holds it, and picks someone else to throw to
+      potato.holder = potato.next;
+      potato.landsAt = t;
+      let n = potato.holder;
+      while (n === potato.holder) n = Math.floor(Math.random() * CREW_SPOTS.length);
+      potato.next = n;
+      potato.thrownAt = t + HOLD * (0.8 + Math.random() * 0.5);
+    }
+    handsOf(potato.holder, a);
+    if (t < potato.thrownAt) {
+      b.position.copy(a);
+    } else {
+      handsOf(potato.next, c);
+      const e = Math.min(1, (t - potato.thrownAt) / FLIGHT);
+      b.position.lerpVectors(a, c, e);
+      b.position.y += Math.sin(e * Math.PI) * 1.5;
+      b.rotation.x += 0.18;
+    }
+    if (spark.current) spark.current.scale.setScalar(0.6 + Math.random() * 0.7);
+  });
+  return (
+    <group ref={g}>
+      <mesh castShadow>
+        <sphereGeometry args={[0.2, 18, 14]} />
+        <meshStandardMaterial color="#1b1d22" roughness={0.35} metalness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.21, 0]}>
+        <cylinderGeometry args={[0.05, 0.06, 0.08, 10]} />
+        <meshStandardMaterial color="#c9973e" metalness={0.7} roughness={0.4} />
+      </mesh>
+      <mesh ref={spark} position={[0.05, 0.32, 0]}>
+        <sphereGeometry args={[0.05, 8, 6]} />
+        <meshBasicMaterial color="#ffd35c" />
+      </mesh>
+      <pointLight position={[0.05, 0.34, 0]} color="#ffb347" intensity={5} distance={4} decay={2} />
+    </group>
+  );
+}
+
+/** The title's crew: everyone but the picked hero, round the pedestal, passing a lit bomb among themselves. */
+function TitleCrew({ hero }: { hero: CharacterId }) {
+  const others = CHARACTERS.filter((c) => c.id !== hero).map((c) => c.id);
+  return (
+    <>
+      {others.slice(0, CREW_SPOTS.length).map((id, i) => (
+        <CrewMate key={id} id={id} i={i} />
+      ))}
+      <HotPotato />
+    </>
+  );
+}
+
+/** The title camera: low and in front of the crew, drifting slowly side to side; the logo sits in the sky above. */
+const TITLE_CAM = new THREE.Vector3(STAGE.x, 3.1, STAGE.z + 11.5);
+const TITLE_LOOK = new THREE.Vector3(STAGE.x, 3.4, STAGE.z - 1);
+
 /** The lobby camera: fixed on the stage (a slow breath), or flying the title circle while the title card is up. */
 function Orbit() {
   const { camera } = useThree();
@@ -104,11 +262,11 @@ function Orbit() {
     look.copy(LOOK);
     const fl = fly.current;
     fl.w += ((titleView.on ? 1 : 0) - fl.w) * (1 - Math.exp(-Math.min(dt, 0.05) * (titleView.on ? 6 : 1.4)));
+    titleBlend.w = fl.w;
     if (fl.w > 0.001) {
-      fl.a += Math.min(dt, 0.05) * 0.045;
-      const fa = fl.a;
-      flyPos.set(Math.sin(fa) * 30, 9.5 + Math.sin(t * 0.13) * 1.2, -6 + Math.cos(fa) * 26);
-      flyLook.set(Math.sin(fa + 2.2) * 6, 1.5, -9 + Math.cos(fa + 2.2) * 5);
+      // the title shot: the crew round the pedestal, the camera drifting slowly side to side
+      flyPos.set(TITLE_CAM.x + Math.sin(t * 0.12) * 3.2, TITLE_CAM.y + Math.sin(t * 0.17) * 0.3, TITLE_CAM.z + Math.cos(t * 0.12) * 0.8);
+      flyLook.copy(TITLE_LOOK);
       const w = fl.w * fl.w * (3 - 2 * fl.w);
       camera.position.lerp(flyPos, w);
       look.lerp(flyLook, w);
@@ -167,6 +325,8 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
           <Arena key={mood} shadows town />
           <Pedestal />
           <Hero id={hero} />
+          <TitleCrew hero={hero} />
+          <DrawnFlag />
         </Suspense>
       </Canvas>
     </div>
