@@ -56,6 +56,8 @@ export interface PlayerState {
   dashReadyAt: number;
   slowUntil: number;
   recoverUntil: number;
+  /** Tagged: frozen in place, can't dash or pass, until then (offline). */
+  dazedUntil: number;
   /** 'pending' = box collected, reward awaiting randomness. */
   inventory: AbilityId | 'pending' | null;
   shield: 'reflect' | 'block' | null;

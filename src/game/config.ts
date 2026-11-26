@@ -21,6 +21,7 @@ export const CONFIG = {
   throwRange: 10,
   throwSpeed: 20,
   bombRadius: 0.25,
+  tagDaze: 0.6, // a tagged player is frozen this long (offline; online the chain doesn't say how the bomb was passed)
   missRecovery: 0.6, // client side in both modes; shorter, and now shown on the HUD
   transferProtection: 0.35,
 

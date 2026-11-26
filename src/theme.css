@@ -1854,6 +1854,40 @@ kbd {
   }
 }
 
+/* tagged: a wobbling name and a little dazed marker under it */
+.name-tag.is-dazed .nt-pill {
+  animation: dazedWobble 0.22s ease-in-out infinite alternate;
+}
+@keyframes dazedWobble {
+  from {
+    transform: rotate(-5deg);
+  }
+  to {
+    transform: rotate(5deg);
+  }
+}
+.name-tag .nt-dazed,
+.name-tag.is-local .nt-dazed {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 2px);
+  transform: translateX(-50%);
+  padding: 0 7px 1px;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #4a2506;
+  background: #ffe14a;
+  border: 2px solid #3b1f0e;
+  border-radius: 999px;
+}
+.feed-dazed {
+  font-weight: 700;
+  color: #c97a00;
+}
+
 /* roster down the right edge */
 .roster {
   position: absolute;

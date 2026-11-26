@@ -73,6 +73,7 @@ export function createMatch(participants: ParticipantSetup[]): MatchState {
       dashSpeed: 0,
       dashReadyAt: 0,
       slowUntil: 0,
+      dazedUntil: 0,
       recoverUntil: 0,
       inventory: null,
       shield: null,
@@ -219,7 +220,12 @@ function giveBomb(s: MatchState, from: PlayerState, to: PlayerState, method: 'ta
   s.bomb.protectedId = from.id;
   s.bomb.protectedUntil = s.time + CONFIG.transferProtection;
   to.stats.received++;
-  if (method === 'tag') from.stats.tags++;
+  if (method === 'tag') {
+    from.stats.tags++;
+    // a tag dazes whoever gets it: they can't move, dash or pass for a moment, so the tagger gets away
+    to.dazedUntil = s.time + CONFIG.tagDaze;
+    to.recoverUntil = Math.max(to.recoverUntil, s.time + CONFIG.tagDaze);
+  }
   if (fuseLeft < CONFIG.closeCallThreshold) from.stats.closeCalls++;
   // Drop any stale fuse request for a previous holder.
   s.randomRequests = s.randomRequests.filter((r) => r.purpose !== 'fuse');
@@ -445,7 +451,8 @@ function movePlayer(s: MatchState, p: PlayerState, inp: InputFrame | null) {
     const push = fx ? fx.push : v();
     if (len(sub(p.vel, push)) > maxSpeed) p.vel = add(scale(norm(sub(p.vel, push)), maxSpeed), push); // no post-dash slide
     // the wind drifts everyone downwind, walking or standing: running into it is a little slower, with it faster
-    const target = add(scale(inp ? inp.move : v(), maxSpeed), push);
+    const dazed = s.time < p.dazedUntil;
+    const target = add(scale(inp && !dazed ? inp.move : v(), maxSpeed), push);
     let dv = sub(target, p.vel);
     const speedingUp = len(target) >= len(p.vel);
     const rate = speedingUp ? CONFIG.acceleration : CONFIG.deceleration;
@@ -582,7 +589,7 @@ export function step(s: MatchState, inputs: ReadonlyMap<PlayerId, InputFrame>): 
     if (inp) {
       p.aim = inp.aim;
       if (inp.use) useAbility(s, p, inp);
-      if (inp.dash && s.time >= p.dashReadyAt && s.time >= p.dashUntil) {
+      if (inp.dash && s.time >= p.dashReadyAt && s.time >= p.dashUntil && s.time >= p.dazedUntil) {
         startDash(s, p, inp, CONFIG.dashDistance, CONFIG.dashDuration);
         p.dashReadyAt = s.time + CONFIG.dashCooldown;
         p.stats.dashes++;

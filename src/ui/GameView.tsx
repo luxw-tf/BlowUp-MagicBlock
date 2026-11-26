@@ -302,6 +302,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
               <>
                 <Name s={s} id={e.from} /> {e.method === 'tag' ? 'tagged' : e.method === 'throw' ? 'lobbed it to' : 'bounced it back to'}{' '}
                 <Name s={s} id={e.to} />
+                {e.method === 'tag' && s.players.some((p) => p.id === e.to && p.dazedUntil > s.time) && <span className="feed-dazed"> (dazed!)</span>}
               </>,
             );
             {
@@ -558,7 +559,7 @@ function NameTags({ session, bubbles }: { session: SessionLike; bubbles: Record<
         return (
           <div
             key={p.id}
-            className={`name-tag ${local ? 'is-local' : ''} ${bomb ? 'has-bomb' : ''}`}
+            className={`name-tag ${local ? 'is-local' : ''} ${bomb ? 'has-bomb' : ''} ${s.time < p.dazedUntil ? 'is-dazed' : ''}`}
             ref={(el) => {
               if (el) overlay.tags.set(p.id, el);
               else overlay.tags.delete(p.id);
@@ -574,6 +575,7 @@ function NameTags({ session, bubbles }: { session: SessionLike; bubbles: Record<
               <b>{local ? 'You' : p.name}</b>
               {bomb && <Icon name="bomb" size={15} />}
             </span>
+            {s.time < p.dazedUntil && <span className="nt-dazed">dazed</span>}
           </div>
         );
       })}
@@ -886,7 +888,9 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
               ? 'Missed! Grab it back…'
               : performance.now() - tagMiss.at < 1400
                 ? 'Too far to tag. Get closer, or throw'
-                : 'LEFT CLICK throw · RIGHT CLICK tag'}
+                : tagCandidates(s, me, me.aim).length > 0
+                  ? 'RIGHT CLICK: tag. Can’t miss, and dazes them'
+                  : 'LEFT CLICK: throw. Can miss · Get close to tag'}
         </div>
       )}
     </>

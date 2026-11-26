@@ -51,7 +51,7 @@ const STEPS: Step[] = [
       </>
     ),
   },
-  { title: 'Tag it back', body: <>It came back to you! Walk right up to the dummy and <kbd>Right click</kbd> to tag. Tags never miss, but you must be close.</> },
+  { title: 'Tag it back', body: <>It came back to you! Walk right up to the dummy and <kbd>Right click</kbd> to tag. A throw reaches far but can miss; a tag never misses and leaves them dazed for a moment, but you must be close.</> },
   { title: 'Use an item', body: <>Walk over a glowing mystery crate to pick up an item, then press <kbd>E</kbd> to use it.</> },
   {
     title: 'You are ready',
