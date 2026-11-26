@@ -626,7 +626,9 @@
     {
       "name": "join_match",
       "docs": [
-        "Sponsored join: the lobby authority pays rent; the guest needs no SOL."
+        "Sponsored join: the lobby authority pays rent; the guest needs no SOL.",
+        "`wallet`: the player's linked wallet (Pubkey::default() for a guest). The",
+        "lobby only passes a wallet after verifying the player's signed link message."
       ],
       "discriminator": [
         244,
@@ -676,6 +678,10 @@
         {
           "name": "session_expiry",
           "type": "i64"
+        },
+        {
+          "name": "wallet",
+          "type": "pubkey"
         }
       ]
     },
@@ -781,6 +787,94 @@
           "type": {
             "vec": "bytes"
           }
+        }
+      ]
+    },
+    {
+      "name": "record_progress",
+      "docs": [
+        "Add a settled match to the wallet profile linked to `seat` (base layer).",
+        "Anyone may call it (the lobby does, paying the profile's rent): it only",
+        "reads the settled match, and each seat counts once per match."
+      ],
+      "discriminator": [
+        116,
+        126,
+        203,
+        83,
+        23,
+        114,
+        161,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "match_state"
+        },
+        {
+          "name": "result",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "match_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "seat",
+          "type": "u8"
         }
       ]
     },
@@ -1223,6 +1317,19 @@
       ]
     },
     {
+      "name": "PlayerProfile",
+      "discriminator": [
+        82,
+        226,
+        99,
+        87,
+        164,
+        130,
+        181,
+        80
+      ]
+    },
+    {
       "name": "PlayerState",
       "discriminator": [
         56,
@@ -1356,6 +1463,21 @@
       "code": 6023,
       "name": "RoundLocked",
       "msg": "Passing is locked in the last moments before the round deadline"
+    },
+    {
+      "code": 6024,
+      "name": "NoWalletLinked",
+      "msg": "No wallet is linked to this seat"
+    },
+    {
+      "code": 6025,
+      "name": "WrongWallet",
+      "msg": "Wallet does not match the seat's linked wallet"
+    },
+    {
+      "code": 6026,
+      "name": "ProgressAlreadyRecorded",
+      "msg": "This match already counted towards that profile"
     }
   ],
   "types": [
@@ -1424,6 +1546,14 @@
           },
           {
             "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "progress_recorded",
+            "docs": [
+              "Bitmask of seats whose wallet profile already counted this match",
+              "(record_progress is idempotent per seat)."
+            ],
             "type": "u8"
           }
         ]
@@ -1562,6 +1692,94 @@
                 6
               ]
             }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "wallets",
+            "docs": [
+              "Wallet linked to each seat (Pubkey::default() = guest). Set at join by the",
+              "lobby after it verified the player's signed link message."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                6
+              ]
+            }
+          },
+          {
+            "name": "passes",
+            "docs": [
+              "Passes made per seat (successful transfers away from them, incl. reflections)."
+            ],
+            "type": {
+              "array": [
+                "u16",
+                6
+              ]
+            }
+          },
+          {
+            "name": "received",
+            "docs": [
+              "Times the bomb landed on each seat (round draws and incoming passes)."
+            ],
+            "type": {
+              "array": [
+                "u16",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerProfile",
+      "docs": [
+        "A wallet's lifetime record across online matches, on the Solana base layer.",
+        "Seeds: [PROFILE_SEED, wallet]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "matches",
+            "type": "u32"
+          },
+          {
+            "name": "wins",
+            "type": "u32"
+          },
+          {
+            "name": "podiums",
+            "docs": [
+              "Top-three finishes (wins included)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "passes",
+            "type": "u32"
+          },
+          {
+            "name": "received",
+            "type": "u32"
+          },
+          {
+            "name": "last_match",
+            "type": "pubkey"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
           },
           {
             "name": "bump",

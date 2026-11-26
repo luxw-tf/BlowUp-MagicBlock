@@ -153,12 +153,15 @@ pub mod blowup {
     }
 
     /// Sponsored join: the lobby authority pays rent; the guest needs no SOL.
+    /// `wallet`: the player's linked wallet (Pubkey::default() for a guest). The
+    /// lobby only passes a wallet after verifying the player's signed link message.
     pub fn join_match(
         ctx: Context<JoinMatch>,
         index: u8,
         player: Pubkey,
         session_key: Pubkey,
         session_expiry: i64,
+        wallet: Pubkey,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(
@@ -170,6 +173,7 @@ pub mod blowup {
         let i = index as usize;
         require!(i < MAX_PLAYERS && m.alive_mask & (1 << index) == 0, BlowupError::BadPlayerIndex);
         m.players[i] = player;
+        m.wallets[i] = wallet;
         m.alive_mask |= 1 << index;
         m.player_count += 1;
 
@@ -236,6 +240,42 @@ pub mod blowup {
         r.last_randomness = m.last_randomness;
         r.recorded_slot = Clock::get()?.slot;
         r.bump = ctx.bumps.result;
+        r.progress_recorded = 0;
+        Ok(())
+    }
+
+    /// Add a settled match to the wallet profile linked to `seat` (base layer).
+    /// Anyone may call it (the lobby does, paying the profile's rent): it only
+    /// reads the settled match, and each seat counts once per match.
+    pub fn record_progress(ctx: Context<RecordProgress>, seat: u8) -> Result<()> {
+        let m = &ctx.accounts.match_state;
+        require!(m.phase == phase::FINISHED, BlowupError::WrongPhase);
+        let i = seat as usize;
+        require!(i < MAX_PLAYERS && m.players[i] != Pubkey::default(), BlowupError::BadPlayerIndex);
+        let wallet = m.wallets[i];
+        require!(wallet != Pubkey::default(), BlowupError::NoWalletLinked);
+        require_keys_eq!(wallet, ctx.accounts.wallet.key(), BlowupError::WrongWallet);
+        let r = &mut ctx.accounts.result;
+        require!(r.progress_recorded & (1 << seat) == 0, BlowupError::ProgressAlreadyRecorded);
+        r.progress_recorded |= 1 << seat;
+
+        let p = &mut ctx.accounts.profile;
+        if p.wallet == Pubkey::default() {
+            p.wallet = wallet;
+            p.bump = ctx.bumps.profile;
+        }
+        let placement = m.placements[i];
+        p.matches = p.matches.saturating_add(1);
+        if is_win(placement) {
+            p.wins = p.wins.saturating_add(1);
+        }
+        if is_podium(placement) {
+            p.podiums = p.podiums.saturating_add(1);
+        }
+        p.passes = p.passes.saturating_add(m.passes[i] as u32);
+        p.received = p.received.saturating_add(m.received[i] as u32);
+        p.last_match = m.key();
+        p.updated_slot = Clock::get()?.slot;
         Ok(())
     }
 
@@ -289,6 +329,7 @@ pub mod blowup {
             let n = survivors(m.alive_mask);
             let holder = nth_alive(m.alive_mask, pick_index(draw_u32(&randomness, b"holder"), n as u32));
             m.holder = holder;
+            m.received[holder as usize] = m.received[holder as usize].saturating_add(1);
             m.round = m.player_count - n + 1;
             m.round_start_slot = slot;
             m.round_deadline_slot = slot + ms_to_slots(ROUND_DEADLINE_MS, m.slot_ms);
@@ -400,6 +441,9 @@ pub mod blowup {
             BlowupError::OutOfRange
         );
 
+        let from = m.holder as usize;
+        m.passes[from] = m.passes[from].saturating_add(1);
+        m.received[target_index as usize] = m.received[target_index as usize].saturating_add(1);
         m.last_giver = m.holder;
         m.protected_player = m.holder;
         m.protected_until_slot = slot + ms_to_slots(TRANSFER_PROTECTION_MS, m.slot_ms);
@@ -607,6 +651,26 @@ pub struct RecordResult<'info> {
         bump
     )]
     pub result: Account<'info, MatchResult>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RecordProgress<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub match_state: Account<'info, MatchState>,
+    #[account(mut, seeds = [RESULT_SEED, match_state.key().as_ref()], bump = result.bump)]
+    pub result: Account<'info, MatchResult>,
+    /// CHECK: the seat's linked wallet; must equal match_state.wallets[seat] (checked in the handler).
+    pub wallet: UncheckedAccount<'info>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + PlayerProfile::INIT_SPACE,
+        seeds = [PROFILE_SEED, wallet.key().as_ref()],
+        bump
+    )]
+    pub profile: Account<'info, PlayerProfile>,
     pub system_program: Program<'info, System>,
 }
 

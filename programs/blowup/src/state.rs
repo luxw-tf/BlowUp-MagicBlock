@@ -5,6 +5,7 @@ use crate::rules::MAX_PLAYERS;
 pub const MATCH_SEED: &[u8] = b"match";
 pub const PLAYER_SEED: &[u8] = b"player";
 pub const RESULT_SEED: &[u8] = b"result";
+pub const PROFILE_SEED: &[u8] = b"profile";
 
 pub mod phase {
     pub const LOBBY: u8 = 0;
@@ -54,6 +55,14 @@ pub struct MatchState {
     pub winner: u8,
     pub players: [Pubkey; MAX_PLAYERS],
     pub bump: u8,
+    // ── appended (wallet progress): new fields go at the end so offsets above don't move ──
+    /// Wallet linked to each seat (Pubkey::default() = guest). Set at join by the
+    /// lobby after it verified the player's signed link message.
+    pub wallets: [Pubkey; MAX_PLAYERS],
+    /// Passes made per seat (successful transfers away from them, incl. reflections).
+    pub passes: [u16; MAX_PLAYERS],
+    /// Times the bomb landed on each seat (round draws and incoming passes).
+    pub received: [u16; MAX_PLAYERS],
 }
 
 /// Per-player state. Inputs only write this account, so players don't contend
@@ -91,5 +100,25 @@ pub struct MatchResult {
     pub vrf_fulfilled: u32,
     pub last_randomness: [u8; 32],
     pub recorded_slot: u64,
+    pub bump: u8,
+    /// Bitmask of seats whose wallet profile already counted this match
+    /// (record_progress is idempotent per seat).
+    pub progress_recorded: u8,
+}
+
+/// A wallet's lifetime record across online matches, on the Solana base layer.
+/// Seeds: [PROFILE_SEED, wallet].
+#[account]
+#[derive(InitSpace)]
+pub struct PlayerProfile {
+    pub wallet: Pubkey,
+    pub matches: u32,
+    pub wins: u32,
+    /// Top-three finishes (wins included).
+    pub podiums: u32,
+    pub passes: u32,
+    pub received: u32,
+    pub last_match: Pubkey,
+    pub updated_slot: u64,
     pub bump: u8,
 }

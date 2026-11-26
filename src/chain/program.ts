@@ -41,6 +41,8 @@ export const pda = {
   player: (match: PublicKey, index: number) =>
     PublicKey.findProgramAddressSync([new TextEncoder().encode('player'), match.toBytes(), Uint8Array.of(index)], PROGRAM_ID)[0],
   result: (match: PublicKey) => PublicKey.findProgramAddressSync([new TextEncoder().encode('result'), match.toBytes()], PROGRAM_ID)[0],
+  /** A wallet's lifetime record across online matches. */
+  profile: (wallet: PublicKey) => PublicKey.findProgramAddressSync([new TextEncoder().encode('profile'), wallet.toBytes()], PROGRAM_ID)[0],
 };
 
 // ───────────────────────── accounts ─────────────────────────
@@ -73,6 +75,11 @@ export interface ChainMatch {
   placements: number[];
   winner: number;
   players: PublicKey[];
+  /** Linked wallet per seat (PublicKey.default = guest). */
+  wallets: PublicKey[];
+  /** Passes made / bombs received per seat. */
+  passes: number[];
+  received: number[];
 }
 
 export interface ChainPlayer {
@@ -99,6 +106,19 @@ export interface ChainResult {
   vrfFulfilled: number;
   lastRandomness: Uint8Array;
   recordedSlot: number;
+  /** Bitmask of seats whose wallet profile already counted this match. */
+  progressRecorded: number;
+}
+
+export interface ChainProfile {
+  wallet: PublicKey;
+  matches: number;
+  wins: number;
+  podiums: number;
+  passes: number;
+  received: number;
+  lastMatch: PublicKey;
+  updatedSlot: number;
 }
 
 type Raw = Record<string, unknown>;
@@ -138,6 +158,9 @@ export function decodeMatch(data: Uint8Array): ChainMatch {
     placements: (r.placements as number[]).map(num),
     winner: num(r.winner),
     players: r.players as PublicKey[],
+    wallets: r.wallets as PublicKey[],
+    passes: (r.passes as number[]).map(num),
+    received: (r.received as number[]).map(num),
   };
 }
 
@@ -170,6 +193,21 @@ export function decodeResult(data: Uint8Array): ChainResult {
     vrfFulfilled: num(r.vrfFulfilled),
     lastRandomness: Uint8Array.from(r.lastRandomness as number[]),
     recordedSlot: num(r.recordedSlot),
+    progressRecorded: num(r.progressRecorded),
+  };
+}
+
+export function decodeProfile(data: Uint8Array): ChainProfile {
+  const r = decodeRaw('PlayerProfile', data);
+  return {
+    wallet: r.wallet as PublicKey,
+    matches: num(r.matches),
+    wins: num(r.wins),
+    podiums: num(r.podiums),
+    passes: num(r.passes),
+    received: num(r.received),
+    lastMatch: r.lastMatch as PublicKey,
+    updatedSlot: num(r.updatedSlot),
   };
 }
 
@@ -204,9 +242,18 @@ export function instructions(connection: Connection) {
   return {
     createMatch: (authority: PublicKey, matchId: bigint, slotMs: number) =>
       m.createMatch(bn(matchId), slotMs).accountsPartial({ authority, matchState: pda.match(matchId) }).instruction(),
-    joinMatch: (authority: PublicKey, match: PublicKey, index: number, player: PublicKey, session: PublicKey, expiry: number) =>
+    /** `wallet`: the seat's verified linked wallet, or PublicKey.default for a guest. */
+    joinMatch: (
+      authority: PublicKey,
+      match: PublicKey,
+      index: number,
+      player: PublicKey,
+      session: PublicKey,
+      expiry: number,
+      wallet: PublicKey = PublicKey.default,
+    ) =>
       m
-        .joinMatch(index, player, session, bn(expiry))
+        .joinMatch(index, player, session, bn(expiry), wallet)
         .accountsPartial({ authority, matchState: match, playerState: pda.player(match, index) })
         .instruction(),
     delegatePlayer: (payer: PublicKey, match: PublicKey, index: number, validator?: PublicKey) =>
@@ -262,6 +309,12 @@ export function instructions(connection: Connection) {
         .instruction(),
     recordResult: (payer: PublicKey, match: PublicKey) =>
       m.recordResult().accountsPartial({ payer, matchState: match, result: pda.result(match) }).instruction(),
+    /** Add a settled match to the wallet profile linked to `seat` (base layer; once per seat). */
+    recordProgress: (payer: PublicKey, match: PublicKey, seat: number, wallet: PublicKey) =>
+      m
+        .recordProgress(seat)
+        .accountsPartial({ payer, matchState: match, result: pda.result(match), wallet, profile: pda.profile(wallet) })
+        .instruction(),
   };
 }
 

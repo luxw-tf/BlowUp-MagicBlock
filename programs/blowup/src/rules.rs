@@ -61,6 +61,14 @@ pub fn takeover_allowed(slot: u64, last_input_slot: u64, slot_ms: u16) -> bool {
     slots_to_ms(slot.saturating_sub(last_input_slot), slot_ms) >= TAKEOVER_GRACE_MS
 }
 
+/// Profile stats: placement 1 is a win; 1-3 is a podium; 0 means no seat.
+pub fn is_win(placement: u8) -> bool {
+    placement == 1
+}
+pub fn is_podium(placement: u8) -> bool {
+    (1..=3).contains(&placement)
+}
+
 /// Unbiased-enough mapping of a u32 to [0, n): floor(u * n / 2^32).
 pub fn pick_index(u: u32, n: u32) -> u32 {
     ((u as u64 * n as u64) >> 32) as u32
@@ -202,6 +210,14 @@ mod tests {
         assert!(takeover_allowed(1_000_500, 1_000_000, 10));
         assert!(takeover_allowed(1_000_000, 0, 10)); // never sent an input
         assert!(!takeover_allowed(1_000_000, 1_000_000, 10)); // just sent one
+    }
+
+    #[test]
+    fn profile_win_and_podium() {
+        assert!(is_win(1) && is_podium(1));
+        assert!(!is_win(2) && is_podium(2) && is_podium(3));
+        assert!(!is_podium(4) && !is_podium(6));
+        assert!(!is_win(0) && !is_podium(0)); // no seat never counts
     }
 
     #[test]

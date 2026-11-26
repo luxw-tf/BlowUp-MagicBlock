@@ -50,4 +50,10 @@ pub enum BlowupError {
     PlayerStillActive,
     #[msg("Passing is locked in the last moments before the round deadline")]
     RoundLocked,
+    #[msg("No wallet is linked to this seat")]
+    NoWalletLinked,
+    #[msg("Wallet does not match the seat's linked wallet")]
+    WrongWallet,
+    #[msg("This match already counted towards that profile")]
+    ProgressAlreadyRecorded,
 }
