@@ -95,8 +95,9 @@ function CameraRig() {
       if (focus.auto !== false && holder) focus.id = holder;
       const g = posOf(focus.id) ?? f;
       tx = g.x; tz = THREE.MathUtils.clamp(g.z, -ARENA.halfDepth + 2, ARENA.halfDepth - 2); zoomT = 0.85; follow = false;
-    } else if (s.phase === 'active' && alive.length === 2) {
-      // the final two: frame both
+    } else if (s.phase === 'active' && alive.length === 2 && !session.practice) {
+      // the final two: frame both (not in the tutorial, where this framing re-centred and re-zoomed on every step you
+      // took, so both figures seemed to glide about on their own)
       const a = posOf(alive[0].id)!, b = posOf(alive[1].id)!;
       tx = (a.x + b.x) / 2; tz = (a.z + b.z) / 2;
       const spread = Math.hypot(a.x - b.x, (a.z - b.z) * 1.6);

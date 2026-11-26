@@ -16,7 +16,11 @@ export const CHARACTERS: CharacterDef[] = [
   { id: 'rat', name: 'Knight', color: '#5b84e0', accent: '#e6eefc' },
   { id: 'duck', name: 'Rogue', color: '#8a5bd6', accent: '#ff8c1a' },
   { id: 'creature', name: 'Shade', color: '#b04aa0', accent: '#d8fffb' },
+  { id: 'skull', name: 'Bones', color: '#e0a82e', accent: '#fff4d6' },
 ];
+
+/** The colours a bot can wear: never Bones' gold, so a gold skeleton on the dock is always a player. */
+export const BOT_CHARACTERS = CHARACTERS.filter((c) => c.id !== 'skull');
 
 export const characterDef = (id: CharacterId): CharacterDef => CHARACTERS.find((c) => c.id === id)!;
 

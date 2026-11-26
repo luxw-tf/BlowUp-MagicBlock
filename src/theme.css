@@ -704,7 +704,8 @@ kbd {
   }
   .hero-row {
     bottom: 166px;
-    gap: 6px;
+    gap: 4px;
+    padding: 8px 10px; /* seven heroes fit a 375px phone inside its 16px gutters */
   }
   .hero-chip .portrait {
     width: 40px !important;

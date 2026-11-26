@@ -3,7 +3,7 @@
  * pedestal at the harbour edge (they wave as they pop in).
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { LAYOUTS, MOODS, OBSTACLES, WEATHERS, selectLayout, selectMood, selectWeather, weatherFor } from '../game/arena';
 import { CHARACTERS } from '../game/content';
@@ -55,8 +55,10 @@ function Pedestal() {
 /** Which way the last switch went (the menu sets it): the next hero spins in from that side. */
 export const heroTurn = { dir: 1 };
 
-/** The picked hero on the pedestal: pops in when you switch, waves once. */
-function Hero({ id }: { id: CharacterId }) {
+/** The picked hero on the pedestal: pops in when you switch, waves once. On the title, the title's own hero stands there. */
+function Hero({ id: picked }: { id: CharacterId }) {
+  const [onTitle, setOnTitle] = useState(titleView.on);
+  const id = onTitle ? TITLE_HERO : picked;
   const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
   const g = useRef<THREE.Group>(null);
   const born = useRef(performance.now());
@@ -71,6 +73,7 @@ function Hero({ id }: { id: CharacterId }) {
     };
   }, [id]);
   useFrame(() => {
+    if (titleView.on !== onTitle) setOnTitle(titleView.on);
     if (!g.current) return;
     const k = Math.min(1, (performance.now() - born.current) / 380);
     const e = 1 - Math.pow(1 - k, 3);
@@ -108,15 +111,19 @@ function DrawnFlag() {
 const titleBlend = { w: 0 };
 
 /**
- * The crew round the pedestal for the title shot (offsets from the stage), symmetric: two each side of the hero.
- * Every spot stays on the deck side of the harbour railing.
+ * The crew round the pedestal for the title shot (offsets from the stage), symmetric: three each side, in a shallow
+ * arc that curves back towards the sea, inside the two dock cannons (at ±6). Every spot stays on the deck side of the harbour railing.
  */
-const CREW_SPOTS: { x: number; z: number; sit?: boolean }[] = [
-  { x: -4.4, z: -0.5 },
-  { x: -2.5, z: 0.5 },
-  { x: 2.5, z: 0.5 },
-  { x: 4.4, z: -0.5 },
+const CREW_SPOTS: { x: number; z: number }[] = [
+  { x: -4.9, z: -0.6 },
+  { x: -3.6, z: 0.1 },
+  { x: -2.3, z: 0.7 },
+  { x: 2.3, z: 0.7 },
+  { x: 3.6, z: 0.1 },
+  { x: 4.9, z: -0.6 },
 ];
+/** Who stands on the title's podium: a different hero each time the page loads. Your own hero takes over as the menu comes in. */
+export const TITLE_HERO: CharacterId = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)].id;
 
 /**
  * The hot potato, as a timeline shared by the crew: who holds it, who's next, when they start the throw, when it
@@ -128,9 +135,6 @@ if (import.meta.env.DEV) Object.assign(window, { __potato: potato });
 /** The throw clip plays at double speed; the bomb leaves the hand about this long after it starts. */
 const RELEASE_AFTER = 0.3;
 const FLIGHT = 0.7;
-/** The sitter stands up (1.13 s clip), throws, then sits back down (1.0 s clip). */
-const STAND_UP = 1.13;
-const SIT_DOWN = 1.0;
 /** Each crew member's hand bones (left, right), found once their model has loaded. */
 const hands: ([THREE.Object3D, THREE.Object3D] | null)[] = CREW_SPOTS.map(() => null);
 
@@ -139,7 +143,7 @@ function bombAt(i: number, t: number, out: THREE.Vector3) {
   const h = hands[i];
   if (!h) {
     const c = CREW_SPOTS[i];
-    return out.set(STAGE.x + c.x, c.sit ? 0.62 : 0.9, STAGE.z + c.z);
+    return out.set(STAGE.x + c.x, 0.9, STAGE.z + c.z);
   }
   const l = h[0].getWorldPosition(out);
   const r = h[1].getWorldPosition(new THREE.Vector3());
@@ -149,14 +153,12 @@ function bombAt(i: number, t: number, out: THREE.Vector3) {
   return k > 0 ? l.lerp(r, k) : l;
 }
 
-/** One of the crew on the title: holds the bomb when it's theirs, turns and throws it on; the sitter gets up first. */
-function CrewMate({ id, i }: { id: CharacterId; i: number }) {
+/** One of the crew on the title: holds the bomb when it's theirs, turns and throws it on. */
+function CrewMate({ id, i, hero }: { id: CharacterId; i: number; hero: CharacterId }) {
   const spot = CREW_SPOTS[i];
-  const drive = useRef<RigDrive>({ state: spot.sit ? 'sit' : 'idle', speed: 0, hitAt: 0, actAt: 0 });
+  const drive = useRef<RigDrive>({ state: 'idle', speed: 0, hitAt: 0, actAt: 0 });
   const g = useRef<THREE.Group>(null);
   const threwFor = useRef(-1);
-  /** when this one last let go of the bomb (the sitter sits back down after it) */
-  const myRelease = useRef(-1);
   useEffect(() => {
     hands[i] = null; // a different model may stand here now
     return () => {
@@ -168,7 +170,9 @@ function CrewMate({ id, i }: { id: CharacterId; i: number }) {
   useFrame(({ clock }, dt) => {
     const grp = g.current;
     if (!grp) return;
-    grp.visible = titleBlend.w > 0.35; // gone a third of the way into the glide down, while the camera is moving
+    // gone a third of the way into the glide down, while the camera is moving; whoever is your hero steps up onto the
+    // podium as the title goes, so their double on the deck goes straight away
+    grp.visible = titleBlend.w > 0.35 && (titleView.on || id !== hero);
     if (!hands[i]) {
       // three.js strips the dots from node names on load: handslot.l is 'handslotl'
       const l = grp.getObjectByName('handslotl'), r = grp.getObjectByName('handslotr');
@@ -180,19 +184,10 @@ function CrewMate({ id, i }: { id: CharacterId; i: number }) {
     // the throw itself, once per hand-off
     if (mine && t >= potato.throwStart && threwFor.current !== potato.throwStart) {
       threwFor.current = potato.throwStart;
-      myRelease.current = potato.releaseAt;
       d.actKind = 'throw';
       d.actAt = performance.now();
     }
-    if (spot.sit) {
-      // sitting, unless it's her turn: get up, hold it, throw, follow through, sit back down
-      const upAt = potato.throwStart - 0.3 - STAND_UP;
-      const r = myRelease.current;
-      if (mine && t >= upAt && t < potato.releaseAt) d.state = t < upAt + STAND_UP ? 'standup' : 'hold';
-      else if (r > 0 && t >= r && t < r + 0.3) d.state = 'idle';
-      else if (r > 0 && t >= r + 0.3 && t < r + 0.3 + SIT_DOWN) d.state = 'sitdown';
-      else d.state = 'sit';
-    } else if (mine && t < potato.releaseAt) d.state = 'hold';
+    if (mine && t < potato.releaseAt) d.state = 'hold';
     else d.state = Math.sin(t * 0.7 + spot.x * 1.3) > 0.88 ? 'win' : 'idle';
     // face the camera, but turn to whoever's next for the throw
     let want = faceCam;
@@ -245,8 +240,7 @@ function HotPotato() {
         const caught = potato.next;
         let n = caught;
         while (n === caught) n = Math.floor(Math.random() * CREW_SPOTS.length);
-        const sit = CREW_SPOTS[caught].sit;
-        const hold = sit ? 0.35 + STAND_UP + 0.3 : 0.7 + Math.random() * 0.6;
+        const hold = 0.7 + Math.random() * 0.6;
         potato.holder = caught;
         potato.next = n;
         potato.landedAt = t;
@@ -275,16 +269,13 @@ function HotPotato() {
   );
 }
 
-/** The title's crew: everyone but the picked hero, round the pedestal, passing a lit bomb among themselves. */
+/** The title's crew: everyone but whoever is on the podium, round the pedestal, passing a lit bomb among themselves. */
 function TitleCrew({ hero }: { hero: CharacterId }) {
-  // four of the other five: the middle one (who used to sit in front) only shows up on the hero picker
-  const others = CHARACTERS.filter((c) => c.id !== hero)
-    .map((c) => c.id)
-    .filter((_, k) => k !== 2);
+  const crew = CHARACTERS.filter((c) => c.id !== TITLE_HERO).map((c) => c.id);
   return (
     <>
-      {others.slice(0, CREW_SPOTS.length).map((id, i) => (
-        <CrewMate key={id} id={id} i={i} />
+      {crew.slice(0, CREW_SPOTS.length).map((id, i) => (
+        <CrewMate key={id} id={id} i={i} hero={hero} />
       ))}
       <HotPotato />
     </>

@@ -9,7 +9,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTERS } from '../game/content';
 import type { CharacterId } from '../game/types';
-import { HEROES, SKELETONS } from './crew';
+import { HEROES, SKELETONS, dyeBotBones } from './crew';
 import { modelUrl } from './models';
 
 export type PortraitKey = CharacterId | `skel${number}`;
@@ -38,6 +38,7 @@ async function renderAll() {
     try {
       const gltf = await loader.loadAsync(modelUrl(src));
       const model = skeletonClone(gltf.scene);
+      if (key.startsWith('skel')) dyeBotBones(model);
       if (idle) {
         const mixer = new THREE.AnimationMixer(model);
         mixer.clipAction(idle).play();

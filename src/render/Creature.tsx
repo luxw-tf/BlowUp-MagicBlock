@@ -167,6 +167,7 @@ function Model({ id }: { id: CharacterId }) {
         </group>
       );
     case 'creature':
+    case 'skull': // a stand-in while the model loads
       return (
         <group>
           <mesh castShadow position={[0, 0.62, 0]}>

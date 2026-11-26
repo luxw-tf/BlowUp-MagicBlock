@@ -9,7 +9,7 @@
  */
 import { BotBrain } from './bots';
 import { CONFIG, TICK_DT } from './config';
-import { BOT_NAMES, CHARACTERS } from './content';
+import { BOT_CHARACTERS, BOT_NAMES } from './content';
 import { add, scale } from './math';
 import { createMatch, drainEvents, fulfillRandomness, step, type ParticipantSetup } from './sim';
 import { LAYOUTS, MOODS, WEATHERS, WEATHER_FX, currentWeather, selectLayout, selectMood, selectWeather, weatherFor } from './arena';
@@ -34,7 +34,7 @@ function shuffle<T>(a: T[]): T[] {
 }
 
 export function buildParticipants(local: LocalPlayerSetup, total = 6): ParticipantSetup[] {
-  const others = shuffle(CHARACTERS.filter((c) => c.id !== local.character).map((c) => c.id));
+  const others = shuffle(BOT_CHARACTERS.filter((c) => c.id !== local.character).map((c) => c.id));
   const names = shuffle(BOT_NAMES.filter((n) => n.toLowerCase() !== local.name.toLowerCase()));
   const list: ParticipantSetup[] = [{ id: 'p0', name: local.name, character: local.character, isBot: false }];
   for (let i = 1; i < total; i++) {
@@ -49,6 +49,8 @@ export class GameSession implements SessionLike {
   private static counter = 0;
   readonly id = ++GameSession.counter;
   readonly localId: PlayerId = 'p0';
+  /** set by the tutorial (see SessionLike.practice) */
+  practice = false;
   readonly online = null;
   readonly verification: VerificationEntry[] = [];
   readonly prevPos = new Map<PlayerId, Vec2>();

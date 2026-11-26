@@ -5,7 +5,7 @@ export interface Vec2 {
 
 export type PlayerId = string;
 
-export type CharacterId = 'frog' | 'cat' | 'blob' | 'rat' | 'duck' | 'creature';
+export type CharacterId = 'frog' | 'cat' | 'blob' | 'rat' | 'duck' | 'creature' | 'skull';
 
 export type AbilityId =
   | 'returnToSender'

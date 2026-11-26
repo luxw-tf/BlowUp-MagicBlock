@@ -21,9 +21,11 @@ export const HEROES: Record<CharacterId, string> = {
   rat: 'kaykit/Knight.glb',
   duck: 'kaykit/Rogue.glb',
   creature: 'kaykit/Rogue_Hooded.glb',
+  skull: 'kaykit/Skeleton_Minion.glb', // Bones: the one playable skeleton, so no bot wears this one
 };
 /** Bots are the undead: one of these, by seat. */
-export const SKELETONS = ['kaykit/Skeleton_Warrior.glb', 'kaykit/Skeleton_Rogue.glb', 'kaykit/Skeleton_Mage.glb', 'kaykit/Skeleton_Minion.glb'];
+export const SKELETONS = ['kaykit/Skeleton_Warrior.glb', 'kaykit/Skeleton_Rogue.glb', 'kaykit/Skeleton_Mage.glb'];
+const isSkeleton = (src: string) => src.includes('/Skeleton_');
 
 /**
  * Each model's build: how tall it stands, its idle, and how quick its stride is. Big and heavy, small and quick,
@@ -71,25 +73,31 @@ function outlineMaterial(width: number, color = '#16110d') {
 
 /** A skeleton's clothes and armour (separate meshes in KayKit's rigs); bone, eyes and jaw keep their own look. */
 const OUTFIT = /(Cloak|Cape|Hood|Hat|Helmet)$/;
+/** A bot skeleton's skull, jaw and arm bones: dyed the undead's own teal, so a bot never passes for Bones (who stays bone white). */
+const BOT_BONE = /(Head|Jaw|Skull|ArmLeft|ArmRight)$/;
+const BOT_TEAL = '#2fb8a8';
 
 /**
  * A figure's material in a player's colour: a soft rim light in that colour round the silhouette (so each figure
  * glows its own identity, even in dark weather), and for a skeleton's clothes a full recolour that keeps the shading
  * (texture brightness drives the shade, hue and saturation come from the player). One material per figure.
  */
-function identity(base: THREE.Material, color: string, recolour: boolean): THREE.Material {
+function identity(base: THREE.Material, color: string, dye: string | null): THREE.Material {
   const m = base.clone() as THREE.MeshStandardMaterial;
   const tint = { value: new THREE.Color(color) };
+  const dyeC = { value: new THREE.Color(dye ?? color) };
+  const recolour = dye !== null;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTint = tint;
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTint;');
+    sh.uniforms.uDye = dyeC;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTint;\nuniform vec3 uDye;');
     if (recolour)
       sh.fragmentShader = sh.fragmentShader.replace(
         '#include <map_fragment>',
         `#include <map_fragment>
         // keep the cloth's light and shade (folds, brims, trims) so the shape still reads, and a touch of its detail
         float tl = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        vec3 dyed = uTint * clamp(0.22 + tl * 3.6, 0.0, 1.2);
+        vec3 dyed = uDye * clamp(0.22 + tl * 3.6, 0.0, 1.2);
         diffuseColor.rgb = mix(dyed, diffuseColor.rgb * 1.6, 0.12);`,
       );
     sh.fragmentShader = sh.fragmentShader.replace(
@@ -101,6 +109,14 @@ function identity(base: THREE.Material, color: string, recolour: boolean): THREE
   };
   m.customProgramCacheKey = () => (recolour ? 'crew-id-tint' : 'crew-id');
   return m;
+}
+
+/** Dye a bot skeleton's bones teal outside a match too (the HUD headshots), to match how they look on the dock. */
+export function dyeBotBones(scene: THREE.Object3D) {
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !Array.isArray(m.material) && BOT_BONE.test(m.name)) m.material = identity(m.material, BOT_TEAL, BOT_TEAL);
+  });
 }
 
 /**
@@ -142,6 +158,7 @@ const HERO_SELECT: Record<CharacterId, string> = {
   rat: 'Melee_Block', // Knight: up on guard
   duck: 'Melee_Dualwield_Attack_Stab', // Rogue: quick twin stabs
   creature: 'Melee_Unarmed_Attack_Kick', // Shade: a sharp kick
+  skull: 'Skeletons_Awaken_Standing', // Bones: rattles back to life
 };
 const ONCE: Move[] = ['dash', 'throw', 'tag', 'hit', 'death', 'hello', 'standup', 'sitdown'];
 
@@ -171,11 +188,11 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       if (!m.isMesh) return;
       m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;
       if (!tint || Array.isArray(m.material)) return;
-      const recolour = bot && OUTFIT.test(m.name);
+      const dye = !bot ? null : OUTFIT.test(m.name) ? tint : BOT_BONE.test(m.name) ? BOT_TEAL : null;
       const key = m.material;
-      if (recolour) m.material = identity(key, tint, true);
+      if (dye) m.material = identity(key, tint, dye);
       else {
-        if (!swapped.has(key)) swapped.set(key, identity(key, tint, false));
+        if (!swapped.has(key)) swapped.set(key, identity(key, tint, null));
         m.material = swapped.get(key)!;
       }
     });
@@ -211,7 +228,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       }
     }
     const mixer = new THREE.AnimationMixer(scene);
-    const names = { ...(bot ? SKELETON_CLIPS : HERO_CLIPS), idle: build.idle, ...(bot ? {} : { hello: HERO_SELECT[id] ?? HERO_CLIPS.hello }) };
+    const names = { ...(isSkeleton(src) ? SKELETON_CLIPS : HERO_CLIPS), idle: build.idle, ...(bot ? {} : { hello: HERO_SELECT[id] ?? HERO_CLIPS.hello }) };
     const all = new Map(anims.flatMap((a) => a.animations).map((c) => [c.name, c]));
     const actions = new Map<Move, THREE.AnimationAction>();
     for (const move of Object.keys(names) as Move[]) {

@@ -15,10 +15,12 @@ const DUMMY: PlayerId = 'dummy';
 /** A two-player match: you, and a dummy with no brain (no bot, no input, so it just stands there). */
 export function createTutorialSession(p: Profile): GameSession {
   const other: CharacterId = CHARACTERS.find((c) => c.id !== p.character)!.id;
-  return new GameSession([
+  const session = new GameSession([
     { id: 'p0', name: p.name, character: p.character, isBot: false },
     { id: DUMMY, name: 'Practice Dummy', character: other, isBot: false },
   ]);
+  session.practice = true;
+  return session;
 }
 
 /** Put the bomb in someone's hands with a fresh, long fuse (the tutorial's own hand, not a pass). */

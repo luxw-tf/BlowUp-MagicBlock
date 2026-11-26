@@ -13,7 +13,7 @@ import { Connection, Keypair, PublicKey, type TransactionInstruction } from '@so
 import { segmentClear } from '../src/game/arena';
 import { BotBrain } from '../src/game/bots';
 import { CONFIG } from '../src/game/config';
-import { BOT_NAMES, CHARACTERS } from '../src/game/content';
+import { BOT_CHARACTERS, BOT_NAMES } from '../src/game/content';
 import { add, dist, norm, scale, sub } from '../src/game/math';
 import { holderCanAct, predictMovement, tagCandidates } from '../src/game/sim';
 import type { CharacterId, PlayerState } from '../src/game/types';
@@ -207,8 +207,8 @@ export class MatchRunner {
     const botNames = shuffle(BOT_NAMES.filter((n) => !taken.has(n.toLowerCase())));
     const usedChars = new Set(this.humans.map((h) => h.character));
     const botChars = shuffle([
-      ...CHARACTERS.map((c) => c.id).filter((c) => !usedChars.has(c)),
-      ...CHARACTERS.map((c) => c.id).filter((c) => usedChars.has(c)),
+      ...BOT_CHARACTERS.map((c) => c.id).filter((c) => !usedChars.has(c)),
+      ...BOT_CHARACTERS.map((c) => c.id).filter((c) => usedChars.has(c)),
     ]);
 
     const now = Math.floor(Date.now() / 1000);

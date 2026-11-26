@@ -37,6 +37,8 @@ export interface SessionLike {
   readonly provider: { readonly label: string; readonly verifiable: boolean };
   readonly verification: VerificationEntry[];
   readonly online: OnlineMatchInfo | null;
+  /** The tutorial's practice round: two players, but not a final, so the camera follows you as in open play. */
+  readonly practice?: boolean;
   /** Interpolation factor between ticks (0..1). */
   readonly alpha: number;
   renderPos(id: PlayerId): Vec2;
