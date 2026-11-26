@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { activeMatchId, rememberActiveMatch, type OnlineSession } from './chain/online-session';
 import { buildParticipants, GameSession } from './game/session';
 import type { SessionLike } from './game/sessionTypes';
@@ -13,6 +13,9 @@ import type { GameSession as LocalSession } from './game/session';
 import { loadProfile, saveProfile, type Profile } from './state/settings';
 import { MenuStage } from './render/MenuStage';
 import type { CharacterId } from './game/types';
+import { signWalletLink, watchWallet } from './chain/browser-wallet';
+import type { WalletProof } from './chain/wallet-link';
+import { WalletProgress } from './ui/WalletProgress';
 
 type Screen =
   | { kind: 'landing' }
@@ -31,6 +34,25 @@ export default function App() {
   const [pendingRoom, setPendingRoom] = useState<string | null>(inviteCode);
   const [rejoinId, setRejoinId] = useState<string | null>(activeMatchId);
   const [notice, setNotice] = useState<string | null>(null);
+  const [linked, setLinked] = useState<{ proof: WalletProof; provider: Parameters<typeof signWalletLink>[0] } | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const walletProof = linked?.proof ?? null;
+  useEffect(() => {
+    if (linked) return watchWallet(linked.provider, () => setLinked(null));
+  }, [linked]);
+
+  const connectWallet = async (provider: Parameters<typeof signWalletLink>[0]) => {
+    setWalletBusy(true);
+    setWalletError(null);
+    try {
+      setLinked({ proof: await signWalletLink(provider), provider });
+    } catch {
+      setWalletError('Could not link wallet. Try again or play as a guest.');
+    } finally {
+      setWalletBusy(false);
+    }
+  };
   /** the pirate standing on the menu's dock */
   const [hero, setHero] = useState<CharacterId>(() => loadProfile()?.character ?? 'frog');
   const [screen, setScreen] = useState<Screen>(() =>
@@ -135,12 +157,13 @@ export default function App() {
           notice={notice}
           onCharacter={setHero}
           onTutorial={tutorial}
+          walletControls={<WalletProgress proof={walletProof} connect={connectWallet} guest={() => { setLinked(null); setWalletError(null); }} busy={walletBusy} error={walletError} />}
         />
       );
     else if (screen.kind === 'lobby')
       menu = <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
-    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} onReady={toMatch} onCancel={toLanding} />;
-    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
+    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} walletProof={walletProof} onReady={toMatch} onCancel={toLanding} />;
+    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} walletProof={walletProof} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
     return (
       <>
         <MenuStage hero={hero} />

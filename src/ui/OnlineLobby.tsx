@@ -3,6 +3,8 @@ import { guestKeys, type OnlineSession } from '../chain/online-session';
 import type { Profile } from '../state/settings';
 import { api, joinPayload, SETUP_STEPS, waitForMatch, type GuestKeys } from './onlineFlow';
 import { Icon } from './Icon';
+import type { WalletProof } from '../chain/wallet-link';
+import { NetworkCredits } from './NetworkCredits';
 
 interface TicketView {
   status: 'queued' | 'matched' | 'cancelled' | 'room';
@@ -16,7 +18,7 @@ interface TicketView {
  * remaining seats after a short window), then wait for the match to go live
  * on the rollup. The lobby sponsors everything, so no wallet or SOL.
  */
-export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; onReady: (s: OnlineSession) => void; onCancel: () => void }) {
+export function OnlineLobby({ profile, walletProof, onReady, onCancel }: { profile: Profile; walletProof: WalletProof | null; onReady: (s: OnlineSession) => void; onCancel: () => void }) {
   const [status, setStatus] = useState('queued');
   const [queue, setQueue] = useState<TicketView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; 
     let cancelled = false;
     keysRef.current ??= guestKeys();
     const keys = keysRef.current;
-    ticket.current ??= api<{ ticket: string }>('/api/quickplay', { body: joinPayload(profile, keys) }).then((r) => r.ticket);
+    ticket.current ??= api<{ ticket: string }>('/api/quickplay', { body: joinPayload(profile, keys, walletProof) }).then((r) => r.ticket);
     (async () => {
       const t = await ticket.current!;
       let matchId: string | null = null;
@@ -95,7 +97,7 @@ export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; 
                 <span className="slot-name">{s.label}</span>
               </div>
             ))}
-            <p className="fine">No wallet needed.</p>
+            <p className="fine">{walletProof ? 'Online progress is linked to your wallet.' : 'Playing as a guest.'}</p>
           </div>
         )}
         <div className="row">
@@ -103,6 +105,7 @@ export function OnlineLobby({ profile, onReady, onCancel }: { profile: Profile; 
             {error ? 'Back' : 'Cancel'}
           </button>
         </div>
+        <NetworkCredits />
       </div>
     </div>
   );

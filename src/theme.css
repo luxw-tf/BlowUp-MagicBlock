@@ -576,6 +576,75 @@ kbd {
   align-items: flex-end;
   gap: 10px;
 }
+.wallet-progress {
+  max-width: min(320px, 90vw);
+  padding: 7px 10px;
+  border: 1px solid #8d6138;
+  border-radius: 10px;
+  background: #28180e;
+  color: var(--cream);
+  font-size: 0.82rem;
+}
+.wallet-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.wallet-progress button {
+  color: var(--cream);
+  font: inherit;
+  border: 1px solid #bd8a52;
+  border-radius: 5px;
+  background: #53321e;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.wallet-progress details {
+  margin-top: 6px;
+}
+.wallet-progress summary {
+  cursor: pointer;
+}
+.wallet-progress dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px 10px;
+  margin: 6px 0;
+}
+.wallet-progress dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+}
+.wallet-progress dd {
+  margin: 0;
+  font-weight: 700;
+}
+.network-credits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  width: fit-content;
+  margin: 10px auto 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #21140e;
+  color: #fff4dc;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.network-credits span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.network-credits img {
+  display: block;
+  width: auto;
+  height: 1rem;
+}
 /* your name, right where you hit Play */
 .play-name {
   display: flex;

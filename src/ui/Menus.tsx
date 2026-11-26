@@ -7,6 +7,7 @@ import type { CharacterId } from '../game/types';
 import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
+import { NetworkCredits } from './NetworkCredits';
 import { heroTurn, stageReady, titleView } from '../render/MenuStage';
 
 
@@ -72,6 +73,7 @@ function LoadingVeil({ progress, done }: { progress: number; done: boolean }) {
         <div className="loading-spark" style={{ left: `${pct}%` }} />
       </div>
       <p className="loading-text">Loading the harbour… {pct}%</p>
+      <NetworkCredits />
     </div>
   );
 }
@@ -113,6 +115,7 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
       <div className="title-center">
         <Wordmark className="title-logo" />
         <div className="ribbon title-ribbon">Pass the bomb. Don't be holding it.</div>
+        <NetworkCredits />
       </div>
       <div className="title-start">Click or press any key</div>
       <LoadingVeil progress={progress} done={done} />
@@ -130,6 +133,7 @@ export function Landing({
   notice,
   onCharacter,
   onTutorial,
+  walletControls,
 }: {
   initial: Profile | null;
   onPlay: (p: Profile) => void;
@@ -144,6 +148,7 @@ export function Landing({
   onCharacter: (c: CharacterId) => void;
   /** How to play: a guided practice round. */
   onTutorial: (p: Profile) => void;
+  walletControls: React.ReactNode;
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
@@ -232,6 +237,7 @@ export function Landing({
       </div>
 
       <div className="play-dock">
+        {walletControls}
         {notice && <p className="verify-status warn">{notice}</p>}
         {onRejoin && (
           <button className="btn danger" onClick={onRejoin}>

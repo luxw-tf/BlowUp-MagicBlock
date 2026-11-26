@@ -5,6 +5,8 @@ import type { Profile } from '../state/settings';
 import { api, joinPayload, SETUP_STEPS, waitForMatch, type GuestKeys } from './onlineFlow';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
+import type { WalletProof } from '../chain/wallet-link';
+import { NetworkCredits } from './NetworkCredits';
 
 interface RoomView {
   code: string;
@@ -20,11 +22,13 @@ interface RoomView {
  */
 export function RoomScreen({
   profile,
+  walletProof,
   initialCode,
   onReady,
   onCancel,
 }: {
   profile: Profile;
+  walletProof: WalletProof | null;
   initialCode: string | null;
   onReady: (s: OnlineSession) => void;
   onCancel: () => void;
@@ -46,7 +50,7 @@ export function RoomScreen({
     setError(null);
     try {
       keys.current ??= guestKeys();
-      const body = joinPayload(profile, keys.current);
+      const body = joinPayload(profile, keys.current, walletProof);
       if (mode === 'create') {
         const r = await api<{ code: string; ticket: string }>('/api/rooms', { body });
         ticket.current = r.ticket;
@@ -119,6 +123,7 @@ export function RoomScreen({
             <h2 className="ribbon">Private room</h2>
             <span className="room-code">Online · devnet</span>
           </div>
+          <NetworkCredits />
           <div className="sheet room-start">
             <p className="sheet-note">Start a room and send your friends the link, or type the five letter code they sent you.</p>
             <div className="row">
@@ -161,6 +166,7 @@ export function RoomScreen({
           <h2 className="ribbon">{setup ? 'Starting the match' : 'Private room'}</h2>
           <span className="room-code big-code">{code}</span>
         </div>
+        <NetworkCredits />
         {!setup && (
           <div className="invite">
             <input readOnly value={invite} onFocus={(e) => e.target.select()} />

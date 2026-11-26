@@ -86,6 +86,10 @@ src/chain/
 src/ui/                  OnlineLobby (queue), RoomScreen (private rooms), onlineFlow (API + rejoin)
 ```
 
+**Optional wallet progress.** Connect a supported browser wallet in the menu and sign a link message to attach online matches to your profile on Solana devnet. Gameplay and rejoin keep using the guest identity and session key. The menu's Online progress panel shows matches, wins, podiums, passes and bombs received, including round-opening draws. Profile updates follow match settlement and may take a moment to appear. Use Refresh progress to read again. A reload ends the browser's wallet link, and the signed proof expires after 24 hours. Guest play is the default.
+
+See [the development handoff](docs/HANDOFF.md) for the pre-integration snapshot, live verification history and program compatibility details.
+
 **Matchmaking (milestone 2).** Quick play groups humans first. When 6 are waiting, or the oldest has waited 8 s (`QUEUE_WINDOW_MS`), the match starts and bots fill the empty seats. Private rooms have a 5-letter code and an invite link (`?room=CODE`), per-player ready states, and host-controlled bot fill. Without bots a room needs 2–6 humans. Names are made unique per match.
 
 **Remote players for free (Cloudflare Quick Tunnel).** Expose a production build, never the dev server:
@@ -126,6 +130,7 @@ All third-party assets are CC0 (public domain), credited anyway:
 - Sound effects and jingles: [Kenney](https://kenney.nl) audio packs. See `public/audio/CREDITS.md`.
 - Menu and HUD art (wooden boards, parchment, buttons, stars): CraftPix "Jungle Cartoon GUI" freebie kit, recoloured. Not covered by this repo's licence and not to be redistributed on its own; see `public/ui/LICENSE.txt` and https://craftpix.net/file-licenses/.
 - The BlowUp logo (`public/ui/title-logo.webp`): made for this game.
+- Network marks identify the services used by online play. [MagicBlock](https://www.magicblock.xyz/) · [Solana](https://github.com/solana-labs/solana/blob/master/docs/static/img/logo.svg)
 - Fonts: Alfa Slab One and Signika (SIL Open Font License), via Fontsource.
 
 ## Not done yet / next steps

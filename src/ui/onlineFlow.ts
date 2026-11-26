@@ -1,5 +1,6 @@
 import { guestKeys, OnlineSession, type LobbyMatchInfo } from '../chain/online-session';
 import type { Profile } from '../state/settings';
+import type { WalletProof } from '../chain/wallet-link';
 
 /** Lobby service base URL: same origin in dev (Vite proxies /api). */
 export const LOBBY_URL: string = (import.meta.env.VITE_LOBBY_URL as string | undefined) ?? '';
@@ -22,12 +23,13 @@ export async function api<T = Record<string, unknown>>(path: string, init?: { me
   return body;
 }
 
-export const joinPayload = (profile: Profile, keys: GuestKeys) => ({
+export const joinPayload = (profile: Profile, keys: GuestKeys, walletProof?: WalletProof | null) => ({
   name: profile.name,
   character: profile.character,
   identity: keys.identity.publicKey.toBase58(),
   session: keys.session.publicKey.toBase58(),
   sessionExpiry: keys.sessionExpiry,
+  ...(walletProof ? { walletProof } : {}),
 });
 
 /** Setup steps shown while a match is being created on-chain. */
