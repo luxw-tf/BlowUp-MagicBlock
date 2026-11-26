@@ -108,16 +108,14 @@ function DrawnFlag() {
 const titleBlend = { w: 0 };
 
 /**
- * The rest of the crew round the pedestal for the title shot (offsets from the stage), symmetric: two standing each
- * side, and one sitting on the deck in front (anyone standing there would hide the hero; anyone behind is hidden).
+ * The crew round the pedestal for the title shot (offsets from the stage), symmetric: two each side of the hero.
  * Every spot stays on the deck side of the harbour railing.
  */
 const CREW_SPOTS: { x: number; z: number; sit?: boolean }[] = [
-  { x: -4.6, z: -0.6 },
-  { x: -2.7, z: 0.45 },
-  { x: 0, z: 1.55, sit: true }, // right at the pedestal's foot, low in the frame
-  { x: 2.7, z: 0.45 },
-  { x: 4.6, z: -0.6 },
+  { x: -4.4, z: -0.5 },
+  { x: -2.5, z: 0.5 },
+  { x: 2.5, z: 0.5 },
+  { x: 4.4, z: -0.5 },
 ];
 
 /**
@@ -279,7 +277,10 @@ function HotPotato() {
 
 /** The title's crew: everyone but the picked hero, round the pedestal, passing a lit bomb among themselves. */
 function TitleCrew({ hero }: { hero: CharacterId }) {
-  const others = CHARACTERS.filter((c) => c.id !== hero).map((c) => c.id);
+  // four of the other five: the middle one (who used to sit in front) only shows up on the hero picker
+  const others = CHARACTERS.filter((c) => c.id !== hero)
+    .map((c) => c.id)
+    .filter((_, k) => k !== 2);
   return (
     <>
       {others.slice(0, CREW_SPOTS.length).map((id, i) => (
