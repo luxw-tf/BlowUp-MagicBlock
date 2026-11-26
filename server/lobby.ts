@@ -113,9 +113,19 @@ export class Lobby {
     this.queue = this.queue.filter((id) => this.tickets.get(id)?.status === 'queued');
     if (!this.queue.length || this.activeMatches() >= this.maxActive) return;
     const oldest = this.tickets.get(this.queue[0])!;
-    const full = this.queue.length >= MAX_PLAYERS;
-    if (!full && Date.now() - oldest.createdAt < QUEUE_WINDOW_MS) return;
-    const group = this.queue.splice(0, MAX_PLAYERS).map((id) => this.tickets.get(id)!);
+    const group: Ticket[] = [];
+    const wallets = new Set<string>();
+    for (const id of this.queue) {
+      const ticket = this.tickets.get(id)!;
+      const wallet = ticket.human.wallet?.toBase58();
+      if (wallet && wallets.has(wallet)) continue;
+      if (wallet) wallets.add(wallet);
+      group.push(ticket);
+      if (group.length === MAX_PLAYERS) break;
+    }
+    if (group.length < MAX_PLAYERS && Date.now() - oldest.createdAt < QUEUE_WINDOW_MS) return;
+    const matched = new Set(group.map((ticket) => ticket.id));
+    this.queue = this.queue.filter((id) => !matched.has(id));
     this.startMatch(group, true);
   }
 
@@ -143,6 +153,10 @@ export class Lobby {
     if (!room) return { error: 'No room with that code.' };
     if (room.status !== 'open') return { error: 'That match already started.' };
     if (room.members.length >= MAX_PLAYERS) return { error: 'Room is full.' };
+    const wallet = human.wallet;
+    if (wallet && room.members.some(({ ticket }) => this.tickets.get(ticket)?.human.wallet?.equals(wallet))) {
+      return { error: 'This wallet already has a seat in the room.' };
+    }
     const t = this.newTicket(human, 'room');
     t.roomCode = room.code;
     room.members.push({ ticket: t.id, ready: false });
