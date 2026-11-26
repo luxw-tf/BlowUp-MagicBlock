@@ -1,8 +1,8 @@
-import { configDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
-// Tests live in src/. Skip local git worktrees (each is a full copy of the repo).
+// Tests live in src/ only (so local copies of the repo in subfolders are never picked up).
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, '.claude/**'],
+    include: ['src/**/*.test.ts'],
   },
 });

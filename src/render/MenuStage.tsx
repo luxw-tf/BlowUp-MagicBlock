@@ -130,8 +130,6 @@ export const TITLE_HERO: CharacterId = CHARACTERS[Math.floor(Math.random() * CHA
  * leaves their hand. The bomb rides the holder's actual hand bones, so it never floats while they move.
  */
 const potato = { holder: 0, next: 1, landedAt: 0, throwStart: 1.2, releaseAt: 1.5 };
-/** Dev-only debugging handle (like window.__session in matches). */
-if (import.meta.env.DEV) Object.assign(window, { __potato: potato });
 /** The throw clip plays at double speed; the bomb leaves the hand about this long after it starts. */
 const RELEASE_AFTER = 0.3;
 const FLIGHT = 0.7;
@@ -214,7 +212,6 @@ function HotPotato() {
   const to = useMemo(() => new THREE.Vector3(), []);
   const released = useRef(false);
   useEffect(() => {
-    if (import.meta.env.DEV) Object.assign(window, { __potatoBomb: g.current, __potatoHands: hands });
   }, []);
   useFrame(({ clock }) => {
     const b = g.current;
