@@ -20,6 +20,9 @@ export function createTutorialSession(p: Profile): GameSession {
     { id: DUMMY, name: 'Practice Dummy', character: other, isBot: false },
   ]);
   session.practice = true;
+  // a calm deck while you learn: the weather still shows, but no wind drifts you (or the dummy) about and the deck
+  // isn't slippery
+  session.state.weatherFx = null;
   return session;
 }
 
