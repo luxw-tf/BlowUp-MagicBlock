@@ -165,13 +165,20 @@ async function scenarioA() {
   await sleep(8_000);
 
   // human 0 freezes (stops sending), human 1 drops its session entirely.
-  const [a, b] = humans;
-  if (a.alive()) {
+  // Freeze / drop players who aren't holding the bomb: a frozen holder just
+  // blows up before the takeover window, which tests nothing.
+  const holderSeat = (() => {
+    const id = humans[0].os!.state.bomb.holderId;
+    return id ? Number(id.slice(1)) : -1;
+  })();
+  const candidates = [...humans.filter((h) => h.alive() && h.seat() !== holderSeat), ...humans.filter((h) => !h.alive() || h.seat() === holderSeat)];
+  const [a, b] = candidates;
+  if (a.alive() && a.seat() !== holderSeat) {
     a.paused = true;
     log(`${a.name} (seat ${a.seat()}) freezes`);
   }
   const bSeat = b.seat();
-  const bAlive = b.alive();
+  const bAlive = b.alive() && bSeat !== holderSeat;
   if (bAlive) {
     b.stop();
     log(`${b.name} (seat ${bSeat}) disconnects`);
@@ -197,7 +204,11 @@ async function scenarioA() {
       async () => (!(await matchInfo()).takeovers.includes(a.seat()) && a.notices.includes('back in control')) || !a.alive(),
       15_000,
     );
-    check('resumed player reclaims the seat', ok && a.notices.includes('back in control'), `notices ${JSON.stringify(a.notices)}`);
+    if (a.alive() || a.notices.length) {
+      check('resumed player reclaims the seat', ok && a.notices.includes('back in control'), `notices ${JSON.stringify(a.notices)}`);
+    } else {
+      log(`SKIP resumed-player reclaim: ${a.name} was eliminated while frozen (got the bomb), nothing to reclaim`);
+    }
   }
   // human 1 rejoins with a brand-new session (as after a reload).
   if (bAlive) {
