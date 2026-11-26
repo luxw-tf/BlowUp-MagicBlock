@@ -2664,5 +2664,118 @@ kbd {
 @media (max-width: 760px) {
   .coach {
     bottom: 120px;
+
+/* ───────── results: your own finish, the rest of the field, awards, buttons ───────── */
+
+/* no stars above the card unless you earned some: the card moves up into the space */
+.results:not(:has(.results-stars)) {
+  margin-top: 28px;
+}
+/* your own result: face, place, how long you lasted, and the roast */
+.results-you {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 6px 14px 6px 8px;
+  background: rgba(42, 20, 8, 0.38);
+  border-radius: 14px;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.18), 0 1px 0 rgba(255, 230, 190, 0.18);
+}
+.you-place {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+}
+.you-place b {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.9rem;
+  color: var(--cream);
+  text-shadow: var(--ol-wood);
+}
+.results-you.podium-finish .you-place b {
+  color: var(--gold);
+}
+.you-place span {
+  margin-top: 3px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--cream-dim);
+  text-shadow: 0 2px 0 #2a1408;
+}
+.results-you .results-verdict {
+  margin: 0 0 0 4px;
+}
+/* 4th to 6th: little plates with a face, readable on the wood */
+.rest {
+  gap: 6px;
+  margin: 14px 0 2px;
+}
+.rest span.rest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 6px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: var(--cream);
+  background: rgba(42, 20, 8, 0.5);
+  border-radius: 999px;
+}
+.rest-chip em {
+  font-style: normal;
+  color: var(--cream-dim);
+}
+.rest span.rest-chip.is-local {
+  color: var(--gold);
+  background: rgba(42, 20, 8, 0.62);
+  box-shadow: 0 0 0 2px rgba(244, 182, 58, 0.8);
+}
+/* awards: two columns, an odd one out centred under them; icons on a painted badge */
+.awards {
+  grid-template-columns: 1fr 1fr;
+}
+.award:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+.award-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5fc4bf, #1f7f86 70%);
+  box-shadow: 0 0 0 2px #fff4dc, 0 0 0 4px #6b3a1c, 0 3px 0 4px #3b1f0e;
+}
+.award .award-badge .icon {
+  color: #fff;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+}
+/* Menu: the same raised button as its neighbours, in a quiet driftwood brown so Rematch still leads */
+.btn.quiet {
+  border-image-source: url('/ui/btn-gold.webp');
+  text-shadow: var(--ol-wood);
+  filter: saturate(0.85) brightness(0.62) contrast(1.1);
+}
+.btn.quiet:hover:not(:disabled) {
+  filter: saturate(0.85) brightness(0.7) contrast(1.1);
+}
+.btn.quiet:active:not(:disabled) {
+  filter: saturate(0.85) brightness(0.55) contrast(1.1);
+}
+@media (max-width: 520px) {
+  .awards {
+    grid-template-columns: 1fr;
+  }
+  .award:last-child:nth-child(odd) {
+    justify-self: stretch;
   }
 }

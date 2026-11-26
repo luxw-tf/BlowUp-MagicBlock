@@ -194,6 +194,6 @@ export function verdict(place: number | null | undefined): string {
     case 5:
       return 'FIFTH. LOWKEY COOKED.';
     default:
-      return 'LAST. FIRST OF ALL, SKILL ISSUE.';
+      return 'LAST PLACE. SKILL ISSUE.';
   }
 }
