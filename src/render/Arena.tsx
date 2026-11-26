@@ -994,23 +994,42 @@ function Basin({ x, z, r, statue = true }: { x: number; z: number; r: number; st
   );
 }
 
+const hash1 = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/**
+ * How hard the air is pushing right now, 0 to about 2: a background breeze that wanders up and down into lulls,
+ * plus gusts that arrive every few seconds at uneven moments and strengths, hitting fast and dying away slowly.
+ */
+function gustyAir(t: number): number {
+  const breeze = 0.22 + 0.2 * Math.sin(t * 0.23 + 1.3) * Math.sin(t * 0.37) + 0.1 * Math.sin(t * 1.1);
+  let gusts = 0;
+  const P = 4.2;
+  for (const n of [Math.floor(t / P) - 1, Math.floor(t / P)]) {
+    const at = n * P + hash1(n) * 2.8, k = t - at;
+    if (k <= 0 || hash1(n + 9.3) < 0.25) continue; // now and then a gust never comes: a longer lull
+    gusts += (0.6 + hash1(n + 4.1) * 1.5) * (1 - Math.exp(-k / 0.22)) * Math.exp(-k / 1.6);
+  }
+  return Math.max(0, breeze + gusts);
+}
+
 /**
  * A big harbour capstan on a round timber platform that fills the footprint: an iron-banded drum with a coil of
  * mooring hawser round it, and capstan bars sticking out like spokes, turning very slowly as if someone just let go.
  */
 function Capstan({ r }: { r: number }) {
   const head = useRef<THREE.Group>(null);
-  const spin = useRef({ a: 0, v: 0.06 });
-  useFrame(({ clock }, dt) => {
+  const spin = useRef({ a: 0, v: 0 });
+  useFrame(({ clock }, dtRaw) => {
     if (!head.current) return;
-    // the wind gets into the bars and whirls it round: barely turning on a calm day, spinning hard in a breeze or a
-    // storm, surging and easing with the gusts (speed eases, so it never jumps)
-    const w = AMBIENT.uWind.value, t = clock.elapsedTime;
-    const gust = 0.75 + 0.25 * Math.sin(t * 0.45) + 0.12 * Math.sin(t * 1.7);
-    const goal = w < 0.45 ? 0.06 : (0.06 + (w - 0.4) * 1.7) * gust;
+    // Pushed by the air, not driven: the wind blows in gusts (a sudden shove that dies away) over a breeze that rises
+    // and falls into lulls, and the heavy head has momentum, so it spins up in a gust, coasts and slows in a lull,
+    // and each bar catches the wind as it comes round. Calm days give it only the odd nudge.
+    const dt = Math.min(dtRaw, 0.05), t = clock.elapsedTime, w = AMBIENT.uWind.value;
     const s = spin.current;
-    s.v += (goal - s.v) * (1 - Math.exp(-Math.min(dt, 0.1) * 0.8));
-    s.a += s.v * Math.min(dt, 0.1);
+    const air = gustyAir(t) * Math.max(0, w - 0.3);
+    const catchBars = 1 + 0.35 * Math.sin(s.a * 8); // eight bars: the push swells as one turns into the wind
+    s.v += (2.6 * air * catchBars - 0.75 * s.v) * dt;
+    s.a += s.v * dt;
     head.current.rotation.y = s.a;
   });
   const BARS = 8;
