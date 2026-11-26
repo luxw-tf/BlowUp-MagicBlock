@@ -120,50 +120,91 @@ const CREW_SPOTS: { x: number; z: number; sit?: boolean }[] = [
   { x: 4.6, z: -0.6 },
 ];
 
-/** The hot potato's state, shared by the crew (who holds it, who's next, and when it was thrown). */
-const potato = { holder: 0, next: 1, thrownAt: -1, landsAt: 0 };
+/**
+ * The hot potato, as a timeline shared by the crew: who holds it, who's next, when they start the throw, when it
+ * leaves their hand. The bomb rides the holder's actual hand bones, so it never floats while they move.
+ */
+const potato = { holder: 0, next: 1, landedAt: 0, throwStart: 1.2, releaseAt: 1.5 };
+/** Dev-only debugging handle (like window.__session in matches). */
+if (import.meta.env.DEV) Object.assign(window, { __potato: potato });
+/** The throw clip plays at double speed; the bomb leaves the hand about this long after it starts. */
+const RELEASE_AFTER = 0.3;
 const FLIGHT = 0.7;
-const HOLD = 1.0;
+/** The sitter stands up (1.13 s clip), throws, then sits back down (1.0 s clip). */
+const STAND_UP = 1.13;
+const SIT_DOWN = 1.0;
+/** Each crew member's hand bones (left, right), found once their model has loaded. */
+const hands: ([THREE.Object3D, THREE.Object3D] | null)[] = CREW_SPOTS.map(() => null);
 
-/** Where a crew member holds the bomb: in both hands in front of them, or in their lap when sitting. */
-function handsOf(i: number, out: THREE.Vector3) {
-  const c = CREW_SPOTS[i];
-  const px = STAGE.x + c.x, pz = STAGE.z + c.z;
-  const a = Math.atan2(TITLE_CAM.x - px, TITLE_CAM.z - pz);
-  return out.set(px + Math.sin(a) * 0.34, c.sit ? 0.62 : 0.9, pz + Math.cos(a) * 0.34);
+/** Where the bomb sits for crew member i: between their hands, or in the right hand once the throw has started. */
+function bombAt(i: number, t: number, out: THREE.Vector3) {
+  const h = hands[i];
+  if (!h) {
+    const c = CREW_SPOTS[i];
+    return out.set(STAGE.x + c.x, c.sit ? 0.62 : 0.9, STAGE.z + c.z);
+  }
+  const l = h[0].getWorldPosition(out);
+  const r = h[1].getWorldPosition(new THREE.Vector3());
+  l.add(r).multiplyScalar(0.5);
+  // as the throw starts it slides from between both hands into the throwing hand, over a few frames
+  const k = i === potato.holder ? Math.min(1, Math.max(0, (t - potato.throwStart) / 0.15)) : 0;
+  return k > 0 ? l.lerp(r, k) : l;
 }
 
-/** One of the crew on the title: holds the bomb when it's theirs, turns and throws it on, cheers now and then. */
+/** One of the crew on the title: holds the bomb when it's theirs, turns and throws it on; the sitter gets up first. */
 function CrewMate({ id, i }: { id: CharacterId; i: number }) {
   const spot = CREW_SPOTS[i];
   const drive = useRef<RigDrive>({ state: spot.sit ? 'sit' : 'idle', speed: 0, hitAt: 0, actAt: 0 });
   const g = useRef<THREE.Group>(null);
-  const threw = useRef(-1);
+  const threwFor = useRef(-1);
+  /** when this one last let go of the bomb (the sitter sits back down after it) */
+  const myRelease = useRef(-1);
+  useEffect(() => {
+    hands[i] = null; // a different model may stand here now
+    return () => {
+      hands[i] = null;
+    };
+  }, [i, id]);
   const px = STAGE.x + spot.x, pz = STAGE.z + spot.z;
   const faceCam = Math.atan2(TITLE_CAM.x - px, TITLE_CAM.z - pz);
   useFrame(({ clock }, dt) => {
-    if (!g.current) return;
-    g.current.visible = titleBlend.w > 0.35; // gone a third of the way into the glide down, while the camera is moving
-    const t = clock.elapsedTime;
-    const holding = potato.holder === i && t >= potato.landsAt;
-    // about to throw: turn to face whoever is next, and play the throw
-    const aboutToThrow = holding && potato.thrownAt > threw.current && potato.thrownAt <= t + 0.18;
-    if (aboutToThrow && !spot.sit) {
-      threw.current = potato.thrownAt;
-      drive.current.actKind = 'throw';
-      drive.current.actAt = performance.now();
+    const grp = g.current;
+    if (!grp) return;
+    grp.visible = titleBlend.w > 0.35; // gone a third of the way into the glide down, while the camera is moving
+    if (!hands[i]) {
+      // three.js strips the dots from node names on load: handslot.l is 'handslotl'
+      const l = grp.getObjectByName('handslotl'), r = grp.getObjectByName('handslotr');
+      if (l && r) hands[i] = [l, r];
     }
-    if (spot.sit) drive.current.state = 'sit';
-    else if (holding) drive.current.state = 'hold';
-    else drive.current.state = Math.sin(t * 0.7 + spot.x * 1.3) > 0.88 ? 'win' : 'idle';
+    const t = clock.elapsedTime;
+    const mine = potato.holder === i;
+    const d = drive.current;
+    // the throw itself, once per hand-off
+    if (mine && t >= potato.throwStart && threwFor.current !== potato.throwStart) {
+      threwFor.current = potato.throwStart;
+      myRelease.current = potato.releaseAt;
+      d.actKind = 'throw';
+      d.actAt = performance.now();
+    }
+    if (spot.sit) {
+      // sitting, unless it's her turn: get up, hold it, throw, follow through, sit back down
+      const upAt = potato.throwStart - 0.3 - STAND_UP;
+      const r = myRelease.current;
+      if (mine && t >= upAt && t < potato.releaseAt) d.state = t < upAt + STAND_UP ? 'standup' : 'hold';
+      else if (r > 0 && t >= r && t < r + 0.3) d.state = 'idle';
+      else if (r > 0 && t >= r + 0.3 && t < r + 0.3 + SIT_DOWN) d.state = 'sitdown';
+      else d.state = 'sit';
+    } else if (mine && t < potato.releaseAt) d.state = 'hold';
+    else d.state = Math.sin(t * 0.7 + spot.x * 1.3) > 0.88 ? 'win' : 'idle';
+    // face the camera, but turn to whoever's next for the throw
     let want = faceCam;
-    if (holding && !spot.sit && potato.thrownAt - t < 0.45) {
+    if (mine && t > potato.throwStart - 0.45 && t < potato.releaseAt + 0.3) {
       const n = CREW_SPOTS[potato.next];
       want = Math.atan2(STAGE.x + n.x - px, STAGE.z + n.z - pz);
     }
-    let d = want - g.current.rotation.y;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    g.current.rotation.y += d * (1 - Math.exp(-dt * 10));
+    let dd = want - grp.rotation.y;
+    dd = Math.atan2(Math.sin(dd), Math.cos(dd));
+    grp.rotation.y += dd * (1 - Math.exp(-dt * 8));
   });
   return (
     <group ref={g} position={[px, 0, pz]} rotation={[0, faceCam, 0]}>
@@ -172,39 +213,48 @@ function CrewMate({ id, i }: { id: CharacterId; i: number }) {
   );
 }
 
-/** The lit bomb: held, then thrown in an arc to the next of the crew (never to the hero on the pedestal). */
+/** The lit bomb: in the holder's hands, then thrown in an arc to the next one's hands (never to the hero). */
 function HotPotato() {
   const g = useRef<THREE.Group>(null);
   const spark = useRef<THREE.Mesh>(null);
-  const a = useMemo(() => new THREE.Vector3(), []);
-  const c = useMemo(() => new THREE.Vector3(), []);
+  const from = useMemo(() => new THREE.Vector3(), []);
+  const to = useMemo(() => new THREE.Vector3(), []);
+  const released = useRef(false);
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(window, { __potatoBomb: g.current, __potatoHands: hands });
+  }, []);
   useFrame(({ clock }) => {
     const b = g.current;
     if (!b) return;
     b.visible = titleBlend.w > 0.35;
     const t = clock.elapsedTime;
-    if (potato.thrownAt < 0) {
-      potato.thrownAt = t + HOLD;
-      potato.landsAt = 0;
-    }
-    if (t >= potato.thrownAt + FLIGHT) {
-      // landed: the next one holds it, and picks someone else to throw to
-      potato.holder = potato.next;
-      potato.landsAt = t;
-      let n = potato.holder;
-      while (n === potato.holder) n = Math.floor(Math.random() * CREW_SPOTS.length);
-      potato.next = n;
-      potato.thrownAt = t + HOLD * (0.8 + Math.random() * 0.5);
-    }
-    handsOf(potato.holder, a);
-    if (t < potato.thrownAt) {
-      b.position.copy(a);
+    if (t < potato.releaseAt) {
+      released.current = false;
+      bombAt(potato.holder, t, b.position);
     } else {
-      handsOf(potato.next, c);
-      const e = Math.min(1, (t - potato.thrownAt) / FLIGHT);
-      b.position.lerpVectors(a, c, e);
-      b.position.y += Math.sin(e * Math.PI) * 1.5;
-      b.rotation.x += 0.18;
+      if (!released.current) {
+        released.current = true;
+        from.copy(b.position); // it leaves from wherever the hand actually was
+      }
+      const e = Math.min(1, (t - potato.releaseAt) / FLIGHT);
+      bombAt(potato.next, t, to); // aim at the catcher's hands as they are now
+      const s = e * e * (3 - 2 * e);
+      b.position.lerpVectors(from, to, s);
+      b.position.y += Math.sin(e * Math.PI) * 1.3;
+      b.rotation.x += 0.2;
+      if (e >= 1) {
+        // caught: the catcher holds it, then picks someone else
+        const caught = potato.next;
+        let n = caught;
+        while (n === caught) n = Math.floor(Math.random() * CREW_SPOTS.length);
+        const sit = CREW_SPOTS[caught].sit;
+        const hold = sit ? 0.35 + STAND_UP + 0.3 : 0.7 + Math.random() * 0.6;
+        potato.holder = caught;
+        potato.next = n;
+        potato.landedAt = t;
+        potato.throwStart = t + hold;
+        potato.releaseAt = potato.throwStart + RELEASE_AFTER;
+      }
     }
     if (spark.current) spark.current.scale.setScalar(0.6 + Math.random() * 0.7);
   });

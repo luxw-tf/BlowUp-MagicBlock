@@ -683,20 +683,6 @@ kbd {
   font-size: 0.85rem;
   color: var(--dim);
 }
-
-.results {
-  width: min(720px, 94vw);
-  text-align: center;
-}
-.results-title {
-  font-size: 2.4rem;
-  font-weight: 900;
-  color: var(--accent);
-}
-.results-sub {
-  color: var(--dim);
-  margin-bottom: 14px;
-}
 .results-table,
 .verify-table {
   width: 100%;
