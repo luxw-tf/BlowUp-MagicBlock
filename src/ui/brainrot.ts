@@ -145,7 +145,7 @@ export const LINES = {
     'got sent to the shadow realm',
     'exploded (skill issue)',
     'got fanum taxed by the fuse',
-    'is now in Ohio',
+    'got shipped to Ohio',
     'went kaboom, no cap',
     "got Bombardiro Crocodilo'd",
     'lost all aura',

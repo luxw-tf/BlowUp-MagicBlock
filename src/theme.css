@@ -1212,10 +1212,20 @@ kbd {
 .slot {
   width: 66px;
   height: 66px;
+  margin-bottom: 12px;
   border: 0;
   border-radius: 50%;
   background: url('/ui/ring.webp') center / contain no-repeat;
   box-shadow: 0 5px 10px rgba(0, 0, 0, 0.35);
+  overflow: visible;
+}
+/* the round face clips the cooldown fill; the key tag hangs below it, outside the circle */
+.slot-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
   overflow: hidden;
 }
 .slot-empty {
@@ -1228,16 +1238,23 @@ kbd {
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
 }
 .slot-key {
-  left: 0;
-  right: 0;
-  bottom: 7px;
-  text-align: center;
+  left: 50%;
+  right: auto;
+  bottom: -11px;
+  transform: translateX(-50%);
+  padding: 1px 7px 2px;
+  white-space: nowrap;
   font-family: var(--body);
   font-weight: 700;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
+  line-height: 1.2;
   letter-spacing: 0.08em;
   color: var(--cream);
-  text-shadow: 0 1px 0 #0a4a50;
+  text-shadow: none;
+  background: #3b1f0e;
+  border: 1.5px solid var(--cream-dim);
+  border-radius: 6px;
+  z-index: 2;
 }
 .dash-fill {
   inset: 6px;

@@ -23,12 +23,15 @@ interface FeedItem {
   html: React.ReactNode;
 }
 
+/** Who is playing on this screen, so the feed says "You" like the tags and the roster do. */
+let localId: PlayerId | null = null;
+
 function Name({ s, id }: { s: MatchState; id: PlayerId | null }) {
   const p = getPlayer(s, id);
   if (!p) return <span>?</span>;
   return (
     <span className="feed-name" style={{ '--c': characterDef(p.character).color } as React.CSSProperties}>
-      {p.name}
+      {p.id === localId ? 'You' : p.name}
       {p.isBot && <span className="bot-badge">BOT</span>}
     </span>
   );
@@ -135,6 +138,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   };
 
 
+  localId = session.localId;
   // Dev-only debugging handle.
   useEffect(() => {
     if (import.meta.env.DEV) (window as unknown as { __session: SessionLike }).__session = session;
@@ -254,7 +258,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
             audio.fuseReset();
             push(
               <>
-                <Icon name="bomb" size={16} /> <Name s={s} id={e.holder} /> starts round {e.round} with the bomb
+                <Icon name="bomb" size={16} /> <Name s={s} id={e.holder} /> {e.holder === local ? 'start' : 'starts'} round {e.round} with the bomb
               </>,
             );
             if (e.holder === local) {
@@ -661,7 +665,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
         if (s.phase === 'active' && fuse !== null) {
           // the fuse length is hidden (that's the game): no number. The rope burns down with the round's hard limit
           // (which everyone knows), and only the last seconds give the real fuse away: the spark flares and sputters
-          fuseText.current.textContent = fuse < 1 ? 'any second!' : fuse < 2.5 ? 'it’s hissing…' : 'has the bomb';
+          fuseText.current.textContent = fuse < 1 ? 'any second!' : fuse < 2.5 ? 'it’s hissing…' : s.bomb.holderId === session.localId ? 'have the bomb' : 'has the bomb';
           fuseBox.current.dataset.state = fuse < 1 ? 'critical' : fuse < 2.5 ? 'warn' : 'ok';
           // the off-screen badge pulses faster as the fuse runs down
           overlay.indicator?.style.setProperty('--pulse', `${Math.max(0.16, Math.min(0.9, fuse / 5)).toFixed(2)}s`);
@@ -699,7 +703,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
       if (dashFill.current) {
         const cd = Math.max(0, me.dashReadyAt - s.time);
         dashFill.current.style.transform = `scaleY(${1 - cd / CONFIG.dashCooldown})`;
-        dashFill.current.parentElement!.dataset.ready = cd <= 0 ? '1' : '0';
+        (dashFill.current.closest('.slot') as HTMLElement).dataset.ready = cd <= 0 ? '1' : '0';
       }
       if (s.phase === 'countdown') {
         const n = Math.ceil(s.phaseEndsAt - s.time);
@@ -753,7 +757,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
                 className={`fuse-name ${holder?.id === session.localId ? 'is-you' : ''}`}
                 style={holder ? ({ '--c': characterDef(holder.character).color } as React.CSSProperties) : undefined}
               >
-                {holder ? (holder.id === session.localId ? 'YOU' : holder.name) : 'Nobody yet'}
+                {holder ? (holder.id === session.localId ? 'You' : holder.name) : 'Nobody yet'}
               </span>
               <span className="fuse-sub" ref={fuseText}>
                 waiting
@@ -797,8 +801,10 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
       {me.alive && (
         <div className="hud-bottom">
           <div className="slot dash-slot" title="Dash (Space)">
-            <div className="dash-fill" ref={dashFill} />
-            <span className="slot-glyph"><Icon name="dash" size={24} /></span>
+            <span className="slot-face">
+              <div className="dash-fill" ref={dashFill} />
+              <span className="slot-glyph"><Icon name="dash" size={24} /></span>
+            </span>
             <span className="slot-key">SPACE</span>
           </div>
           <div
@@ -806,7 +812,9 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
             style={inv && inv !== 'pending' ? { borderColor: ABILITY_DEFS[inv].color, boxShadow: `0 0 18px ${ABILITY_DEFS[inv].color}66` } : undefined}
             title={inv && inv !== 'pending' ? ABILITY_DEFS[inv].blurb : 'Pick up a mystery box'}
           >
-            <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? <Icon name={ABILITY_DEFS[inv].glyph as IconName} size={26} fill={ABILITY_DEFS[inv].color} /> : <span className="slot-empty">?</span>}</span>
+            <span className="slot-face">
+              <span className="slot-glyph">{inv === 'pending' ? <span className="spinner" /> : inv ? <Icon name={ABILITY_DEFS[inv].glyph as IconName} size={26} fill={ABILITY_DEFS[inv].color} /> : <span className="slot-empty">?</span>}</span>
+            </span>
             <span className="slot-key">E</span>
           </div>
           <div className="item-name">
