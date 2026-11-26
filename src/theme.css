@@ -2704,7 +2704,9 @@ kbd {
 /* ───────── results: a victory screen over the dimmed dock ───────── */
 
 .results-backdrop {
-  overflow: hidden auto;
+  overflow: hidden;
+  padding: 0;
+  place-items: center;
   background: rgba(16, 9, 4, 0.72);
 }
 /* confetti tumbling down once over the first few seconds */
@@ -2741,7 +2743,7 @@ kbd {
   position: relative;
   isolation: isolate;
   width: min(720px, calc(100vw - 24px));
-  margin: 12px auto 10px;
+  margin: 0 auto;
   text-align: center;
   color: var(--cream);
 }

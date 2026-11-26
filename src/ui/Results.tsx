@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { characterDef } from '../game/content';
 import type { SessionLike } from '../game/sessionTypes';
 import { Icon, type IconName } from './Icon';
@@ -35,6 +35,25 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
   const local = s.players.find((p) => p.id === session.localId);
   // the match keeps ticking behind the panel; the time shown is when it ended
   const [endTime] = useState(() => Math.round(s.time));
+  // the screen never scrolls: on a short window the whole card shrinks to fit instead
+  const card = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = card.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.zoom = '1';
+      const h = el.scrollHeight + 24, w = el.scrollWidth + 24;
+      el.style.zoom = String(Math.min(1, window.innerHeight / h, window.innerWidth / w));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.body);
+    window.addEventListener('resize', fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', fit);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -74,7 +93,7 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
         ))}
       </div>
 
-      <div className="results2">
+      <div className="results2" ref={card}>
         {stars > 0 && <img className="r-stars" src={`${import.meta.env.BASE_URL}ui/stars-${stars}.webp`} alt={`${stars} of 3 stars`} draggable={false} />}
         <h2 className="ribbon r-banner">{localWon ? 'Victory!' : 'Match over'}</h2>
         <div className="r-title">{localWon ? 'You outlasted the whole crew' : `${winner.name} wins`}</div>
