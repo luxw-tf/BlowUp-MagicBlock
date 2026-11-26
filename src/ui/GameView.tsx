@@ -653,6 +653,8 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
   useEffect(() => {
     let raf = 0;
     let lastTickSlot = -1;
+    // the rope: the fuse's full length when it was lit, and how much of it the spark has eaten (eased)
+    let fuseLit = false, fuseTotal = 0, shownBurn = 0, lastFrame = performance.now();
     let lastCount = -1;
     let frame = 0;
     const loop = () => {
@@ -663,8 +665,8 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
 
       if (fuseText.current && fuseBox.current) {
         if (s.phase === 'active' && fuse !== null) {
-          // the fuse length is hidden (that's the game): no number. The rope burns down with the round's hard limit
-          // (which everyone knows), and only the last seconds give the real fuse away: the spark flares and sputters
+          // no number: the rope on the panel burns down with the fuse, and the last seconds get loud (the spark flares,
+          // the line changes, the bomb shakes)
           fuseText.current.textContent = fuse < 1 ? 'any second!' : fuse < 2.5 ? 'it’s hissing…' : s.bomb.holderId === session.localId ? 'have the bomb' : 'has the bomb';
           fuseBox.current.dataset.state = fuse < 1 ? 'critical' : fuse < 2.5 ? 'warn' : 'ok';
           // the off-screen badge pulses faster as the fuse runs down
@@ -689,8 +691,26 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
       }
       // the rope: burnt back from the left as the round runs out, the spark riding the burning end
       if (ropeLive.current && spark.current) {
-        const left = s.phase === 'active' ? Math.max(0, s.roundDeadline - s.time) : CONFIG.roundHardDeadline;
-        const burnt = 1 - left / CONFIG.roundHardDeadline;
+        // the rope burns with the real fuse: it reaches the bomb exactly as it blows (the round's hard limit can cut a
+        // fuse short; time theft can lengthen it, and the rope grows back a little). A fresh rope while arming.
+        const tNow = performance.now(), fdt = Math.min(0.1, (tNow - lastFrame) / 1000);
+        lastFrame = tNow;
+        let target = 0;
+        if (s.phase === 'active' && fuse !== null) {
+          const left = Math.max(0, Math.min(fuse, s.roundDeadline - s.time));
+          if (!fuseLit) { fuseLit = true; fuseTotal = left; shownBurn = 0; }
+          fuseTotal = Math.max(fuseTotal, left);
+          target = fuseTotal > 0 ? 1 - left / fuseTotal : 1;
+        } else if (s.phase === 'active') {
+          fuseLit = false; // arming: a new fuse is coming
+        } else {
+          fuseLit = false;
+          target = s.phase === 'intermission' || s.phase === 'finished' ? 1 : 0; // burnt out after a blast
+        }
+        // the sim ticks 20 times a second: ease the spark between ticks so it creeps smoothly
+        shownBurn += (target - shownBurn) * Math.min(1, fdt * 14);
+        if (target === 0 && shownBurn < 0.002) shownBurn = 0;
+        const burnt = Math.min(1, Math.max(0, shownBurn));
         const live = ropeLive.current;
         const dash = `0 ${(burnt * 100).toFixed(2)} 100`;
         live.style.strokeDasharray = dash;
@@ -764,8 +784,8 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
               </span>
             </div>
           </div>
-          {/* the fuse itself: a twisted rope burning down towards the bomb (the round's hard limit; the real fuse is secret) */}
-          <div className="fuse-rope" title="Round time left">
+          {/* the fuse itself: a twisted rope burning down towards the bomb, reaching it as it blows */}
+          <div className="fuse-rope" title="The fuse">
             <svg viewBox="0 0 220 34" preserveAspectRatio="none" aria-hidden>
               <defs>
                 {/* the twist: diagonal strands fixed in space, so the rope keeps its lay as it burns away */}
