@@ -268,6 +268,12 @@ function HotPotato() {
 
 /** The title's crew: everyone but whoever is on the podium, round the pedestal, passing a lit bomb among themselves. */
 function TitleCrew({ hero }: { hero: CharacterId }) {
+  const [active, setActive] = useState(titleView.on);
+  useFrame(() => {
+    const visible = titleView.on || titleBlend.w > 0.35;
+    if (visible !== active) setActive(visible);
+  });
+  if (!active) return null;
   const crew = CHARACTERS.filter((c) => c.id !== TITLE_HERO).map((c) => c.id);
   return (
     <>
@@ -333,6 +339,41 @@ function Exposure() {
   return null;
 }
 
+/** The harbour is mostly static. Refresh its shadows independently of the moving crew. */
+function MenuRenderBudget() {
+  const { gl, setDpr } = useThree();
+  const budget = useRef({ seconds: 0, frames: 0, shadowTime: 1, scale: 1 });
+  useEffect(() => {
+    const previous = gl.shadowMap.autoUpdate;
+    gl.shadowMap.autoUpdate = false;
+    return () => { gl.shadowMap.autoUpdate = previous; };
+  }, [gl]);
+  useFrame((_, delta) => {
+    const b = budget.current;
+    b.shadowTime += delta;
+    if (b.shadowTime >= 1 / 12) {
+      gl.shadowMap.needsUpdate = true;
+      b.shadowTime = 0;
+    }
+    if (document.hidden || delta > 0.25) {
+      b.seconds = b.frames = 0;
+      return;
+    }
+    b.seconds += delta;
+    b.frames++;
+    if (b.seconds < 2) return;
+    const fps = b.frames / b.seconds;
+    const next = fps < 35 ? Math.max(0.7, b.scale - 0.1) :
+      fps > 55 ? Math.min(1, b.scale + 0.05) : b.scale;
+    if (Math.abs(next - b.scale) > 0.001) {
+      b.scale = next;
+      setDpr(next);
+    }
+    b.seconds = b.frames = 0;
+  });
+  return null;
+}
+
 export function MenuStage({ hero }: { hero: CharacterId }) {
   // a fresh time of day each visit; the bay is cleared so the camera's sweep never clips a container
   const mood = useMemo(() => {
@@ -352,16 +393,17 @@ export function MenuStage({ hero }: { hero: CharacterId }) {
     <div className="menu-stage" aria-hidden>
       <Canvas
         shadows="soft"
-        dpr={[1, 1.25]}
+        dpr={1}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
         camera={{ fov: 38, near: 0.3, far: 400, position: CAM.toArray() }}
       >
         <color attach="background" args={[L.sky]} />
         <fog attach="fog" args={[L.sky, L.fogNear, L.fogFar]} />
+        <MenuRenderBudget />
         <Exposure />
         <Orbit />
         <Suspense fallback={null}>
-          <Arena key={mood} shadows town />
+          <Arena key={mood} shadows town shadowSize={1024} />
           <Pedestal />
           <Hero id={hero} />
           <TitleCrew hero={hero} />

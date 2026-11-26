@@ -528,7 +528,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         <div className="top-right">
           {session.online && (
             <span className="net-pill" title="Bomb ownership, fuses and eliminations are decided on a MagicBlock rollup">
-              Online · devnet rollup
+              <img src="/brand/magicblock.png" alt="" width="16" height="16" /> Live on devnet
             </span>
           )}
           <button className="icon-btn ic-info" title="Match details" aria-label="Match details" onClick={() => setShowVerify(true)} />

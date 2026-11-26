@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { CHARACTERS } from '../game/content';
+import { characterDef } from '../game/content';
 import type { CharacterId } from '../game/types';
-import { HEROES, SKELETONS, dyeBotBones } from './crew';
+import { SKELETONS, dyeBotBones } from './crew';
 import { modelUrl } from './models';
 
 export type PortraitKey = CharacterId | `skel${number}`;
@@ -31,7 +31,6 @@ async function renderAll() {
   const camera = new THREE.PerspectiveCamera(24, 1, 0.05, 50);
   const idle = (await loader.loadAsync(modelUrl('kaykit/anim_general.glb'))).animations.find((a) => a.name === 'Idle_A');
   const jobs: [PortraitKey, string][] = [
-    ...CHARACTERS.map((c) => [c.id, HEROES[c.id]] as [PortraitKey, string]),
     ...SKELETONS.map((src, i) => [`skel${i}`, src] as [PortraitKey, string]),
   ];
   for (const [key, src] of jobs) {
@@ -74,6 +73,7 @@ async function renderAll() {
 export function usePortrait(key: PortraitKey): string | undefined {
   const [, bump] = useState(0);
   useEffect(() => {
+    if (!key.startsWith("skel")) return;
     const f = () => bump((n) => n + 1);
     listeners.add(f);
     if (!started) {
@@ -81,6 +81,6 @@ export function usePortrait(key: PortraitKey): string | undefined {
       void renderAll();
     }
     return () => void listeners.delete(f);
-  }, []);
-  return shots.get(key);
+  }, [key]);
+  return key.startsWith("skel") ? shots.get(key) : "/portraits/" + characterDef(key as CharacterId).name.toLowerCase() + ".png";
 }

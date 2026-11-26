@@ -68,11 +68,12 @@ function LoadingVeil({ progress, done }: { progress: number; done: boolean }) {
   return (
     <div className={`loading-veil ${done ? 'gone' : ''}`} aria-busy={!done} aria-label="Loading">
       <Wordmark className="loading-logo" />
+      <p className="loading-text"><span>Loading the harbour</span><span>{pct}%</span></p>
       <div className="loading-rope" aria-hidden>
         <div className="loading-burnt" style={{ width: `${pct}%` }} />
         <div className="loading-spark" style={{ left: `${pct}%` }} />
       </div>
-      <p className="loading-text">Loading the harbour… {pct}%</p>
+
       <NetworkCredits />
     </div>
   );
@@ -236,7 +237,6 @@ export function Landing({
       </div>
 
       <div className="play-dock">
-        {walletControls}
         {notice && <p className="verify-status warn">{notice}</p>}
         {onRejoin && (
           <button className="btn danger" onClick={onRejoin}>
@@ -248,11 +248,14 @@ export function Landing({
             Join room {pendingRoom}
           </button>
         )}
+        <section className="player-card" aria-label="Player profile">
         <label className="play-name" title="Your name">
-          <span>Playing as</span>
+          <span>Player name</span>
           <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} spellCheck={false} aria-label="Your name" />
           <Icon name="pencil" size={16} />
         </label>
+        {walletControls}
+        </section>
         <div className="mode-switch" role="tablist" aria-label="Mode">
           {MODES.map((m) => (
             <button key={m.id} role="tab" aria-selected={m.id === mode} className={m.id === mode ? 'on' : ''} onClick={() => setMode(m.id)}>

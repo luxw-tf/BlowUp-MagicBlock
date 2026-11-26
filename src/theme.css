@@ -630,7 +630,7 @@ kbd {
   margin: 10px auto 0;
   padding: 7px 12px;
   border-radius: 8px;
-  background: #21140e;
+  background: transparent;
   color: #fff4dc;
   font-size: 0.8rem;
   font-weight: 600;
@@ -2805,3 +2805,37 @@ kbd {
     flex: 1 1 40%;
   }
 }
+
+.play-dock { width: min(324px, calc(100vw - 32px)); align-items: stretch; }
+.player-card { max-height: 48vh; overflow-y: auto; background: #2c2019; color: #fff2db; border: 1px solid #886746; border-radius: 12px; box-shadow: 0 4px 12px #160d0840; }
+.player-card .play-name { padding: 9px 14px; border-radius: 0; background: #38291f; border-bottom: 1px solid #66503b; }
+.player-card .play-name input { flex: 1; min-width: 0; text-align: right; border-bottom: 1px solid transparent; }
+.player-card .play-name:focus-within input { border-color: var(--gold); }
+.player-card .wallet-progress { max-width: none; border: 0; background: transparent; padding: 10px 14px; }
+.wallet-line, .wallet-picker button { display: flex; align-items: center; gap: 8px; }
+.wallet-copy { flex: 1; }
+.wallet-copy strong, .wallet-copy small { display: block; }
+.wallet-copy small, .wallet-picker small { color: #e2ccb0; font-size: .75rem; }
+.wallet-progress button { padding: 6px 10px; border-radius: 6px; }
+.wallet-picker { display: grid; gap: 4px; margin-top: 10px; }
+.wallet-picker small { margin-left: auto; }
+.wallet-picker button:disabled { background: #342a23; border-color: #645341; cursor: default; }
+.wallet-picker p { margin: 4px 0; }
+.wallet-progress details { margin-top: 9px; padding-top: 8px; border-top: 1px solid #66503b; }
+.wallet-progress summary { color: #f4d6a0; }
+.play-dock .mode-switch button { flex: 1; }
+@media (max-width: 600px) { .play-dock { width: auto; } }
+
+.loading-veil .loading-text { display: flex; justify-content: space-between; align-items: baseline; width: min(420px, 70vw); }
+.loading-text span:last-child { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.loading-veil .loading-rope { height: 8px; }
+.network-credits { gap: 6px 12px; padding: 0; background: transparent; }
+.network-credits small { font-size: .73rem; font-weight: 500; }
+.network-credits span { gap: 5px; }
+
+.wallet-dialog { box-sizing: border-box; width: min(340px, calc(100vw - 32px)); padding: 18px; border: 1px solid #a38155; border-radius: 12px; background: #302218; color: #fff2db; box-shadow: 0 12px 40px #120c0a66; }
+.wallet-dialog::backdrop { background: rgba(20, 15, 12, .50); }
+.wallet-dialog header { display: flex; align-items: center; justify-content: space-between; }
+.wallet-dialog h2 { margin: 0; font-size: 1.2rem; }
+.wallet-dialog header button { font-size: 1.2rem; line-height: 1; }
+.wallet-dialog .wallet-picker button { min-height: 42px; padding-inline: 12px; }

@@ -97,7 +97,7 @@ function OnlineDetails({ info }: { info: OnlineMatchInfo }) {
         <>
           recorded on Solana ·{' '}
           <a href={explorer('address', info.resultPda)} target="_blank" rel="noreferrer">
-            result
+            <img src="/brand/solana.svg" alt="" width="14" height="14" /> View match on Solana
           </a>{' '}
           ·{' '}
           {info.recordSig && (

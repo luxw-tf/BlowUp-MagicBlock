@@ -1218,7 +1218,7 @@ function Obstacle({ o, i, crateTex }: { o: (typeof OBSTACLES)[number]; i: number
 const SMOKE_FROM: [number, number, number][] = [[17, 4.3, -20.7], [31, 7.5, -33.3]];
 
 /** `town`: the houses behind the near quay, which only the menu's camera ever turns round to see. */
-export function Arena({ shadows, town = false }: { shadows: boolean; town?: boolean }) {
+export function Arena({ shadows, town = false, shadowSize = 2048 }: { shadows: boolean; town?: boolean; shadowSize?: number }) {
   const L = lightNow();
   const look = lookNow();
   const deckTex = useMemo(() => makeDeckTexture(OBSTACLES), []);
@@ -1242,7 +1242,7 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
         intensity={L.sunI}
         color={L.sun}
         castShadow={shadows}
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowSize, shadowSize]}
         shadow-camera-left={-34}
         shadow-camera-right={34}
         shadow-camera-top={26}
