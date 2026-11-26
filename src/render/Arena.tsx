@@ -481,11 +481,13 @@ function Container({ position, rotation = 0, color, len = 6, hanging = false }: 
           <meshStandardMaterial color="#d7d3c8" metalness={0.4} roughness={0.4} />
         </mesh>
       ))}
-      {/* a cream stencil band across the side */}
-      <mesh position={[0, 1.75, 1.245]}>
-        <planeGeometry args={[len * 0.55, 0.42]} />
-        <meshStandardMaterial color={P.cream} roughness={0.8} transparent opacity={0.85} />
-      </mesh>
+      {/* the shipping line's name and the box's code, stencilled on both long sides */}
+      {[1, -1].map((side) => (
+        <mesh key={side} position={[0, 1.75, side * 1.245]} rotation={[0, side > 0 ? 0 : Math.PI, 0]}>
+          <planeGeometry args={[len * 0.62, len * 0.62 * (96 / 512)]} />
+          <meshStandardMaterial map={stencilTexture()} roughness={0.8} transparent opacity={0.9} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -629,8 +631,31 @@ function LifeRing({ position, rotation = 0 }: { position: [number, number, numbe
   );
 }
 
-/** A dockside crane that slowly swings its boom, a container dangling from the hook. */
-function Crane({ position }: { position: [number, number, number] }) {
+let stencil: THREE.CanvasTexture | null = null;
+/** A painted shipping label: the line's name and a container code, like the real boxes on a quay. Drawn once. */
+function stencilTexture(): THREE.CanvasTexture {
+  if (stencil) return stencil;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 96;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#efe6d2'; g.fillRect(0, 0, 512, 96);
+  g.strokeStyle = '#2b2a33'; g.lineWidth = 5; g.strokeRect(6, 6, 500, 84);
+  g.fillStyle = '#2b2a33'; g.textBaseline = 'middle';
+  g.font = '900 34px Arial Black, Impact, sans-serif'; g.textAlign = 'left';
+  g.fillText('BLOWUP LINES', 22, 50);
+  g.font = '700 21px Arial, sans-serif'; g.textAlign = 'right';
+  g.fillText('BLWU 407219', 490, 36); g.fillText('22G1  •  7', 490, 66);
+  // weathering: the paint has worn through in flecks
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(239,230,210,${Math.random() * 0.7})`; g.fillRect(Math.random() * 512, Math.random() * 96, 3, 2); }
+  stencil = new THREE.CanvasTexture(c);
+  stencil.colorSpace = THREE.SRGBColorSpace; stencil.anisotropy = 4;
+  return stencil;
+}
+
+/**
+ * A dockside crane that slowly swings its boom, a container dangling from the hook. `carrying` false leaves just the
+ * hook: the menu's and title's camera stand at the harbour edge, where a swinging box drifts behind the hero and logo.
+ */
+function Crane({ position, carrying = true }: { position: [number, number, number]; carrying?: boolean }) {
   const boom = useRef<THREE.Group>(null);
   const load = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
@@ -672,7 +697,14 @@ function Crane({ position }: { position: [number, number, number] }) {
             <cylinderGeometry args={[0.03, 0.03, 4, 4]} />
             <meshStandardMaterial color="#26262c" />
           </mesh>
-          <Container position={[0, -6.6, 0]} color={P.teal} len={4.2} hanging />
+          {carrying ? (
+            <Container position={[0, -6.6, 0]} color={P.teal} len={4.2} hanging />
+          ) : (
+            <mesh position={[0, -4.1, 0]}>
+              <boxGeometry args={[0.36, 0.3, 0.36]} />
+              <meshStandardMaterial color="#26262c" metalness={0.5} roughness={0.4} />
+            </mesh>
+          )}
         </group>
       </group>
     </group>
@@ -1348,7 +1380,8 @@ export function Arena({ shadows, town = false }: { shadows: boolean; town?: bool
         <Prop src={MODEL.rock} position={[-29, -0.5, -13.4]} size={3} />
         <Prop src={MODEL.rock} position={[30, -0.5, -13.6]} size={3.4} rotation={2} />
       </Suspense>
-      <Crane position={[-6, 0, -16.5]} />
+      {/* on the menu and title the crane holds an empty hook (its swinging box would sit behind the hero and logo) */}
+      <Crane position={[-6, 0, -16.5]} carrying={!town} />
       <Gulls />
       {/* smoke from the tug's and the cargo ship's funnels; dust and leaves by day, fireflies at night */}
       <Smoke emitters={SMOKE_FROM} color={currentMood() === 'night' ? '#5b6170' : '#e9ecef'} opacity={currentMood() === 'night' ? 0.45 : 0.6} />
