@@ -72,6 +72,7 @@ export function Landing({
   onRejoin,
   notice,
   onCharacter,
+  onTutorial,
 }: {
   initial: Profile | null;
   onPlay: (p: Profile) => void;
@@ -84,6 +85,8 @@ export function Landing({
   notice: string | null;
   /** The pick changed: the 3D dock behind shows them. */
   onCharacter: (c: CharacterId) => void;
+  /** How to play: a guided practice round. */
+  onTutorial: (p: Profile) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
@@ -116,7 +119,6 @@ export function Landing({
   };
   const hero = characterDef(character);
   const [mode, setMode] = useState<'bots' | 'online' | 'private'>('bots');
-  const [howOpen, setHowOpen] = useState(false);
 
   if (title)
     return (
@@ -202,20 +204,10 @@ export function Landing({
         </button>
       </div>
 
-      <div className={`how ${howOpen ? 'open' : ''}`}>
-        <button className="btn plank how-btn" onClick={() => setHowOpen((v) => !v)}>
+      <div className="how">
+        <button className="btn plank how-btn" onClick={go(onTutorial)} disabled={!clean}>
           How to play
         </button>
-        {howOpen && (
-          <div className="how-card">
-            <p>Pass the bomb before it blows. Nobody knows how long the fuse is.</p>
-            <span><kbd>WASD</kbd> move</span>
-            <span><kbd>Left click</kbd> throw</span>
-            <span><kbd>Right click</kbd> tag</span>
-            <span><kbd>Space</kbd> dash</span>
-            <span><kbd>E</kbd> item</span>
-          </div>
-        )}
       </div>
     </div>
   );

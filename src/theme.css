@@ -2565,3 +2565,104 @@ kbd {
     margin-top: -122px;
   }
 }
+
+/* ───────── tutorial coach ───────── */
+
+.coach {
+  position: fixed;
+  z-index: 20;
+  left: 18px;
+  bottom: 22px;
+  width: min(320px, calc(100vw - 36px));
+  padding: 14px 16px 12px;
+  color: var(--ink);
+  background: #fbf0d6;
+  border: 3px solid #3b1f0e;
+  border-radius: 12px;
+  box-shadow: 0 5px 0 #2a1408, 0 14px 26px rgba(0, 0, 0, 0.35);
+  animation: fade 0.3s ease-out;
+}
+.coach-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.coach-count {
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9a4f1c;
+}
+.coach-dots {
+  display: flex;
+  gap: 5px;
+}
+.coach-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid #b08a5a;
+}
+.coach-dots i.on {
+  border-color: var(--teal);
+  background: var(--teal);
+}
+.coach-dots i.done {
+  border-color: var(--good);
+  background: var(--good);
+}
+.coach h3 {
+  margin: 8px 0 4px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.35rem;
+  color: var(--ink);
+  animation: nameIn 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.coach p {
+  margin: 0;
+  font-weight: 500;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.coach kbd {
+  margin: 0 1px;
+}
+.coach-note {
+  margin-top: 8px !important;
+  padding: 6px 9px;
+  font-weight: 700 !important;
+  color: #9a2a1c;
+  background: rgba(198, 58, 44, 0.1);
+  border-left: 4px solid var(--red);
+  border-radius: 4px;
+}
+.coach-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.coach-actions .btn {
+  min-width: 0;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+.coach-skip {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--ink-dim);
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .coach {
+    bottom: 120px;
+  }
+}

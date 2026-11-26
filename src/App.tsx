@@ -8,6 +8,8 @@ import { Landing, Lobby } from './ui/Menus';
 import { OnlineLobby } from './ui/OnlineLobby';
 import { rejoinMatch } from './ui/onlineFlow';
 import { RoomScreen } from './ui/RoomScreen';
+import { createTutorialSession, TutorialCoach } from './ui/Tutorial';
+import type { GameSession as LocalSession } from './game/session';
 import { loadProfile, saveProfile, type Profile } from './state/settings';
 import { MenuStage } from './render/MenuStage';
 import type { CharacterId } from './game/types';
@@ -17,7 +19,8 @@ type Screen =
   | { kind: 'lobby'; participants: ParticipantSetup[] }
   | { kind: 'online-lobby'; profile: Profile; attempt: number }
   | { kind: 'room'; profile: Profile; code: string | null; attempt: number }
-  | { kind: 'match'; session: SessionLike };
+  | { kind: 'match'; session: SessionLike }
+  | { kind: 'tutorial'; session: LocalSession };
 
 const params = new URLSearchParams(location.search);
 /** Invite links: ?room=CODE */
@@ -43,7 +46,7 @@ export default function App() {
    */
   const go = useCallback((next: Screen) => {
     setScreen((prev) => {
-      if (prev.kind === 'match' && (next.kind !== 'match' || next.session !== prev.session)) prev.session.dispose();
+      if ((prev.kind === 'match' || prev.kind === 'tutorial') && (!('session' in next) || next.session !== prev.session)) prev.session.dispose();
       return next;
     });
   }, []);
@@ -92,11 +95,31 @@ export default function App() {
       });
   }, [go, rejoinId]);
 
+  const tutorial = useCallback(
+    (p: Profile) => {
+      remember(p);
+      go({ kind: 'tutorial', session: createTutorialSession(p) });
+    },
+    [go, remember],
+  );
+
   const toMatch = useCallback((s: OnlineSession) => go({ kind: 'match', session: s }), [go]);
   const toLanding = useCallback(() => {
     setRejoinId(activeMatchId());
     go({ kind: 'landing' });
   }, [go]);
+
+  if (screen.kind === 'tutorial')
+    return (
+      <>
+        <GameView key={screen.session.id} session={screen.session} onRematch={() => tutorial(profile ?? { name: 'guest', character: 'frog' })} onMenu={toLanding} />
+        <TutorialCoach
+          session={screen.session}
+          onPlay={() => quickPlay(profile ?? { name: 'guest', character: 'frog' })}
+          onExit={toLanding}
+        />
+      </>
+    );
 
   if (screen.kind !== 'match') {
     let menu;
@@ -111,6 +134,7 @@ export default function App() {
           onRejoin={rejoinId ? rejoin : null}
           notice={notice}
           onCharacter={setHero}
+          onTutorial={tutorial}
         />
       );
     else if (screen.kind === 'lobby')
