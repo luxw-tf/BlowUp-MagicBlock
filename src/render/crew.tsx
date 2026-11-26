@@ -122,7 +122,7 @@ function hipBomb(): THREE.Group {
   return g;
 }
 
-const ANIMS = ['general', 'move', 'dodge', 'social', 'melee', 'skeleton'].map((n) => modelUrl(`kaykit/anim_${n}.glb`));
+const ANIMS = ['general', 'move', 'dodge', 'social', 'melee', 'skeleton', 'select'].map((n) => modelUrl(`kaykit/anim_${n}.glb`));
 
 type Move = 'idle' | 'walk' | 'run' | 'dash' | 'throw' | 'tag' | 'hit' | 'death' | 'win' | 'hello';
 const HERO_CLIPS: Record<Move, string> = {
@@ -131,6 +131,15 @@ const HERO_CLIPS: Record<Move, string> = {
 };
 const SKELETON_CLIPS: Record<Move, string> = {
   ...HERO_CLIPS, idle: 'Skeletons_Idle', walk: 'Skeletons_Walking', death: 'Skeletons_Death', win: 'Skeletons_Taunt', hello: 'Skeletons_Taunt',
+};
+/** Each hero's own move when you pick them in the menu (KayKit Character Animations, CC0), in place of a wave. */
+const HERO_SELECT: Record<CharacterId, string> = {
+  frog: 'Ranged_Bow_Draw_Up', // Ranger: draws a bow to the sky
+  cat: 'Melee_2H_Attack_Spin', // Barbarian: a two-handed spin
+  blob: 'Ranged_Magic_Raise', // Mage: a calm raise of the hand
+  rat: 'Melee_Block', // Knight: up on guard
+  duck: 'Melee_Dualwield_Attack_Stab', // Rogue: quick twin stabs
+  creature: 'Melee_Unarmed_Attack_Kick', // Shade: a sharp kick
 };
 const ONCE: Move[] = ['dash', 'throw', 'tag', 'hit', 'death', 'hello'];
 
@@ -200,7 +209,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
       }
     }
     const mixer = new THREE.AnimationMixer(scene);
-    const names = { ...(bot ? SKELETON_CLIPS : HERO_CLIPS), idle: build.idle };
+    const names = { ...(bot ? SKELETON_CLIPS : HERO_CLIPS), idle: build.idle, ...(bot ? {} : { hello: HERO_SELECT[id] ?? HERO_CLIPS.hello }) };
     const all = new Map(anims.flatMap((a) => a.animations).map((c) => [c.name, c]));
     const actions = new Map<Move, THREE.AnimationAction>();
     for (const move of Object.keys(names) as Move[]) {
@@ -212,7 +221,7 @@ export function CrewMember({ id, bot = false, seat = 0, drive, tint }: {
     }
     const dur = (m: Move) => (actions.get(m)?.getClip().duration ?? 1) * 1000;
     return { scene, k, minY: box.min.y, mixer, actions, dur, stride: build.stride, current: null as Move | null, hitUntil: 0, actUntil: 0, actKind: 'throw' as 'throw' | 'tag', helloUntil: 0, helloOn: false };
-  }, [gltf, anims, bot, tint]);
+  }, [gltf, anims, bot, tint, id]);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
