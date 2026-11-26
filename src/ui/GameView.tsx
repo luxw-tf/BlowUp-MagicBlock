@@ -85,13 +85,17 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   /** Bot trash talk over their heads: one bubble per bot, a few seconds each. */
   const [bubbles, setBubbles] = useState<Record<PlayerId, { text: string; key: number }>>({});
   const lastBubble = useRef(new Map<PlayerId, number>());
-  /** Where the big line goes: whichever half of the screen you're not standing in, so it never covers you. */
+  /**
+   * Where the big line goes: whichever half of the screen you're not standing in, so it never covers you. Once you're
+   * out (no tag on screen) it sits below the middle, clear of the wooden round banner at the top and above the
+   * spectator bar; in the top half it never rises into that banner (see the clamp where it is drawn).
+   */
   const calloutTop = () => {
     const tag = overlay.tags.get(session.localId);
     const box = wrap.current?.getBoundingClientRect();
-    if (!tag || !box || tag.style.display === 'none') return 26;
+    if (!tag || !box || tag.style.display === 'none') return 64;
     const y = (tag.getBoundingClientRect().top - box.top) / box.height;
-    return y < 0.5 ? 70 : 26;
+    return y < 0.5 ? 70 : 30;
   };
   /** Words slammed all over the screen on the big moments. */
   const [pops, setPops] = useState<Pop[]>([]);
@@ -466,7 +470,7 @@ export function GameView({ session, onRematch, onMenu }: Props) {
         </div>
 
         {callout && (
-          <div key={callout.key} className={`callout callout-${callout.tone}`} style={{ top: `${callout.top}%`, '--tilt': `${((callout.key % 7) - 3) * 1.6}deg` } as React.CSSProperties}>
+          <div key={callout.key} className={`callout callout-${callout.tone}`} style={{ top: callout.top < 50 ? `max(${callout.top}%, 270px)` : `${callout.top}%`, '--tilt': `${((callout.key % 7) - 3) * 1.6}deg` } as React.CSSProperties}>
             {callout.text}
           </div>
         )}
