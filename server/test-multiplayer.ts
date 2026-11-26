@@ -190,7 +190,13 @@ async function scenarioA() {
   // human 0 resumes the same session → should reclaim automatically.
   if (a.paused) {
     a.paused = false;
-    const ok = await waitFor('reclaim by resumed session', async () => !(await matchInfo()).takeovers.includes(a.seat()) || !a.alive(), 15_000);
+    // Wait for both sides: the lobby can see the re-keyed seat a beat before the
+    // client's own confirmation returns and it queues its notice.
+    const ok = await waitFor(
+      'reclaim by resumed session',
+      async () => (!(await matchInfo()).takeovers.includes(a.seat()) && a.notices.includes('back in control')) || !a.alive(),
+      15_000,
+    );
     check('resumed player reclaims the seat', ok && a.notices.includes('back in control'), `notices ${JSON.stringify(a.notices)}`);
   }
   // human 1 rejoins with a brand-new session (as after a reload).
