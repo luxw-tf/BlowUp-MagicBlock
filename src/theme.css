@@ -774,8 +774,9 @@ kbd {
   bottom: 22px;
   transform: translateX(-50%);
   display: flex;
-  gap: 10px;
-  padding: 6px 10px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
   border-radius: 999px;
   background: rgba(30, 16, 6, 0.55);
 }
@@ -793,11 +794,11 @@ kbd {
 }
 .hero-chip:hover {
   opacity: 1;
-  transform: translateY(-3px);
+  transform: scale(1.05);
 }
 .hero-chip.on {
   opacity: 1;
-  transform: translateY(-5px) scale(1.12);
+  transform: scale(1.1);
 }
 .hero-chip.on .portrait {
   border-color: var(--gold);
