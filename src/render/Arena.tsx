@@ -1000,8 +1000,18 @@ function Basin({ x, z, r, statue = true }: { x: number; z: number; r: number; st
  */
 function Capstan({ r }: { r: number }) {
   const head = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (head.current) head.current.rotation.y = clock.elapsedTime * 0.06;
+  const spin = useRef({ a: 0, v: 0.06 });
+  useFrame(({ clock }, dt) => {
+    if (!head.current) return;
+    // the wind gets into the bars and whirls it round: barely turning on a calm day, spinning hard in a breeze or a
+    // storm, surging and easing with the gusts (speed eases, so it never jumps)
+    const w = AMBIENT.uWind.value, t = clock.elapsedTime;
+    const gust = 0.75 + 0.25 * Math.sin(t * 0.45) + 0.12 * Math.sin(t * 1.7);
+    const goal = w < 0.45 ? 0.06 : (0.06 + (w - 0.4) * 1.7) * gust;
+    const s = spin.current;
+    s.v += (goal - s.v) * (1 - Math.exp(-Math.min(dt, 0.1) * 0.8));
+    s.a += s.v * Math.min(dt, 0.1);
+    head.current.rotation.y = s.a;
   });
   const BARS = 8;
   const reach = r - 0.25; // the bar tips stay inside the footprint
