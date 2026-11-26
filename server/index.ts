@@ -17,9 +17,9 @@
  * Join payload: { name, character, identity, session, sessionExpiry }.
  */
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { CHARACTERS } from '../src/game/content';
 import type { CharacterId } from '../src/game/types';
 import { Lobby, QUEUE_WINDOW_MS } from './lobby';
@@ -32,6 +32,26 @@ const KEY_PATH = process.env.AUTHORITY_KEY ?? join(process.cwd(), '.keys/authori
 
 const authority = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(KEY_PATH, 'utf8'))));
 const lobby = new Lobby(authority, MAX_ACTIVE);
+
+// Index only regular files in the built client. Request paths are lookup keys.
+const publicFiles = new Map<string, string>();
+function indexDirectory(directory: string, prefix: string) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue;
+    const file = join(directory, entry.name);
+    const url = prefix + encodeURIComponent(entry.name);
+    if (entry.isDirectory()) indexDirectory(file, url + '/');
+    if (entry.isFile()) publicFiles.set(url, file);
+  }
+}
+const dist = join(process.cwd(), 'dist');
+if (existsSync(dist)) indexDirectory(dist, '/');
+const mime: Record<string, string> = {
+  '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp',
+  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.ogg': 'audio/ogg',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.txt': 'text/plain', '.md': 'text/plain',
+};
 
 const json = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, {
@@ -142,6 +162,13 @@ const server = createServer(async (req, res) => {
       return runner ? json(res, 200, runner.publicInfo()) : json(res, 404, { error: 'unknown match' });
     }
 
+    const file = publicFiles.get(path === '/' ? '/index.html' : path);
+    if (file && (method === 'GET' || method === 'HEAD')) {
+      res.setHeader('Content-Type', mime[extname(file)] ?? 'application/octet-stream');
+      if (method === 'HEAD') res.end();
+      else createReadStream(file).on('error', () => res.destroy()).pipe(res);
+      return;
+    }
     json(res, 404, { error: 'not found' });
   } catch (e) {
     json(res, 500, { error: (e as Error).message });
