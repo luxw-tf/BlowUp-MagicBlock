@@ -115,7 +115,6 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
       <div className="title-center">
         <Wordmark className="title-logo" />
         <div className="ribbon title-ribbon">Pass the bomb. Don't be holding it.</div>
-        <NetworkCredits />
       </div>
       <div className="title-start">Click or press any key</div>
       <LoadingVeil progress={progress} done={done} />
