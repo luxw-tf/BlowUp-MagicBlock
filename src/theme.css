@@ -1584,6 +1584,25 @@ kbd {
   box-shadow: none;
 }
 
+/* the holder hint changes to explain a pause: recovering from a miss, or a tag with nobody in reach */
+.holder-hint.waiting {
+  filter: grayscale(0.7) brightness(0.9);
+}
+.holder-hint.warn {
+  border-image-source: url('/ui/btn-gold.webp');
+  text-shadow: var(--ol-gold);
+  animation: hintShake 0.08s linear 3;
+}
+@keyframes hintShake {
+  50% {
+    margin-left: 4px;
+  }
+}
+/* an item you can't use right now (a shield while you hold the bomb) dims */
+.item-slot.unusable .slot-face {
+  filter: grayscale(0.9) brightness(0.7);
+}
+
 /* kill feed: little paper slips */
 .feed-item {
   color: var(--ink);

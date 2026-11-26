@@ -21,7 +21,7 @@ export const CONFIG = {
   throwRange: 10,
   throwSpeed: 20,
   bombRadius: 0.25,
-  missRecovery: 0.8,
+  missRecovery: 0.6, // client side in both modes; shorter, and now shown on the HUD
   transferProtection: 0.35,
 
   // Fuse (PRD §05) — indexed by survivors remaining
@@ -50,11 +50,12 @@ export const CONFIG = {
   blockWindow: 1.25,
   emergencyDashDistance: 6,
   emergencyDashDuration: 0.26,
-  swapRange: 8,
+  swapRange: 10, // items are offline only
   slowRange: 8,
   slowFactor: 0.35,
   slowDuration: 1.5,
   timeTheftSeconds: 2,
+  timeTheftRunnerSeconds: 1.5, // used by anyone but the holder, Time Theft takes time off the fuse instead
 
   // Weather (arena.ts WEATHER_FX). On: offline/practice matches feel the weather: wind drifts people and bends
   // throws, rain and snow make the deck slippery, snow is slower going. Never applied online (the on-chain program

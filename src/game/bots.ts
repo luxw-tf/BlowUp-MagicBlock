@@ -5,7 +5,7 @@
  * occasional mistakes, driven by a private per-bot PRNG.
  */
 import { CONFIG } from './config';
-import { ARENA, OBSTACLES, circleBlocked, segmentClear } from './arena';
+import { ARENA, OBSTACLES, circleBlocked, currentLayout, segmentClear } from './arena';
 import { add, dist, dot, len, norm, scale, sub, v } from './math';
 import { alivePlayers, fuseRemaining, getPlayer, holderCanAct } from './sim';
 import type { InputFrame, MatchState, PlayerState, Vec2 } from './types';
@@ -21,20 +21,32 @@ function mulberry32(seed: number) {
   };
 }
 
-/** Navigation waypoints around the basin and crates for one-hop path finding. */
-const NAV_NODES: Vec2[] = (() => {
+/**
+ * Navigation waypoints round whatever obstacles the current layout has, for one-hop path finding: a ring round each
+ * round obstacle and the corners of each box. Built per layout (the yard changes between matches).
+ */
+let navFor = '';
+let navNodes: Vec2[] = [];
+function NAV(): Vec2[] {
+  // the layout swaps OBSTACLES in place, so key the cache on the layout and its obstacle count
+  const key = `${currentLayout().id}:${OBSTACLES.length}`;
+  if (navFor === key) return navNodes;
   const nodes: Vec2[] = [];
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    nodes.push({ x: Math.cos(a) * 4.3, z: Math.sin(a) * 4.3 });
-  }
   for (const o of OBSTACLES) {
-    if (o.kind !== 'box') continue;
-    const m = 0.9;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) nodes.push({ x: o.x + sx * (o.hw + m), z: o.z + sz * (o.hd + m) });
+    if (o.kind === 'circle') {
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        nodes.push({ x: o.x + Math.cos(a) * (o.r + 1.3), z: o.z + Math.sin(a) * (o.r + 1.3) });
+      }
+    } else {
+      const m = 0.9;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) nodes.push({ x: o.x + sx * (o.hw + m), z: o.z + sz * (o.hd + m) });
+    }
   }
-  return nodes.filter((n) => !circleBlocked(n, CONFIG.playerRadius));
-})();
+  navNodes = nodes.filter((n) => !circleBlocked(n, CONFIG.playerRadius));
+  navFor = key;
+  return navNodes;
+}
 
 const R = CONFIG.playerRadius;
 
@@ -42,7 +54,7 @@ function waypointToward(from: Vec2, to: Vec2): Vec2 {
   if (segmentClear(from, to, R)) return to;
   let best: Vec2 | null = null;
   let bestCost = Infinity;
-  for (const n of NAV_NODES) {
+  for (const n of NAV()) {
     if (!segmentClear(from, n, R)) continue;
     const cost = dist(from, n) + dist(n, to) + (segmentClear(n, to, R) ? 0 : 6);
     if (cost < bestCost) {
@@ -81,7 +93,8 @@ export class BotBrain {
 
   constructor(readonly id: string, seed: number) {
     this.rng = mulberry32(seed);
-    this.reaction = 0.16 + this.rng() * 0.14;
+    // human-ish reactions (0.26 to 0.42 s): faster bots out-reacted people, who won about 5% of matches
+    this.reaction = 0.26 + this.rng() * 0.16;
     this.aimError = 0.08 + this.rng() * 0.16;
     this.aggression = 0.4 + this.rng() * 0.5;
   }

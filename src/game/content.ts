@@ -56,7 +56,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
   outtaHere: { id: 'outtaHere', name: 'Full Sail', blurb: 'A long emergency dash', color: '#7dff6b', glyph: 'sprint' },
   plotTwist: { id: 'plotTwist', name: 'Plot Twist', blurb: 'Swap places with the pirate nearest your cursor', color: '#c38bff', glyph: 'swap' },
   skillIssue: { id: 'skillIssue', name: 'Dead Weight', blurb: 'Slow the pirate nearest your cursor by 35%', color: '#ffb347', glyph: 'slow' },
-  timeTheft: { id: 'timeTheft', name: 'Time Theft', blurb: '+2s on the active fuse (round cap applies)', color: '#ffe066', glyph: 'clock' },
+  timeTheft: { id: 'timeTheft', name: 'Time Theft', blurb: 'Holding the bomb: +2s on the fuse. Not holding: 1.5s off it', color: '#ffe066', glyph: 'clock' },
 };
 
 export const CALLOUTS = {

@@ -5,7 +5,7 @@ import { audio } from '../audio/audio';
 import { ABILITY_DEFS, characterDef } from '../game/content';
 import { CONFIG } from '../game/config';
 import type { SessionLike } from '../game/sessionTypes';
-import { alivePlayers, fuseRemaining, getPlayer } from '../game/sim';
+import { alivePlayers, fuseRemaining, getPlayer, holderCanAct, tagCandidates } from '../game/sim';
 import type { GameEvent, MatchState, PlayerId } from '../game/types';
 import { InputController } from '../input/input';
 import { GameContext, overlay, type GameCtx } from '../render/context';
@@ -22,6 +22,11 @@ interface FeedItem {
   id: number;
   html: React.ReactNode;
 }
+
+/** When a tag last found nobody in reach (drives the "too far" hint). */
+const tagMiss = { at: 0 };
+/** A throw or tag clicked while you hold the bomb but can't act yet is kept this long, then fires as soon as it can. */
+const BUFFER_MS = 200;
 
 /** Who is playing on this screen, so the feed says "You" like the tags and the roster do. */
 let localId: PlayerId | null = null;
@@ -152,7 +157,24 @@ export function GameView({ session, onRematch, onMenu }: Props) {
   useEffect(() => {
     if (!wrap.current) return;
     input.attach(wrap.current);
-    session.setInputSampler(input.sample);
+    // clicks are never silently dropped: a throw or tag made while you hold the bomb but can't act yet (recovering
+    // from a miss, bomb in flight, fuse still lighting) is kept for a moment and fires on the first tick it can.
+    // Only clicks made while holding are kept, so a click just before the bomb reaches you can't pass it straight on.
+    const pend = { throw: 0, tag: 0 };
+    session.setInputSampler(() => {
+      const f = input.sample();
+      const s = session.state;
+      const me = getPlayer(s, session.localId);
+      const now = performance.now();
+      const holding = !!me && s.bomb.holderId === me.id && s.phase === 'active';
+      if (!holding) pend.throw = pend.tag = 0;
+      else {
+        if (f.throw) pend.throw = now + BUFFER_MS;
+        if (f.tag) pend.tag = now + BUFFER_MS;
+        if (f.tag && me && holderCanAct(s, me) && tagCandidates(s, me, f.aim).length === 0) tagMiss.at = now;
+      }
+      return { ...f, throw: f.throw || now < pend.throw, tag: f.tag || now < pend.tag };
+    });
     return () => {
       session.setInputSampler(null);
       input.dispose();
@@ -832,7 +854,7 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
             <span className="slot-key">SPACE</span>
           </div>
           <div
-            className={`slot item-slot ${inv && inv !== 'pending' ? 'has-item' : ''}`}
+            className={`slot item-slot ${inv && inv !== 'pending' ? 'has-item' : ''} ${(inv === 'returnToSender' || inv === 'notToday') && s.bomb.holderId === me.id ? 'unusable' : ''}`}
             style={inv && inv !== 'pending' ? { borderColor: ABILITY_DEFS[inv].color, boxShadow: `0 0 18px ${ABILITY_DEFS[inv].color}66` } : undefined}
             title={inv && inv !== 'pending' ? ABILITY_DEFS[inv].blurb : 'Pick up a mystery box'}
           >
@@ -857,7 +879,15 @@ function Hud({ session, bubbles }: { session: SessionLike; bubbles: Record<Playe
       )}
 
       {me.alive && s.bomb.holderId === me.id && s.phase === 'active' && (
-        <div className="holder-hint">LEFT CLICK throw · RIGHT CLICK tag</div>
+        <div className={`holder-hint ${s.time < me.recoverUntil || s.bomb.fuseDeadline === null ? 'waiting' : performance.now() - tagMiss.at < 1400 ? 'warn' : ''}`}>
+          {s.bomb.fuseDeadline === null
+            ? 'Lighting the fuse…'
+            : s.time < me.recoverUntil
+              ? 'Missed! Grab it back…'
+              : performance.now() - tagMiss.at < 1400
+                ? 'Too far to tag. Get closer, or throw'
+                : 'LEFT CLICK throw · RIGHT CLICK tag'}
+        </div>
       )}
     </>
   );

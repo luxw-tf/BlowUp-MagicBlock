@@ -421,7 +421,13 @@ function useAbility(s: MatchState, p: PlayerState, inp: InputFrame) {
         emit(s, { type: 'abilityFailed', id: p.id, ability, reason: 'fuse not armed' });
         return;
       }
-      s.bomb.fuseDeadline = Math.min(s.bomb.fuseDeadline + CONFIG.timeTheftSeconds, s.roundDeadline);
+      if (s.bomb.holderId === p.id) {
+        // the holder buys time
+        s.bomb.fuseDeadline = Math.min(s.bomb.fuseDeadline + CONFIG.timeTheftSeconds, s.roundDeadline);
+      } else {
+        // anyone else steals it from the holder (never below the minimum fuse); items are offline only
+        s.bomb.fuseDeadline = Math.max(s.time + CONFIG.fuseMinimum, s.bomb.fuseDeadline - CONFIG.timeTheftRunnerSeconds);
+      }
       break;
   }
   p.inventory = null;
