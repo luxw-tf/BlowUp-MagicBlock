@@ -23,18 +23,20 @@ export const CONFIG = {
   bombRadius: 0.25,
   tagDaze: 0.6, // a tagged player is frozen this long (offline; online the chain doesn't say how the bomb was passed)
   missRecovery: 0.6, // client side in both modes; shorter, and now shown on the HUD
-  transferProtection: 0.35,
+  transferProtection: 0.9, // stops instant pass-backs (was 0.35 s: 21% of passes came straight back)
 
-  // Fuse (PRD §05) — indexed by survivors remaining
+  // Fuse, indexed by survivors remaining. Tuned from PRD §05 (docs/onchain-tuning.md).
+  // MUST match programs/blowup/src/rules.rs: src/game/rules-sync.test.ts checks it.
   fuseRanges: {
-    6: [8, 15],
-    5: [6, 12],
-    4: [4, 9],
-    3: [3, 6],
-    2: [2, 4],
+    6: [5, 11],
+    5: [4.5, 10],
+    4: [4, 8.5],
+    3: [4, 7],
+    2: [4, 7],
   } as Record<number, [number, number]>,
-  fuseMinimum: 1.25,
-  compressionWindow: 45,
+  fuseMinimum: 1.25, // also: no passes in the round's last fuseMinimum seconds
+  compressionWindow: 30,
+  openingFuseBonus: 1.5, // added to each round's opening fuse, capped by the round deadline
   compressionFloor: 0.25,
   roundHardDeadline: 45,
   closeCallThreshold: 0.6,

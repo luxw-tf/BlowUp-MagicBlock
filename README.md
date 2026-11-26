@@ -34,7 +34,8 @@ Key rules implemented as specified:
 - The sim **never generates randomness**. Holder draws, fuse lengths and pickup rewards are explicit `randomRequests`. The match visibly waits ("drawing bomb holder…", fuse "…", item spinner) until `fulfillRandomness()` is called. Stale or duplicate fulfilments are ignored, and unanswered requests are retried after a bounded wait.
 - Expiration is checked before any action each tick. A fuse that expires mid-flight eliminates the thrower. The 45s hard round deadline caps every fuse, including Time Theft.
 - Inputs carry sequence numbers. Stale or duplicate frames are rejected, and move vectors are clamped.
-- Transfer protection (0.35s) blocks tag-backs. Return to Sender ignores it, since it is an explicit reflection.
+- Transfer protection (0.9 s) blocks tag-backs. Return to Sender ignores it, since it is an explicit reflection.
+- Fuse ranges, compression, the opening-fuse bonus and the end-of-round pass lock were tuned from the PRD table after ~9,000 simulated matches; see [docs/onchain-tuning.md](docs/onchain-tuning.md). The on-chain program and the client must change together: `src/game/rules-sync.test.ts` fails if they drift.
 
 ## Phase 00 — MagicBlock feasibility (validated on devnet)
 

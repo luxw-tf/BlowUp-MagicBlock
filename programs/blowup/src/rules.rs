@@ -7,21 +7,30 @@
 pub const MAX_PLAYERS: usize = 6;
 pub const NO_PLAYER: u8 = u8::MAX;
 
-/// Initial fuse range in ms, indexed by survivors remaining (PRD §05).
+/// Initial fuse range in ms, indexed by survivors remaining.
+///
+/// Tuned from the PRD §05 table after ~9,000 simulated matches
+/// (docs/onchain-tuning.md): shorter early fuses remove ~15 s of dead time per
+/// round, and the 3- and 2-player fuses are long enough that the first holder
+/// can actually pass (the 1v1 first holder died 72% of the time with 2–4 s).
 pub const FUSE_RANGES_MS: [(u64, u64); MAX_PLAYERS + 1] = [
     (0, 0),
     (0, 0),
-    (2_000, 4_000),
-    (3_000, 6_000),
-    (4_000, 9_000),
-    (6_000, 12_000),
-    (8_000, 15_000),
+    (4_000, 7_000),
+    (4_000, 7_000),
+    (4_000, 8_500),
+    (4_500, 10_000),
+    (5_000, 11_000),
 ];
 pub const FUSE_MIN_MS: u64 = 1_250;
-pub const COMPRESSION_WINDOW_MS: u64 = 45_000;
+pub const COMPRESSION_WINDOW_MS: u64 = 30_000;
 pub const COMPRESSION_FLOOR_PERMILLE: u64 = 250;
 pub const ROUND_DEADLINE_MS: u64 = 45_000;
-pub const TRANSFER_PROTECTION_MS: u64 = 350;
+/// Long enough to stop instant pass-backs (21% of passes came back within 1 s at 350 ms).
+pub const TRANSFER_PROTECTION_MS: u64 = 900;
+/// Added to each round's opening fuse (still capped by the round deadline), so
+/// the first holder has time to reach someone after the intermission.
+pub const OPENING_FUSE_BONUS_MS: u64 = 1_500;
 
 /// Positions are fixed-point millimetres. Arena is 36 × 20 units.
 pub const ARENA_HALF_W_MM: i32 = 18_000;
@@ -91,6 +100,12 @@ pub fn fuse_ms(survivors: u8, elapsed_ms: u64, remaining_round_ms: u64, u: u32) 
     d.min(remaining_round_ms)
 }
 
+/// Passing is locked in the last FUSE_MIN_MS before the round deadline: a pass
+/// there would hand the receiver a fuse cut to a fraction of a second.
+pub fn pass_locked(slot: u64, round_deadline_slot: u64, slot_ms: u16) -> bool {
+    slot + ms_to_slots(FUSE_MIN_MS, slot_ms) >= round_deadline_slot
+}
+
 pub fn ms_to_slots(ms: u64, slot_ms: u16) -> u64 {
     let s = slot_ms.max(1) as u64;
     (ms + s - 1) / s
@@ -128,27 +143,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ranges_match_prd_table() {
-        assert_eq!(fuse_range_ms(6, 0), (8_000, 15_000));
-        assert_eq!(fuse_range_ms(2, 0), (2_000, 4_000));
+    fn ranges_match_tuned_table() {
+        assert_eq!(fuse_range_ms(6, 0), (5_000, 11_000));
+        assert_eq!(fuse_range_ms(5, 0), (4_500, 10_000));
+        assert_eq!(fuse_range_ms(4, 0), (4_000, 8_500));
+        assert_eq!(fuse_range_ms(3, 0), (4_000, 7_000));
+        assert_eq!(fuse_range_ms(2, 0), (4_000, 7_000));
     }
 
     #[test]
     fn compression_and_floor() {
-        // Half way through the window: factor 0.5.
-        assert_eq!(fuse_range_ms(6, 22_500), (4_000, 7_500));
-        // Floor 0.25 → [2000, 3750].
-        assert_eq!(fuse_range_ms(6, 44_000), (2_000, 3_750));
-        assert_eq!(fuse_range_ms(6, 90_000), (2_000, 3_750));
-        // Nominal minimum.
-        assert_eq!(fuse_range_ms(2, 40_000), (1_250, 1_250));
+        // Half way through the 30 s window: factor 0.5.
+        assert_eq!(fuse_range_ms(6, 15_000), (2_500, 5_500));
+        // Floor 0.25 → [1250, 2750].
+        assert_eq!(fuse_range_ms(6, 29_000), (1_250, 2_750));
+        assert_eq!(fuse_range_ms(6, 90_000), (1_250, 2_750));
+        // Nominal minimum: 1v1 late in the round → [1000, 1750] floored to 1250.
+        assert_eq!(fuse_range_ms(2, 40_000), (1_250, 1_750));
+    }
+
+    #[test]
+    fn passes_lock_in_the_last_fuse_minimum() {
+        // 10 ms slots: FUSE_MIN_MS (1.25 s) = 125 slots.
+        assert!(!pass_locked(1_000_000, 1_000_126, 10));
+        assert!(pass_locked(1_000_000, 1_000_125, 10));
+        assert!(pass_locked(1_000_200, 1_000_125, 10)); // past the deadline
     }
 
     #[test]
     fn fuse_draw_bounds_and_round_cap() {
-        assert_eq!(fuse_ms(6, 0, 45_000, 0), 8_000);
-        assert!(fuse_ms(6, 0, 45_000, u32::MAX) < 15_000);
-        assert!(fuse_ms(6, 0, 45_000, u32::MAX) > 14_990);
+        assert_eq!(fuse_ms(6, 0, 45_000, 0), 5_000);
+        assert!(fuse_ms(6, 0, 45_000, u32::MAX) < 11_000);
+        assert!(fuse_ms(6, 0, 45_000, u32::MAX) > 10_990);
         assert_eq!(fuse_ms(6, 0, 500, u32::MAX), 500);
         assert_eq!(fuse_ms(2, 44_900, 100, 0), 100);
     }

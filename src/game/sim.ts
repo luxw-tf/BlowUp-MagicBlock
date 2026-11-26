@@ -159,7 +159,10 @@ function isProtected(s: MatchState, id: PlayerId): boolean {
   return s.bomb.protectedId === id && s.time < s.bomb.protectedUntil;
 }
 
-/** Holder may tag/throw only once the fuse is armed and nothing is in flight. */
+/** True in the round's last `fuseMinimum` seconds, when passing is locked (on-chain too: `pass_locked`). */
+export const passLocked = (s: MatchState): boolean => s.roundDeadline - s.time < CONFIG.fuseMinimum;
+
+/** Holder may tag/throw only once the fuse is armed, nothing is in flight and the round isn't about to end. */
 export function holderCanAct(s: MatchState, p: PlayerState): boolean {
   return (
     s.phase === 'active' &&
@@ -167,7 +170,8 @@ export function holderCanAct(s: MatchState, p: PlayerState): boolean {
     s.bomb.holderId === p.id &&
     s.bomb.fuseDeadline !== null &&
     s.bomb.projectile === null &&
-    s.time >= p.recoverUntil
+    s.time >= p.recoverUntil &&
+    !passLocked(s)
   );
 }
 
@@ -314,7 +318,7 @@ export function fulfillRandomness(s: MatchState, requestId: number, bytes: Uint8
     s.bomb.protectedId = null;
     holder.stats.received++;
     emit(s, { type: 'holderAssigned', holder: holder.id, round: s.round });
-    setFuse(s, uniformFrom(bytes, 1));
+    setFuse(s, uniformFrom(bytes, 1), CONFIG.openingFuseBonus);
     return true;
   }
 
@@ -333,8 +337,9 @@ export function fulfillRandomness(s: MatchState, requestId: number, bytes: Uint8
   return true;
 }
 
-function setFuse(s: MatchState, u: number) {
-  const d = computeFuse(s, u);
+/** `bonus`: CONFIG.openingFuseBonus for a round's opening holder, 0 after a pass (matches on-chain arm_fuse). */
+function setFuse(s: MatchState, u: number, bonus = 0) {
+  const d = Math.min(computeFuse(s, u) + bonus, Math.max(0, s.roundDeadline - s.time));
   s.bomb.fuseDuration = d;
   s.bomb.fuseSetAt = s.time;
   s.bomb.fuseDeadline = s.time + d;

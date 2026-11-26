@@ -8,6 +8,8 @@ import {
   fulfillRandomness,
   fuseRange,
   getPlayer,
+  holderCanAct,
+  passLocked,
   step,
   type ParticipantSetup,
 } from './sim';
@@ -64,7 +66,8 @@ describe('bomb assignment', () => {
     fulfillRandomness(s, req.id, bytesFor(0.99, 0));
     expect(s.bomb.holderId).toBe('f');
     expect(s.phase).toBe('active');
-    expect(s.bomb.fuseDeadline! - s.time).toBeCloseTo(8, 5);
+    // Shortest 6-player fuse (5 s) plus the opening-fuse bonus.
+    expect(s.bomb.fuseDeadline! - s.time).toBeCloseTo(5 + CONFIG.openingFuseBonus, 5);
   });
 
   it('ignores duplicate or unknown fulfilments', () => {
@@ -76,11 +79,11 @@ describe('bomb assignment', () => {
 describe('dynamic fuse', () => {
   it('uses round ranges and compresses with elapsed round time', () => {
     const s = activeMatch();
-    expect(fuseRange(s)).toEqual([8, 15]);
-    s.time = s.roundStart + 22.5; // factor 0.5
-    expect(fuseRange(s)).toEqual([4, 7.5]);
-    s.time = s.roundStart + 44; // factor floors at 0.25 → [2, 3.75]
-    expect(fuseRange(s)).toEqual([2, 3.75]);
+    expect(fuseRange(s)).toEqual([5, 11]);
+    s.time = s.roundStart + 15; // factor 0.5 (30 s window)
+    expect(fuseRange(s)).toEqual([2.5, 5.5]);
+    s.time = s.roundStart + 29; // factor floors at 0.25 → [1.25, 2.75]
+    expect(fuseRange(s)).toEqual([1.25, 2.75]);
   });
 
   it('never extends past the hard round deadline', () => {
@@ -91,9 +94,30 @@ describe('dynamic fuse', () => {
 
   it('enforces the nominal minimum', () => {
     const s = activeMatch();
-    s.players.slice(0, 4).forEach((p) => (p.alive = false)); // 2 survivors → [2,4]
-    s.time = s.roundStart + 40; // factor 0.25 → [0.5, 1] → clamped to 1.25
-    expect(fuseRange(s)).toEqual([1.25, 1.25]);
+    s.players.slice(0, 4).forEach((p) => (p.alive = false)); // 2 survivors → [4, 7]
+    s.time = s.roundStart + 40; // factor 0.25 → [1, 1.75] → low end clamped to 1.25
+    expect(fuseRange(s)).toEqual([1.25, 1.75]);
+  });
+
+  it('caps the opening-fuse bonus at the round deadline', () => {
+    const s = createMatch(PARTS);
+    run(s, Math.ceil(CONFIG.matchCountdown / TICK_DT) + 1);
+    const req = s.randomRequests.find((r) => r.purpose === 'holder')!;
+    fulfillRandomness(s, req.id, bytesFor(0.1, 0.999));
+    // Longest 6-player fuse (~11 s) + 1.5 s bonus, still inside the 45 s round.
+    expect(s.bomb.fuseDeadline! - s.time).toBeGreaterThan(12.4);
+    expect(s.bomb.fuseDeadline!).toBeLessThanOrEqual(s.roundDeadline);
+  });
+
+  it('locks passing in the last fuseMinimum seconds of a round', () => {
+    const s = activeMatch(0);
+    const a = getPlayer(s, 'a')!;
+    s.time = s.roundDeadline - CONFIG.fuseMinimum - 0.05;
+    expect(passLocked(s)).toBe(false);
+    expect(holderCanAct(s, a)).toBe(true);
+    s.time = s.roundDeadline - CONFIG.fuseMinimum + 0.05;
+    expect(passLocked(s)).toBe(true);
+    expect(holderCanAct(s, a)).toBe(false);
   });
 });
 

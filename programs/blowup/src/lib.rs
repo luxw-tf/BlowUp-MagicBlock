@@ -108,10 +108,12 @@ fn begin_request(
     }
 }
 
-fn arm_fuse(m: &mut MatchState, u: u32, slot: u64) {
+/// `bonus_ms`: OPENING_FUSE_BONUS_MS for a round's opening holder, 0 after a pass.
+/// The round deadline still caps the result.
+fn arm_fuse(m: &mut MatchState, u: u32, slot: u64, bonus_ms: u64) {
     let elapsed = slots_to_ms(slot.saturating_sub(m.round_start_slot), m.slot_ms);
     let remaining = slots_to_ms(m.round_deadline_slot.saturating_sub(slot), m.slot_ms);
-    let d = fuse_ms(survivors(m.alive_mask), elapsed, remaining, u);
+    let d = (fuse_ms(survivors(m.alive_mask), elapsed, remaining, u) + bonus_ms).min(remaining);
     m.fuse_ms = d as u32;
     // Never 0: 0 means "arming". A zero-length fuse (round cap hit) expires immediately.
     m.fuse_deadline_slot = (slot + ms_to_slots(d, m.slot_ms)).max(1);
@@ -293,13 +295,13 @@ pub mod blowup {
             m.protected_player = NO_PLAYER;
             m.last_giver = NO_PLAYER;
             m.phase = phase::ACTIVE;
-            arm_fuse(m, draw_u32(&randomness, b"holder-fuse"), slot);
+            arm_fuse(m, draw_u32(&randomness, b"holder-fuse"), slot, OPENING_FUSE_BONUS_MS);
             msg!("round {} holder {} fuse {}ms", m.round, holder, m.fuse_ms);
         } else {
             if m.phase != phase::ACTIVE || m.fuse_deadline_slot != 0 {
                 return Ok(());
             }
-            arm_fuse(m, draw_u32(&randomness, b"fuse"), slot);
+            arm_fuse(m, draw_u32(&randomness, b"fuse"), slot, 0);
             msg!("fuse {}ms for holder {}", m.fuse_ms, m.holder);
         }
         Ok(())
@@ -379,6 +381,9 @@ pub mod blowup {
         require!(m.fuse_deadline_slot != 0, BlowupError::FuseArming);
         // Expiration takes precedence at or after the deadline.
         require!(slot < m.fuse_deadline_slot && slot < m.round_deadline_slot, BlowupError::FuseExpired);
+        // No passes in the round's last FUSE_MIN_MS: the receiver would get a fuse
+        // cut to a fraction of a second by the round deadline.
+        require!(!pass_locked(slot, m.round_deadline_slot, m.slot_ms), BlowupError::RoundLocked);
         require!(
             target_state.index == target_index
                 && target_index != m.holder

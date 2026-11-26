@@ -48,4 +48,6 @@ pub enum BlowupError {
     BadOracleQueue,
     #[msg("Player is still sending inputs; takeover not allowed yet")]
     PlayerStillActive,
+    #[msg("Passing is locked in the last moments before the round deadline")]
+    RoundLocked,
 }

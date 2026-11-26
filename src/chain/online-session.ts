@@ -450,6 +450,8 @@ function humanReason(err: string): string {
       return 'they just passed it';
     case 'FuseArming':
       return 'fuse arming';
+    case 'RoundLocked':
+      return 'round is ending';
     default:
       return 'pass rejected';
   }

@@ -1351,6 +1351,11 @@
       "code": 6022,
       "name": "PlayerStillActive",
       "msg": "Player is still sending inputs; takeover not allowed yet"
+    },
+    {
+      "code": 6023,
+      "name": "RoundLocked",
+      "msg": "Passing is locked in the last moments before the round deadline"
     }
   ],
   "types": [
