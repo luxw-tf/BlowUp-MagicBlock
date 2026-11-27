@@ -88,7 +88,7 @@ src/ui/                  OnlineLobby (queue), RoomScreen (private rooms), online
 
 **Optional wallet progress.** Connect a supported browser wallet in the menu and sign a link message to attach online matches to your profile on Solana devnet. Gameplay and rejoin keep using the guest identity and session key. The menu's Online progress panel shows matches, wins, podiums, passes and bombs received, including round-opening draws. Profile updates follow match settlement and may take a moment to appear. Use Refresh progress to read again. A link survives reloads on the same site until the proof expires after 24 hours. Use Manage → Continue as guest to clear it.
 
-**Arenas.** Online quick play selects an arena automatically and always takes place in the morning. Weather is chosen automatically. Private rooms and offline matches also pick the time of day automatically. Weather affects movement and throws against offline bots and is visual only online. Your player name saves in the browser as you edit it.
+**Arenas.** Online quick play picks a random arena and always takes place on a clear morning. Private rooms and offline matches pick their weather and time of day automatically. Weather affects movement and throws against offline bots and is visual only online. Your player name saves in the browser as you edit it.
 
 See [the development handoff](docs/HANDOFF.md) for the pre-integration snapshot, live verification history and program compatibility details.
 

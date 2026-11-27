@@ -63,7 +63,7 @@ export class Lobby {
     return t;
   }
 
-  private startMatch(tickets: Ticket[], options: { botFill: boolean; mood?: 'morning' }): MatchRunner {
+  private startMatch(tickets: Ticket[], options: { botFill: boolean; quickPlay?: boolean }): MatchRunner {
     const runner = new MatchRunner(
       this.authority,
       tickets.map((t) => t.human),
@@ -129,7 +129,7 @@ export class Lobby {
     if (group.length < MAX_PLAYERS && Date.now() - oldest.createdAt < QUEUE_WINDOW_MS) return;
     const matched = new Set(group.map((ticket) => ticket.id));
     this.queue = this.queue.filter((id) => !matched.has(id));
-    this.startMatch(group, { botFill: true, mood: 'morning' });
+    this.startMatch(group, { botFill: true, quickPlay: true });
   }
 
   // ───────────────────────── private rooms ─────────────────────────

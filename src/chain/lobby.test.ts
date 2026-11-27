@@ -2,13 +2,13 @@ import { Keypair } from '@solana/web3.js';
 import { expect, it, vi } from 'vitest';
 import { Lobby, QUEUE_WINDOW_MS } from '../../server/lobby';
 
-const runners = vi.hoisted(() => [] as { status: string; options: { botFill: boolean; mood?: string } }[]);
+const runners = vi.hoisted(() => [] as { status: string; options: { botFill: boolean; quickPlay?: boolean } }[]);
 
 vi.mock('../../server/match-runner', () => ({
   MatchRunner: class {
     readonly id = String(runners.length);
     status = 'creating';
-    constructor(_authority: unknown, _players: unknown, readonly options: { botFill: boolean; mood?: string }) {
+    constructor(_authority: unknown, _players: unknown, readonly options: { botFill: boolean; quickPlay?: boolean }) {
       runners.push(this);
     }
     async run() {}
@@ -32,7 +32,7 @@ it('shares three match slots across morning quick play and private rooms', () =>
     const queued = lobby.enqueue(player('Quick Play'));
     vi.advanceTimersByTime(QUEUE_WINDOW_MS + 500);
     expect(lobby.ticketView(queued.id)?.status).toBe('matched');
-    expect(runners.map(({ options }) => options.mood)).toEqual([undefined, undefined, 'morning']);
+    expect(runners.map(({ options }) => options.quickPlay)).toEqual([undefined, undefined, true]);
     expect(lobby.activeMatches()).toBe(3);
 
     const { code, ticket } = rooms[2];

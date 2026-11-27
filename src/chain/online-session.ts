@@ -19,7 +19,7 @@ import type {
   SessionListener,
   VerificationEntry,
 } from '../game/sessionTypes';
-import { circleBlocked, type Mood } from '../game/arena';
+import { circleBlocked } from '../game/arena';
 import { drainEvents, getPlayer, holderCanAct, predictMovement, tagCandidates } from '../game/sim';
 import type { GameEvent, PlayerId, PlayerState, Vec2 } from '../game/types';
 import { ChainMirror, indexOf, playerId, type RosterEntry } from './mirror';
@@ -45,7 +45,7 @@ export interface LobbyMatchInfo {
   erUrl: string;
   validator: string | null;
   slotMs: number;
-  mood?: Mood;
+  quickPlay?: boolean;
   roster: RosterEntry[];
   takeovers?: number[];
   result: Record<string, unknown> | null;
@@ -132,7 +132,7 @@ export class OnlineSession implements SessionLike {
     this.clock = new SlotClock(this.er, info.slotMs);
     this.clock.start();
     this.ix = instructions(this.er);
-    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]), info.matchPda, info.mood);
+    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]), info.matchPda, info.quickPlay);
     rememberActiveMatch(info.id);
     if (rejoin) void this.reclaim();
     this.online = {

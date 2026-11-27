@@ -289,9 +289,10 @@ describe('layouts', () => {
       expect(`${currentMood()}/${currentWeather()}`).toBe(a);
       if (currentWeather() === 'storm') expect(currentMood()).toBe('night');
       seen.add(currentWeather());
-      const morningLayout = selectLayoutFor(key, 'morning');
+      const morningLayout = selectLayoutFor(key, true);
       expect(morningLayout).toBe(layout);
       expect(currentMood()).toBe('morning');
+      expect(currentWeather()).toBe('clear');
       morningLayouts.add(morningLayout.id);
       selectLayoutFor(key);
     }
