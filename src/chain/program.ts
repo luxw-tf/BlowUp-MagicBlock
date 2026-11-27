@@ -347,23 +347,25 @@ export async function sendTx(
   ixs: TransactionInstruction[],
   signers: Keypair[],
   feePayer: Keypair,
-  opts: { confirm?: boolean; timeoutMs?: number; pollMs?: number; commitment?: Commitment } = {},
+  opts: { confirm?: boolean; timeoutMs?: number; pollMs?: number; commitment?: Commitment; preflight?: boolean; resendMs?: number } = {},
 ): Promise<SendResult> {
   const tx = new Transaction().add(...ixs);
   tx.feePayer = feePayer.publicKey;
   tx.recentBlockhash = await recentBlockhash(conn);
   tx.sign(feePayer, ...signers.filter((s) => !s.publicKey.equals(feePayer.publicKey)));
+  const wire = tx.serialize();
+  const commitment = opts.commitment ?? conn.commitment ?? 'processed';
   const t0 = performance.now();
   let sig: string;
   try {
-    sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    sig = await conn.sendRawTransaction(wire, { skipPreflight: !opts.preflight, preflightCommitment: commitment });
   } catch (e) {
     return { sig: '', ms: performance.now() - t0, err: `send failed: ${(e as Error).message.slice(0, 160)}` };
   }
   if (!opts.confirm) return { sig, ms: performance.now() - t0, err: null };
   const timeout = opts.timeoutMs ?? 15_000;
   const poll = opts.pollMs ?? 25;
-  const commitment = opts.commitment ?? conn.commitment ?? 'processed';
+  let resendAt = t0 + (opts.resendMs ?? Infinity);
   while (performance.now() - t0 < timeout) {
     try {
       const st = (await conn.getSignatureStatuses([sig])).value[0];
@@ -371,6 +373,11 @@ export async function sendTx(
       const status = st?.confirmationStatus;
       if (status === 'finalized' || (status === 'confirmed' && commitment !== 'finalized') || (status === 'processed' && commitment === 'processed')) {
         return { sig, ms: performance.now() - t0, err: null };
+      }
+      if (!st && opts.resendMs && performance.now() >= resendAt) {
+        resendAt = performance.now() + opts.resendMs;
+        // Resending the same signed bytes retains the signature and cannot repeat the write.
+        await conn.sendRawTransaction(wire, { skipPreflight: true, maxRetries: 0 });
       }
     } catch {
       // transient RPC error / rate limit

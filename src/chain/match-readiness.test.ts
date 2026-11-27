@@ -2,7 +2,7 @@ import { BN, BorshAccountsCoder } from '@coral-xyz/anchor';
 import { Connection, Keypair, PublicKey, type AccountInfo } from '@solana/web3.js';
 import { describe, expect, it, vi } from 'vitest';
 import { waitForMatchAccounts } from '../../server/match-readiness';
-import { IDL, instructions, pda, PHASE, PROGRAM_ID } from './program';
+import { IDL, instructions, pda, PHASE, PROGRAM_ID, sendTx } from './program';
 
 async function roomFixture() {
   const match = pda.match(41n);
@@ -84,4 +84,25 @@ describe('online match account readiness', () => {
       seats.map(({ index }) => [pda.player(match, index).toBase58(), true]),
     );
   });
+});
+
+it('rebroadcasts identical bytes and waits for the requested confirmation', async () => {
+  const payer = Keypair.generate();
+  const connection = new Connection('http://localhost:8899', 'confirmed');
+  vi.spyOn(connection, 'getLatestBlockhash').mockResolvedValue({
+    blockhash: Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: 10,
+  });
+  const send = vi.spyOn(connection, 'sendRawTransaction').mockResolvedValue('test-signature');
+  const status = vi.spyOn(connection, 'getSignatureStatuses');
+  status
+    .mockResolvedValueOnce({ context: { slot: 1 }, value: [{ slot: 1, confirmations: 0, err: null, confirmationStatus: 'processed' }] })
+    .mockResolvedValueOnce({ context: { slot: 2 }, value: [null] })
+    .mockResolvedValueOnce({ context: { slot: 3 }, value: [{ slot: 1, confirmations: 2, err: null, confirmationStatus: 'confirmed' }] });
+  const ix = await instructions(connection).createMatch(payer.publicKey, 41n, 10);
+  const result = await sendTx(connection, [ix], [], payer, { confirm: true, preflight: true, pollMs: 10, resendMs: 1 });
+  expect(result.err).toBeNull();
+  expect(status).toHaveBeenCalledTimes(3);
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send.mock.calls[0][1]?.skipPreflight).toBe(false);
+  expect(send.mock.calls[0][0]).toEqual(send.mock.calls[1][0]);
 });

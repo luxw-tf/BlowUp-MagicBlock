@@ -282,7 +282,7 @@ export class MatchRunner {
   }
 
   private async base_(ixs: TransactionInstruction[], what: string) {
-    const r = await sendTx(this.base, ixs, [], this.authority, { confirm: true, pollMs: 500, timeoutMs: 60_000 });
+    const r = await sendTx(this.base, ixs, [], this.authority, { confirm: true, preflight: true, resendMs: 3_000, pollMs: 500, timeoutMs: 60_000 });
     if (r.err) throw new Error(`${what} failed: ${r.err} ${r.sig}`);
   }
 
@@ -570,6 +570,8 @@ export class MatchRunner {
     if (!undelegated) throw new Error('Match did not return to Solana ownership after settlement.');
     const rec = await sendTx(this.base, [await this.ix.recordResult(this.authority.publicKey, this.match)], [], this.authority, {
       confirm: true,
+      preflight: true,
+      resendMs: 3_000,
       pollMs: 500,
       timeoutMs: 60_000,
     });
