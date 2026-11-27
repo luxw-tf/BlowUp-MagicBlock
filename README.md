@@ -88,7 +88,7 @@ src/ui/                  OnlineLobby (queue), RoomScreen (private rooms), online
 
 **Optional wallet progress.** Connect a supported browser wallet in the menu and sign a link message to attach online matches to your profile on Solana devnet. Gameplay and rejoin keep using the guest identity and session key. The menu's Online progress panel shows matches, wins, podiums, passes and bombs received, including round-opening draws. Profile updates follow match settlement and may take a moment to appear. Use Refresh progress to read again. A link survives reloads on the same site until the proof expires after 24 hours. Use Manage → Continue as guest to clear it.
 
-**Match weather.** Pick Random, Clear, Breezy, Rain, Fog, Storm or Snow before playing. The host can also change the selection in a private room. Online quick play uses the first queued player's preference. Weather affects movement and throws against offline bots and is visual only online.
+**Map selection.** Pick weather and time of day before playing. The time options are Morning, Afternoon, Sunset and Night. Either setting can be Random. The host can also change both in a private room. Online quick play uses the first queued player's selection. Weather affects movement and throws against offline bots and is visual only online. Your player name saves in the browser as you edit it.
 
 See [the development handoff](docs/HANDOFF.md) for the pre-integration snapshot, live verification history and program compatibility details.
 

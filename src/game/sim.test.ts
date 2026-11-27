@@ -297,6 +297,11 @@ describe('layouts', () => {
       expect(currentWeather()).toBe(weather);
       if (weather === 'storm') expect(currentMood()).toBe('night');
     }
+    for (const mood of MOODS) {
+      expect(selectLayoutFor('Match111', 'rain', mood).id).toBe(layout);
+      expect(currentMood()).toBe(mood);
+      expect(currentWeather()).toBe('rain');
+    }
     selectLayout(LAYOUTS.indexOf(previous.layout));
     selectMood(MOODS.indexOf(previous.mood));
     selectWeather(previous.weather);

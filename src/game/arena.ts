@@ -77,6 +77,7 @@ let layoutIndex = 0;
 /** Time of day: purely visual, but picked with the layout so everyone in a match sees the same sky. */
 export const MOODS = ['morning', 'noon', 'sunset', 'night'] as const;
 export type Mood = (typeof MOODS)[number];
+export const isMood = (value: unknown): value is Mood => MOODS.some((mood) => mood === value);
 let moodIndex = 1;
 export const currentMood = (): Mood => MOODS[moodIndex];
 export function selectMood(index: number): Mood {
@@ -91,6 +92,10 @@ export function selectMood(index: number): Mood {
  */
 export const WEATHERS = ['clear', 'breezy', 'rain', 'fog', 'storm', 'snow'] as const;
 export type Weather = (typeof WEATHERS)[number];
+export interface MapSelection {
+  weather?: Weather;
+  mood?: Mood;
+}
 export const isWeather = (value: unknown): value is Weather => WEATHERS.some((weather) => weather === value);
 let weatherIndex = 0;
 export const currentWeather = (): Weather => WEATHERS[weatherIndex];
@@ -139,10 +144,10 @@ export function selectLayout(index: number): Layout {
 export const currentLayout = (): Layout => LAYOUTS[layoutIndex];
 
 /** Same key, same layout: online matches use the match address, so every client and the lobby's bots agree. */
-export function selectLayoutFor(key: string, weather?: Weather): Layout {
+export function selectLayoutFor(key: string, weather?: Weather, timeOfDay?: Mood): Layout {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
-  const mood = selectMood(weather === 'storm' ? MOODS.indexOf('night') : Math.abs(h >> 8));
+  const mood = selectMood(timeOfDay ? MOODS.indexOf(timeOfDay) : weather === 'storm' ? MOODS.indexOf('night') : Math.abs(h >> 8));
   selectWeather(weather ?? weatherFor(mood, Math.imul(h ^ 0x9e3779b9, 0x85ebca6b) >>> 7));
   return selectLayout(Math.abs(h));
 }

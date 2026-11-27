@@ -12,7 +12,7 @@ import { CONFIG, TICK_DT } from './config';
 import { BOT_CHARACTERS, BOT_NAMES } from './content';
 import { add, scale } from './math';
 import { createMatch, drainEvents, fulfillRandomness, step, type ParticipantSetup } from './sim';
-import { LAYOUTS, MOODS, WEATHERS, WEATHER_FX, currentWeather, selectLayout, selectMood, selectWeather, weatherFor, type Weather } from './arena';
+import { LAYOUTS, MOODS, WEATHERS, WEATHER_FX, currentWeather, selectLayout, selectMood, selectWeather, weatherFor, type MapSelection } from './arena';
 import { LocalDevRandomness, toHex, type RandomFulfillment, type RandomnessProvider } from './randomness';
 import type { InputSampler, SessionLike, SessionListener as Listener, VerificationEntry } from './sessionTypes';
 import type { CharacterId, InputFrame, MatchState, PlayerId, Vec2 } from './types';
@@ -67,15 +67,16 @@ export class GameSession implements SessionLike {
   constructor(
     participants: ParticipantSetup[],
     readonly provider: RandomnessProvider = new LocalDevRandomness(),
-    weather?: Weather,
+    map: MapSelection = {},
   ) {
     // a different yard and time of day each match; ?layout=alley&mood=night pins them (handy for recording)
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
-    const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout')), mi = MOODS.indexOf((q?.get('mood') ?? q?.get('weather') ?? '') as (typeof MOODS)[number]); // ?weather=night works too
+    const li = LAYOUTS.findIndex((l) => l.id === q?.get('layout'));
+    const mi = MOODS.findIndex((mood) => mood === (map.mood ?? q?.get('mood') ?? q?.get('weather')));
     selectLayout(li >= 0 ? li : Math.floor(Math.random() * LAYOUTS.length));
     const mood = selectMood(mi >= 0 ? mi : Math.floor(Math.random() * MOODS.length));
     // weather too (?weather=rain); a storm needs the dark, so pinning one without a mood makes it night
-    const pw = weather ?? WEATHERS.find((w) => w === q?.get('weather'));
+    const pw = map.weather ?? WEATHERS.find((w) => w === q?.get('weather'));
     if (pw === 'storm' && mi < 0 && mood !== 'night') selectMood(MOODS.indexOf('night'));
     selectWeather(pw ?? weatherFor(mood, Math.floor(Math.random() * 1e9)));
     this.state = createMatch(participants);

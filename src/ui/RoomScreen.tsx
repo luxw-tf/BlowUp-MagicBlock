@@ -7,14 +7,15 @@ import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 import type { WalletProof } from '../chain/wallet-link';
 import { NetworkCredits } from './NetworkCredits';
-import { WeatherSelect } from './WeatherSelect';
-import type { Weather } from '../game/arena';
+import { MapSelect } from './MapSelect';
+import type { MapSelection, Mood, Weather } from '../game/arena';
 
 interface RoomView {
   code: string;
   status: 'open' | 'started';
   botFill: boolean;
   weather: Weather | null;
+  mood: Mood | null;
   matchId: string | null;
   members: { name: string; character: CharacterId; ready: boolean; host: boolean; you: boolean }[];
 }
@@ -26,14 +27,14 @@ interface RoomView {
 export function RoomScreen({
   profile,
   walletProof,
-  weather,
+  map,
   initialCode,
   onReady,
   onCancel,
 }: {
   profile: Profile;
   walletProof: WalletProof | null;
-  weather?: Weather;
+  map: MapSelection;
   initialCode: string | null;
   onReady: (s: OnlineSession) => void;
   onCancel: () => void;
@@ -56,7 +57,7 @@ export function RoomScreen({
     setError(null);
     try {
       keys.current ??= guestKeys();
-      const body = joinPayload(profile, keys.current, walletProof, mode === 'create' ? weather : undefined);
+      const body = joinPayload(profile, keys.current, walletProof, mode === 'create' ? map : undefined);
       if (mode === 'create') {
         const r = await api<{ code: string; ticket: string }>('/api/rooms', { body });
         ticket.current = r.ticket;
@@ -110,7 +111,7 @@ export function RoomScreen({
   const post = (action: string, body: Record<string, unknown>) =>
     api(`/api/rooms/${code}/${action}`, { body: { ticket: ticket.current, ...body } }).catch((e: Error) => setError(e.message));
 
-  const changeSettings = async (settings: { botFill?: boolean; weather?: Weather | null }) => {
+  const changeSettings = async (settings: { botFill?: boolean; weather?: Weather | null; mood?: Mood | null }) => {
     setSavingSettings(true);
     setError(null);
     try {
@@ -232,7 +233,12 @@ export function RoomScreen({
         )}
         {!setup && room && (
           <>
-            <WeatherSelect value={room.weather} disabled={!isHost || savingSettings} onChange={(choice) => void changeSettings({ weather: choice ?? null })} />
+            <MapSelect
+              value={{ weather: room.weather ?? undefined, mood: room.mood ?? undefined }}
+              disabled={!isHost || savingSettings}
+              onWeather={(weather) => void changeSettings({ weather: weather ?? null })}
+              onMood={(mood) => void changeSettings({ mood: mood ?? null })}
+            />
             <label className="setting toggle">
               <span>Fill empty seats with bots {isHost ? '' : '(host decides)'}</span>
               <input type="checkbox" checked={room.botFill} disabled={!isHost || savingSettings} onChange={(e) => void changeSettings({ botFill: e.target.checked })} />

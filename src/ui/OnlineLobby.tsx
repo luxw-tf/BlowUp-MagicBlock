@@ -5,7 +5,7 @@ import { api, joinPayload, SETUP_STEPS, waitForMatch, type GuestKeys } from './o
 import { Icon } from './Icon';
 import type { WalletProof } from '../chain/wallet-link';
 import { NetworkCredits } from './NetworkCredits';
-import type { Weather } from '../game/arena';
+import type { MapSelection } from '../game/arena';
 
 interface TicketView {
   status: 'queued' | 'matched' | 'cancelled' | 'room';
@@ -19,7 +19,7 @@ interface TicketView {
  * remaining seats after a short window), then wait for the match to go live
  * on the rollup. The lobby sponsors everything, so no wallet or SOL.
  */
-export function OnlineLobby({ profile, walletProof, weather, onReady, onCancel }: { profile: Profile; walletProof: WalletProof | null; weather?: Weather; onReady: (s: OnlineSession) => void; onCancel: () => void }) {
+export function OnlineLobby({ profile, walletProof, map, onReady, onCancel }: { profile: Profile; walletProof: WalletProof | null; map: MapSelection; onReady: (s: OnlineSession) => void; onCancel: () => void }) {
   const [status, setStatus] = useState('queued');
   const [queue, setQueue] = useState<TicketView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function OnlineLobby({ profile, walletProof, weather, onReady, onCancel }
     let cancelled = false;
     keysRef.current ??= guestKeys();
     const keys = keysRef.current;
-    ticket.current ??= api<{ ticket: string }>('/api/quickplay', { body: joinPayload(profile, keys, walletProof, weather) }).then((r) => r.ticket);
+    ticket.current ??= api<{ ticket: string }>('/api/quickplay', { body: joinPayload(profile, keys, walletProof, map) }).then((r) => r.ticket);
     (async () => {
       const t = await ticket.current!;
       let matchId: string | null = null;

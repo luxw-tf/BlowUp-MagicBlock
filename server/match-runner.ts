@@ -10,7 +10,7 @@
  */
 import { ConnectionMagicRouter, GetCommitmentSignature } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { Connection, Keypair, PublicKey, type TransactionInstruction } from '@solana/web3.js';
-import { segmentClear, type Weather } from '../src/game/arena';
+import { segmentClear, type MapSelection } from '../src/game/arena';
 import { BotBrain } from '../src/game/bots';
 import { CONFIG } from '../src/game/config';
 import { BOT_CHARACTERS, BOT_NAMES } from '../src/game/content';
@@ -40,14 +40,13 @@ import {
 
 export type MatchStatus = 'creating' | 'delegating' | 'starting' | 'live' | 'settling' | 'finished' | 'error';
 
-export interface HumanJoin {
+export interface HumanJoin extends MapSelection {
   name: string;
   character: CharacterId;
   identity: PublicKey;
   session: PublicKey;
   sessionExpiry: number;
   wallet?: PublicKey;
-  weather?: Weather;
 }
 
 interface Bot {
@@ -134,7 +133,7 @@ export class MatchRunner {
   constructor(
     private readonly authority: Keypair,
     private readonly humans: HumanJoin[],
-    private readonly opts: { botFill: boolean; weather?: Weather; baseRpc?: string; router?: string },
+    private readonly opts: MapSelection & { botFill: boolean; baseRpc?: string; router?: string },
   ) {
     if (humans.length < 1 || humans.length > MAX_PLAYERS) throw new Error('1–6 humans per match');
     if (!opts.botFill && humans.length < 2) throw new Error('a match without bots needs at least 2 players');
@@ -164,6 +163,7 @@ export class MatchRunner {
       validator: this.validator?.toBase58() ?? null,
       slotMs: this.slotMs,
       weather: this.opts.weather,
+      mood: this.opts.mood,
       roster: this.roster,
       /** Human seats currently driven by a bot because their player went silent. */
       takeovers: [...this.bots.values()].filter((b) => b.takeover).map((b) => b.index),
@@ -293,7 +293,7 @@ export class MatchRunner {
   private async play() {
     const er = this.er!;
     const clock = this.clock!;
-    const mirror = new ChainMirror(this.roster, clock, this.localIndices, this.match.toBase58(), this.opts.weather);
+    const mirror = new ChainMirror(this.roster, clock, this.localIndices, this.match.toBase58(), this.opts);
     this.mirror = mirror;
 
     this.subs.push(

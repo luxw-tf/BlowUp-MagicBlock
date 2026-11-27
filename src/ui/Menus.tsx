@@ -8,8 +8,8 @@ import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 import { NetworkCredits } from './NetworkCredits';
-import { WeatherSelect } from './WeatherSelect';
-import type { Weather } from '../game/arena';
+import { MapSelect } from './MapSelect';
+import type { MapSelection } from '../game/arena';
 import { heroTurn, stageReady, titleView } from '../render/MenuStage';
 
 
@@ -136,8 +136,9 @@ export function Landing({
   onCharacter,
   onTutorial,
   walletControls,
-  weather,
-  onWeather,
+  map,
+  onMap,
+  onProfileChange,
 }: {
   initial: Profile | null;
   onPlay: (p: Profile) => void;
@@ -153,8 +154,9 @@ export function Landing({
   /** How to play: a guided practice round. */
   onTutorial: (p: Profile) => void;
   walletControls: React.ReactNode;
-  weather?: Weather;
-  onWeather: (weather: Weather | undefined) => void;
+  map: MapSelection;
+  onMap: (map: MapSelection) => void;
+  onProfileChange: (profile: Profile) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
@@ -167,6 +169,7 @@ export function Landing({
     const next = CHARACTERS[(idx + d + CHARACTERS.length) % CHARACTERS.length].id;
     setCharacter(next);
     onCharacter(next);
+    if (clean) onProfileChange({ name: clean, character: next });
   };
 
   // ← / → switch hero (unless you're typing your name)
@@ -257,7 +260,11 @@ export function Landing({
         <section className="player-card" aria-label="Player profile">
         <label className="play-name" title="Your name">
           <span>Player name</span>
-          <input value={name} maxLength={18} onChange={(e) => setName(e.target.value)} spellCheck={false} aria-label="Your name" />
+          <input value={name} maxLength={18} onChange={(e) => {
+            const value = e.currentTarget.value;
+            setName(value);
+            if (value.trim()) onProfileChange({ name: value.trim(), character });
+          }} spellCheck={false} aria-label="Your name" />
           <Icon name="pencil" size={16} />
         </label>
         {walletControls}
@@ -269,7 +276,7 @@ export function Landing({
             </button>
           ))}
         </div>
-        {!pendingRoom && <WeatherSelect value={weather} onChange={onWeather} label={mode === 'online' ? 'Preferred weather' : 'Weather'} />}
+        {!pendingRoom && <MapSelect value={map} onWeather={(weather) => onMap({ ...map, weather })} onMood={(mood) => onMap({ ...map, mood })} />}
         <button className="play-btn" onClick={go(current.go)} disabled={!clean} autoFocus>
           Play
           <small>{current.sub}</small>
