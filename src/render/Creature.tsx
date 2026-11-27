@@ -278,7 +278,8 @@ export function Creature({ id }: { id: PlayerId }) {
     const vx = (a.smooth.x - a.lastPos.x) / Math.max(dt, 1e-3);
     const vz = (a.smooth.z - a.lastPos.z) / Math.max(dt, 1e-3);
     a.lastPos = { ...a.smooth };
-    const speed = Math.hypot(vx, vz);
+    const measuredSpeed = Math.hypot(vx, vz);
+    const speed = THREE.MathUtils.damp(drive.current.speed, measuredSpeed, 10, dt);
 
     root.current.position.set(a.smooth.x, 0, a.smooth.z);
 
@@ -286,7 +287,7 @@ export function Creature({ id }: { id: PlayerId }) {
     const isHolder = s.bomb.holderId === id;
     let yawTarget = a.yaw;
     if (isHolder && (p.aim.x !== 0 || p.aim.z !== 0)) yawTarget = Math.atan2(p.aim.x - a.smooth.x, p.aim.z - a.smooth.z);
-    else if (speed > 0.6) yawTarget = Math.atan2(vx, vz);
+    else if (measuredSpeed > 0.6) yawTarget = Math.atan2(vx, vz);
     let dy = yawTarget - a.yaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     a.yaw += dy * (1 - Math.exp(-16 * dt));

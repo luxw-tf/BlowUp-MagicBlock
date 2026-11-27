@@ -102,6 +102,7 @@ export class OnlineSession implements SessionLike {
   private lastVrfPurpose = 0;
   private settlementPoll: ReturnType<typeof setInterval> | null = null;
   private disposed = false;
+  private readonly remoteMotion = new Map<PlayerId, { from: Vec2; at: number; duration: number }>();
   private synced = false;
   private reclaiming = false;
   private lastUpdateAt = 0;
@@ -179,7 +180,14 @@ export class OnlineSession implements SessionLike {
       this.subs.push(
         watchAccount(this.er, pda.player(this.match, r.index), (data, slot) => {
           this.clock.observe(slot);
-          this.mirror.applyPlayer(decodePlayer(data));
+          const player = decodePlayer(data);
+          const id = playerId(r.index);
+          const now = performance.now();
+          const previous = this.remoteMotion.get(id);
+          const from = { ...this.renderPos(id) };
+          this.mirror.applyPlayer(player);
+          this.remoteMotion.set(id, { from, at: now, duration: previous ? Math.min(200, Math.max(50, now - previous.at)) : 0 });
+
         }),
       );
     }
@@ -304,7 +312,10 @@ export class OnlineSession implements SessionLike {
   renderPos(id: PlayerId): Vec2 {
     const p = getPlayer(this.state, id)!;
     if (id === this.localId && p.alive) return add(p.pos, scale(p.vel, Math.min(this.acc, TICK_DT)));
-    return p.pos;
+    const motion = this.remoteMotion.get(id);
+    if (!motion?.duration) return p.pos;
+    const t = Math.min(1, (performance.now() - motion.at) / motion.duration);
+    return { x: motion.from.x + (p.pos.x - motion.from.x) * t, z: motion.from.z + (p.pos.z - motion.from.z) * t };
   }
 
   update(dt: number) {

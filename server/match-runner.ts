@@ -239,11 +239,9 @@ export class MatchRunner {
     if (joinIxs.length > 3) await this.base_(joinIxs.slice(3), 'join');
 
     this.status = 'delegating';
-    for (let k = 0; k < this.seats.length; k += 2) {
-      await this.base_(
-        await Promise.all(this.seats.slice(k, k + 2).map((i) => this.ix.delegatePlayer(auth, this.match, i, this.validator!))),
-        'delegate players',
-      );
+    await this.waitForSeats(this.base, 'confirmed');
+    for (const seat of this.seats) {
+      await this.base_([await this.ix.delegatePlayer(auth, this.match, seat, this.validator!)], 'delegate player');
     }
     await this.base_([await this.ix.delegateMatch(auth, this.matchId, this.validator)], 'delegate match');
 
@@ -265,7 +263,22 @@ export class MatchRunner {
 
     // Wait for the ER to clone the match.
     for (let i = 0; i < 60 && !(await this.er.getAccountInfo(this.match, 'processed')); i++) await sleep(250);
+    await this.waitForSeats(this.er, 'processed');
     this.note(`delegated to ${this.erUrl} (${this.humans.length} human, ${this.seats.length - this.humans.length} bot)`);
+  }
+
+  private async waitForSeats(connection: Connection, commitment: 'confirmed' | 'processed') {
+    const keys = this.seats.map((seat) => pda.player(this.match, seat));
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const accounts = await connection.getMultipleAccountsInfo(keys, commitment);
+      if (accounts.every((account, i) => {
+        if (!account?.owner.equals(PROGRAM_ID) || !account.data.length) return false;
+        const player = decodePlayer(account.data);
+        return player.index === this.seats[i] && player.matchKey.equals(this.match);
+      })) return;
+      await sleep(500);
+    }
+    throw new Error('Could not load every player account before match start');
   }
 
   private newBot(index: number, session: Keypair, takeover: boolean): Bot {
