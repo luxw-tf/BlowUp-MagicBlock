@@ -11,6 +11,10 @@
 
 Public chain evidence for settlement comes from [the failed Finalize transaction](https://explorer.solana.com/tx/2etKeL3nqbdooGY9roiXRVbnteL4963v57ArJZsMWq9vpXkm7Fx7UVhTQbHmt9E82edsPUbmXjbkB9b5XGceRPKg?cluster=devnet) and [another finished three-player match](https://explorer.solana.com/address/B82m8iwUuno4QNkd2mQvo5m3YA7wbG8Jdf6pVzrBPu7b?cluster=devnet) whose base account was still delegated during the check. These addresses are historical evidence. They are not a confirmed identification of the exact room from the user report.
 
+## Funded browser verification
+
+The first production-browser run used three isolated Chrome contexts, two guests and one disposable signed wallet. All three entered the bot-free room 13 seconds after Start and agreed on the winner. Both opening VRF draws reproduced from the callbacks, the base-layer result matched the rollup placements, and the linked profile received one credit. On the software-rendered test host, all three players had zero accepted inputs. Transaction history showed the first browser inputs arriving after the match had finished. The online loop was tied to the suspended 3D scene, so it now runs independently of that scene and stops sending inputs when the match ends. [First browser run result](https://explorer.solana.com/address/9fhqBMP3H8gtSxJpKjDd3BM3aaC9wTh761mDzZK2bE3p?cluster=devnet)
+
 ## Release gate
 
 1. Restart the submission lobby from the exact audited commit and serve its matching production build. Confirm the judge URL reaches that instance.

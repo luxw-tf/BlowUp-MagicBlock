@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { audio } from '../audio/audio';
 import { ABILITY_DEFS, characterDef } from '../game/content';
-import { CONFIG } from '../game/config';
+import { CONFIG, TICK_DT } from '../game/config';
 import type { SessionLike } from '../game/sessionTypes';
 import { alivePlayers, fuseRemaining, getPlayer, holderCanAct, tagCandidates } from '../game/sim';
 import type { GameEvent, MatchState, PlayerId } from '../game/types';
@@ -180,6 +180,19 @@ export function GameView({ session, onRematch, onMenu }: Props) {
       input.dispose();
     };
   }, [input, session]);
+
+  useEffect(() => {
+    if (!session.online) return;
+    // An online match may already be live while the 3D scene is still loading.
+    // Keep input, subscriptions and prediction moving without the suspended Canvas tree.
+    let previous = performance.now();
+    const timer = setInterval(() => {
+      const now = performance.now();
+      if (!document.hidden) session.update((now - previous) / 1000);
+      previous = now;
+    }, TICK_DT * 1000);
+    return () => clearInterval(timer);
+  }, [session]);
 
   useEffect(() => {
     input.enabled = !showSettings && !showVerify;

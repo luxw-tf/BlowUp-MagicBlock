@@ -844,8 +844,10 @@ export function Scene() {
     if (new URLSearchParams(location.search).has('perf')) Object.assign(window, { __gl: gl, __scene: scene });
   }, [gl, scene]);
 
-  // Drive the simulation from the render loop (fixed-step inside).
-  useFrame((_, dt) => session.update(dt), -2);
+  // Offline play waits for the scene. Online matches have their own clock in GameView.
+  useFrame((_, dt) => {
+    if (!session.online) session.update(dt);
+  }, -2);
 
   return (
     <>

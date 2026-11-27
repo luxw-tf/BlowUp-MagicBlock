@@ -355,7 +355,7 @@ export class OnlineSession implements SessionLike {
       const h = getPlayer(s, s.bomb.holderId);
       if (h) h.stats.timeHolding += TICK_DT;
     }
-    if (me.alive) this.sendPosition(false);
+    if (me.alive && s.phase !== 'finished') this.sendPosition(false);
 
     const events = [...this.queued, ...drainEvents(s)];
     this.queued = [];
