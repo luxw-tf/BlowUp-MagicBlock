@@ -277,34 +277,26 @@ describe('layouts', () => {
   });
 
   it('pick the same weather from the same match address, and storms only at night', async () => {
-    const { selectLayout, selectLayoutFor, currentLayout, currentMood, currentWeather, LAYOUTS, MOODS, selectMood, selectWeather, WEATHERS } = await import('./arena');
+    const { selectLayoutFor, currentMood, currentWeather, LAYOUTS, WEATHERS } = await import('./arena');
     const seen = new Set<string>();
+    const morningLayouts = new Set<string>();
     for (let i = 0; i < 400; i++) {
       const key = `Match${i * 7919}`;
-      selectLayoutFor(key);
+      const layout = selectLayoutFor(key);
       const a = `${currentMood()}/${currentWeather()}`;
       selectLayoutFor('other');
       selectLayoutFor(key);
       expect(`${currentMood()}/${currentWeather()}`).toBe(a);
       if (currentWeather() === 'storm') expect(currentMood()).toBe('night');
       seen.add(currentWeather());
+      const morningLayout = selectLayoutFor(key, 'morning');
+      expect(morningLayout).toBe(layout);
+      expect(currentMood()).toBe('morning');
+      morningLayouts.add(morningLayout.id);
+      selectLayoutFor(key);
     }
     expect(seen.size).toBe(WEATHERS.length); // every weather turns up
-    const previous = { layout: currentLayout(), mood: currentMood(), weather: currentWeather() };
-    const layout = selectLayoutFor('Match111').id;
-    for (const weather of WEATHERS) {
-      expect(selectLayoutFor('Match111', weather).id).toBe(layout);
-      expect(currentWeather()).toBe(weather);
-      if (weather === 'storm') expect(currentMood()).toBe('night');
-    }
-    for (const mood of MOODS) {
-      expect(selectLayoutFor('Match111', 'rain', mood).id).toBe(layout);
-      expect(currentMood()).toBe(mood);
-      expect(currentWeather()).toBe('rain');
-    }
-    selectLayout(LAYOUTS.indexOf(previous.layout));
-    selectMood(MOODS.indexOf(previous.mood));
-    selectWeather(previous.weather);
+    expect(morningLayouts.size).toBe(LAYOUTS.length);
   });
 
   it('move people with the weather only when the match carries it, the same for everyone', async () => {

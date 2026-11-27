@@ -576,36 +576,6 @@ kbd {
   align-items: flex-end;
   gap: 10px;
 }
-.map-select {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.65rem;
-  width: fit-content;
-  padding: 0.3rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid #8d6138;
-  margin: 0;
-  background: #28180e;
-  color: var(--cream);
-  font-weight: 600;
-}
-.map-select label {
-  display: grid;
-  gap: 3px;
-  font-size: 0.8rem;
-}
-.map-select select {
-  padding: 0.2rem 0.45rem;
-  border: 1px solid #bd8a52;
-  border-radius: 5px;
-  background: #53321e;
-  color: inherit;
-  font: inherit;
-}
-.lobby-panel .map-select {
-  margin: 0.65rem auto;
-}
 .wallet-progress {
   max-width: min(320px, 90vw);
   padding: 7px 10px;

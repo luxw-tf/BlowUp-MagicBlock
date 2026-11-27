@@ -24,7 +24,6 @@ import { CHARACTERS } from '../src/game/content';
 import type { CharacterId } from '../src/game/types';
 import { Lobby, QUEUE_WINDOW_MS } from './lobby';
 import type { HumanJoin } from './match-runner';
-import { isMood, isWeather } from '../src/game/arena';
 import { verifyWalletProof } from './wallet-verify';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -92,10 +91,7 @@ function parseJoin(b: Record<string, unknown>): HumanJoin | { error: string } {
     return { error: 'Invalid join request.' };
   }
   const proof = b.walletProof;
-  if ((b.weather !== undefined && !isWeather(b.weather)) || (b.mood !== undefined && !isMood(b.mood))) {
-    return { error: 'Invalid map selection.' };
-  }
-  const human = { name, character, identity, session, sessionExpiry: expiry, weather: b.weather, mood: b.mood };
+  const human = { name, character, identity, session, sessionExpiry: expiry };
   if (proof === undefined) return human;
   if (!proof || typeof proof !== 'object' || !('wallet' in proof) || !('message' in proof) || !('signature' in proof)
     || typeof proof.wallet !== 'string' || typeof proof.message !== 'string' || typeof proof.signature !== 'string') {
@@ -154,13 +150,8 @@ const server = createServer(async (req, res) => {
         }
         if (action === 'ready') return json(res, 200, { ok: lobby.setReady(code, ticket, !!b.ready) });
         if (action === 'settings') {
-          const { botFill, weather, mood } = b;
-          if ((botFill !== undefined && typeof botFill !== 'boolean')
-            || (weather !== undefined && weather !== null && !isWeather(weather))
-            || (mood !== undefined && mood !== null && !isMood(mood))) {
-            return json(res, 400, { error: 'Invalid room settings.' });
-          }
-          return json(res, 200, { ok: lobby.setRoomSettings(code, ticket, { botFill, weather, mood }) });
+          if (typeof b.botFill !== 'boolean') return json(res, 400, { error: 'Invalid bot fill setting.' });
+          return json(res, 200, { ok: lobby.setBotFill(code, ticket, b.botFill) });
         }
         if (action === 'start') {
           const r = lobby.startRoom(code, ticket);

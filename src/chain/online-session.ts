@@ -19,7 +19,7 @@ import type {
   SessionListener,
   VerificationEntry,
 } from '../game/sessionTypes';
-import { circleBlocked, type MapSelection } from '../game/arena';
+import { circleBlocked, type Mood } from '../game/arena';
 import { drainEvents, getPlayer, holderCanAct, predictMovement, tagCandidates } from '../game/sim';
 import type { GameEvent, PlayerId, PlayerState, Vec2 } from '../game/types';
 import { ChainMirror, indexOf, playerId, type RosterEntry } from './mirror';
@@ -36,7 +36,7 @@ import {
   type ChainMatch,
 } from './program';
 
-export interface LobbyMatchInfo extends MapSelection {
+export interface LobbyMatchInfo {
   id: string;
   status: string;
   error: string | null;
@@ -45,6 +45,7 @@ export interface LobbyMatchInfo extends MapSelection {
   erUrl: string;
   validator: string | null;
   slotMs: number;
+  mood?: Mood;
   roster: RosterEntry[];
   takeovers?: number[];
   result: Record<string, unknown> | null;
@@ -131,7 +132,7 @@ export class OnlineSession implements SessionLike {
     this.clock = new SlotClock(this.er, info.slotMs);
     this.clock.start();
     this.ix = instructions(this.er);
-    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]), info.matchPda, info);
+    this.mirror = new ChainMirror(info.roster, this.clock, new Set([seat.index]), info.matchPda, info.mood);
     rememberActiveMatch(info.id);
     if (rejoin) void this.reclaim();
     this.online = {

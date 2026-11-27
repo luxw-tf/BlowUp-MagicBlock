@@ -14,7 +14,6 @@ import { loadProfile, saveProfile, type Profile } from './state/settings';
 import { MenuStage } from './render/MenuStage';
 import type { CharacterId } from './game/types';
 import { browserWallets, loadWalletLink, saveWalletLink, signWalletLink, WALLET_LINK_KEY, walletLinkExpiresAt, watchWallet, type SavedWalletLink } from './chain/browser-wallet';
-import type { MapSelection } from './game/arena';
 import { WalletProgress } from './ui/WalletProgress';
 
 type Screen =
@@ -35,7 +34,6 @@ export default function App() {
   const [rejoinId, setRejoinId] = useState<string | null>(activeMatchId);
   const [notice, setNotice] = useState<string | null>(null);
   const [linked, setLinked] = useState(loadWalletLink);
-  const [map, setMap] = useState<MapSelection>({});
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const walletProof = linked?.proof ?? null;
@@ -99,7 +97,7 @@ export default function App() {
     });
   }, []);
 
-  const startMatch = useCallback((participants: ParticipantSetup[]) => go({ kind: 'match', session: new GameSession(participants, undefined, map) }), [go, map]);
+  const startMatch = useCallback((participants: ParticipantSetup[]) => go({ kind: 'match', session: new GameSession(participants) }), [go]);
 
   const remember = useCallback((p: Profile) => {
     setProfile(p);
@@ -183,16 +181,14 @@ export default function App() {
           notice={notice}
           onCharacter={setHero}
           onTutorial={tutorial}
-          map={map}
-          onMap={setMap}
           onProfileChange={remember}
           walletControls={<WalletProgress proof={walletProof} connect={connectWallet} guest={() => { storeLink(null); setWalletError(null); }} busy={walletBusy} error={walletError} />}
         />
       );
     else if (screen.kind === 'lobby')
       menu = <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
-    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} walletProof={walletProof} map={map} onReady={toMatch} onCancel={toLanding} />;
-    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} walletProof={walletProof} map={map} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
+    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} walletProof={walletProof} onReady={toMatch} onCancel={toLanding} />;
+    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} walletProof={walletProof} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
     return (
       <>
         <MenuStage hero={hero} />

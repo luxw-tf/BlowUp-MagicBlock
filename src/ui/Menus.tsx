@@ -8,8 +8,6 @@ import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 import { NetworkCredits } from './NetworkCredits';
-import { MapSelect } from './MapSelect';
-import type { MapSelection } from '../game/arena';
 import { heroTurn, stageReady, titleView } from '../render/MenuStage';
 
 
@@ -136,8 +134,6 @@ export function Landing({
   onCharacter,
   onTutorial,
   walletControls,
-  map,
-  onMap,
   onProfileChange,
 }: {
   initial: Profile | null;
@@ -154,8 +150,6 @@ export function Landing({
   /** How to play: a guided practice round. */
   onTutorial: (p: Profile) => void;
   walletControls: React.ReactNode;
-  map: MapSelection;
-  onMap: (map: MapSelection) => void;
   onProfileChange: (profile: Profile) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
@@ -276,7 +270,6 @@ export function Landing({
             </button>
           ))}
         </div>
-        {!pendingRoom && <MapSelect value={map} onWeather={(weather) => onMap({ ...map, weather })} onMood={(mood) => onMap({ ...map, mood })} />}
         <button className="play-btn" onClick={go(current.go)} disabled={!clean} autoFocus>
           Play
           <small>{current.sub}</small>

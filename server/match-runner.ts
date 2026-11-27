@@ -10,7 +10,7 @@
  */
 import { ConnectionMagicRouter, GetCommitmentSignature } from '@magicblock-labs/ephemeral-rollups-sdk';
 import { Connection, Keypair, PublicKey, type TransactionInstruction } from '@solana/web3.js';
-import { segmentClear, type MapSelection } from '../src/game/arena';
+import { segmentClear, selectLayoutFor, type Mood } from '../src/game/arena';
 import { BotBrain } from '../src/game/bots';
 import { CONFIG } from '../src/game/config';
 import { BOT_CHARACTERS, BOT_NAMES } from '../src/game/content';
@@ -40,7 +40,7 @@ import {
 
 export type MatchStatus = 'creating' | 'delegating' | 'starting' | 'live' | 'settling' | 'finished' | 'error';
 
-export interface HumanJoin extends MapSelection {
+export interface HumanJoin {
   name: string;
   character: CharacterId;
   identity: PublicKey;
@@ -133,7 +133,7 @@ export class MatchRunner {
   constructor(
     private readonly authority: Keypair,
     private readonly humans: HumanJoin[],
-    private readonly opts: MapSelection & { botFill: boolean; baseRpc?: string; router?: string },
+    private readonly opts: { botFill: boolean; mood?: Mood; baseRpc?: string; router?: string },
   ) {
     if (humans.length < 1 || humans.length > MAX_PLAYERS) throw new Error('1–6 humans per match');
     if (!opts.botFill && humans.length < 2) throw new Error('a match without bots needs at least 2 players');
@@ -162,7 +162,6 @@ export class MatchRunner {
       erUrl: this.erUrl,
       validator: this.validator?.toBase58() ?? null,
       slotMs: this.slotMs,
-      weather: this.opts.weather,
       mood: this.opts.mood,
       roster: this.roster,
       /** Human seats currently driven by a bot because their player went silent. */
@@ -293,7 +292,7 @@ export class MatchRunner {
   private async play() {
     const er = this.er!;
     const clock = this.clock!;
-    const mirror = new ChainMirror(this.roster, clock, this.localIndices, this.match.toBase58(), this.opts);
+    const mirror = new ChainMirror(this.roster, clock, this.localIndices, this.match.toBase58(), this.opts.mood);
     this.mirror = mirror;
 
     this.subs.push(
@@ -380,7 +379,12 @@ export class MatchRunner {
     if (m.phase === PHASE.FINISHED) return true;
     if (Date.now() - this.liveSince > MATCH_TIMEOUT_MS) return false;
 
-    for (const bot of this.bots.values()) this.tickBot(bot, nowMs);
+    // Bot geometry uses the process-wide arena. Set it before this match's
+    // synchronous bot step because the lobby may be ticking other matches.
+    if (this.bots.size) {
+      selectLayoutFor(this.match.toBase58(), this.opts.mood);
+      for (const bot of this.bots.values()) this.tickBot(bot, nowMs);
+    }
     if (nowMs - this.lastTakeoverCheck > 1_000) {
       this.lastTakeoverCheck = nowMs;
       this.checkTakeovers();
