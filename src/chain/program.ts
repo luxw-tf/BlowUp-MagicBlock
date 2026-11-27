@@ -363,10 +363,15 @@ export async function sendTx(
   if (!opts.confirm) return { sig, ms: performance.now() - t0, err: null };
   const timeout = opts.timeoutMs ?? 15_000;
   const poll = opts.pollMs ?? 25;
+  const commitment = opts.commitment ?? conn.commitment ?? 'processed';
   while (performance.now() - t0 < timeout) {
     try {
       const st = (await conn.getSignatureStatuses([sig])).value[0];
-      if (st && (st.confirmationStatus || st.err)) return { sig, ms: performance.now() - t0, err: explainError(st.err) };
+      if (st?.err) return { sig, ms: performance.now() - t0, err: explainError(st.err) };
+      const status = st?.confirmationStatus;
+      if (status === 'finalized' || (status === 'confirmed' && commitment !== 'finalized') || (status === 'processed' && commitment === 'processed')) {
+        return { sig, ms: performance.now() - t0, err: null };
+      }
     } catch {
       // transient RPC error / rate limit
     }

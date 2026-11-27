@@ -46,15 +46,19 @@ export async function waitForMatch(
   cancelled: () => boolean,
   onStatus: (status: string) => void,
 ): Promise<OnlineSession | null> {
-  while (!cancelled()) {
+  const deadline = Date.now() + 5 * 60_000;
+  while (!cancelled() && Date.now() < deadline) {
     const m = await api<LobbyMatchInfo>(`/api/matches/${matchId}`);
+    if (cancelled()) return null;
     onStatus(m.status);
     if (m.status === 'error') throw new Error(m.error ?? 'match setup failed');
-    if ((m.status === 'starting' || m.status === 'live') && m.erUrl) {
+    if (m.status === 'finished' || m.status === 'settling') throw new Error('That match has already ended.');
+    if (m.status === 'live' && m.erUrl) {
       return new OnlineSession(m, keys.identity, keys.session, LOBBY_URL);
     }
     await new Promise((r) => setTimeout(r, 400));
   }
+  if (!cancelled()) throw new Error('Match setup timed out. Return to the menu and try again.');
   return null;
 }
 

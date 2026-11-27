@@ -80,6 +80,21 @@ export function Results({ session, onRematch, onMenu, onVerify }: { session: Ses
     }));
   }, [winner.character]);
 
+  if (!s.winnerId) {
+    return (
+      <div className="modal-backdrop results-backdrop">
+        <div className="results2" ref={card}>
+          <div className="r-title">Match ended without a winner</div>
+          <div className="r-actions">
+            <button className="btn quiet" onClick={onMenu}>Menu</button>
+            <button className="btn" onClick={onVerify}>Match details</button>
+            <button className="btn primary big" onClick={onRematch}>Rematch <kbd>R</kbd></button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // podium order on screen: 2nd, 1st, 3rd
   const podium = [ranked[1], ranked[0], ranked[2]];
   const place = ['second', 'first', 'third'];

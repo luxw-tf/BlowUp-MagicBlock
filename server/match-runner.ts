@@ -17,11 +17,13 @@ import { BOT_CHARACTERS, BOT_NAMES } from '../src/game/content';
 import { add, dist, norm, scale, sub } from '../src/game/math';
 import { holderCanAct, predictMovement, tagCandidates } from '../src/game/sim';
 import type { CharacterId, PlayerState } from '../src/game/types';
+import { waitForMatchAccounts } from './match-readiness';
 import { ChainMirror, indexOf, playerId, type RosterEntry } from '../src/chain/mirror';
 import {
   DEFAULT_BASE_RPC,
   DEFAULT_ROUTER,
   MAX_PLAYERS,
+  NO_PLAYER,
   PHASE,
   PROGRAM_ID,
   SlotClock,
@@ -197,7 +199,7 @@ export class MatchRunner {
     const route = (routes?.result as { identity: string; fqdn: string; blockTimeMs?: number }[] | undefined)?.find(
       (r) => r.identity === closest.identity,
     );
-    this.slotMs = Math.max(1, Math.round(route?.blockTimeMs ?? 10));
+    this.slotMs = Math.min(1_000, Math.max(10, Math.round(route?.blockTimeMs ?? 10)));
 
     // Seats: humans get random seats among the used ones; bots fill the rest.
     const total = this.opts.botFill ? MAX_PLAYERS : this.humans.length;
@@ -239,7 +241,7 @@ export class MatchRunner {
     if (joinIxs.length > 3) await this.base_(joinIxs.slice(3), 'join');
 
     this.status = 'delegating';
-    await this.waitForSeats(this.base, 'confirmed');
+    await waitForMatchAccounts((key) => this.base.getAccountInfo(key, 'confirmed'), this.match, joins, 'Solana', 30_000);
     for (const seat of this.seats) {
       await this.base_([await this.ix.delegatePlayer(auth, this.match, seat, this.validator!)], 'delegate player');
     }
@@ -248,37 +250,22 @@ export class MatchRunner {
     const t0 = Date.now();
     let fqdn: string | undefined;
     while (Date.now() - t0 < 30_000) {
-      const st = (await this.router.getDelegationStatus(this.match)) as { isDelegated: boolean; fqdn?: string };
-      if (st.isDelegated) {
+      const st = await this.router.getDelegationStatus(this.match).catch(() => null);
+      if (st?.isDelegated && 'fqdn' in st && typeof st.fqdn === 'string' && st.fqdn) {
         fqdn = st.fqdn;
         break;
       }
       await sleep(250);
     }
-    this.erUrl = fqdn ?? route?.fqdn ?? closest.fqdn ?? null;
-    if (!this.erUrl) throw new Error('match not delegated / no ER endpoint');
+    if (!fqdn) throw new Error(`MagicBlock router did not publish a delegation route for match ${this.match.toBase58()}`);
+    this.erUrl = fqdn;
     this.er = new Connection(this.erUrl, { commitment: 'processed', wsEndpoint: this.erUrl.replace(/^http/, 'ws') });
+    const er = this.er;
+    await waitForMatchAccounts((key) => er.getAccountInfo(key, 'processed'), this.match, joins, 'MagicBlock rollup', 60_000);
     this.clock = new SlotClock(this.er, this.slotMs);
     this.clock.start();
 
-    // Wait for the ER to clone the match.
-    for (let i = 0; i < 60 && !(await this.er.getAccountInfo(this.match, 'processed')); i++) await sleep(250);
-    await this.waitForSeats(this.er, 'processed');
     this.note(`delegated to ${this.erUrl} (${this.humans.length} human, ${this.seats.length - this.humans.length} bot)`);
-  }
-
-  private async waitForSeats(connection: Connection, commitment: 'confirmed' | 'processed') {
-    const keys = this.seats.map((seat) => pda.player(this.match, seat));
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const accounts = await connection.getMultipleAccountsInfo(keys, commitment);
-      if (accounts.every((account, i) => {
-        if (!account?.owner.equals(PROGRAM_ID) || !account.data.length) return false;
-        const player = decodePlayer(account.data);
-        return player.index === this.seats[i] && player.matchKey.equals(this.match);
-      })) return;
-      await sleep(500);
-    }
-    throw new Error('Could not load every player account before match start');
   }
 
   private newBot(index: number, session: Keypair, takeover: boolean): Bot {
@@ -344,12 +331,23 @@ export class MatchRunner {
     this.note('started');
 
     this.lastTickAt = performance.now();
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
+      let aborting = false;
       this.loop = setInterval(() => {
         try {
           if (this.tick()) {
             this.stopLoop();
             resolve();
+          } else if (!aborting && Date.now() - this.liveSince > MATCH_TIMEOUT_MS) {
+            aborting = true;
+            this.note('timeout: aborting');
+            void this.ix.abortMatch(this.authority.publicKey, this.match)
+              .then((ix) => sendTx(er, [ix], [], this.authority, { confirm: true }))
+              .then((result) => {
+                if (result.err && result.err !== 'WrongPhase') throw new Error(`Match timed out and could not be ended: ${result.err}`);
+              }).catch(reject);
+          } else if (aborting && Date.now() - this.liveSince > MATCH_TIMEOUT_MS + 20_000) {
+            reject(new Error('Match timed out waiting for the rollup to report its final state.'));
           }
         } catch (e) {
           this.log('tick error', e);
@@ -378,11 +376,7 @@ export class MatchRunner {
     mirror.syncTimes();
     if (!m) return false;
     if (m.phase === PHASE.FINISHED) return true;
-    if (Date.now() - this.createdAt > MATCH_TIMEOUT_MS) {
-      this.note('timeout: aborting');
-      void this.er_([this.ix.abortMatch(this.authority.publicKey, this.match)], this.authority);
-      return false;
-    }
+    if (Date.now() - this.liveSince > MATCH_TIMEOUT_MS) return false;
 
     for (const bot of this.bots.values()) this.tickBot(bot, nowMs);
     if (nowMs - this.lastTakeoverCheck > 1_000) {
@@ -551,18 +545,29 @@ export class MatchRunner {
   private async settle() {
     this.status = 'settling';
     const er = this.er!;
-    const final = decodeMatch((await er.getAccountInfo(this.match, 'processed'))!.data);
-    const r = await sendTx(er, [await this.ix.finalize(this.authority.publicKey, this.match, this.seats)], [], this.authority, {
+    const snapshot = await er.getAccountInfo(this.match, 'processed');
+    if (!snapshot?.owner.equals(PROGRAM_ID)) throw new Error('Rollup match account unavailable during settlement.');
+    const final = decodeMatch(snapshot.data);
+    // Eliminated players still have accounts to undelegate. Empty seats do not.
+    const occupiedSeats = final.players.flatMap((identity, index) => identity.equals(PublicKey.default) ? [] : [index]);
+    if (occupiedSeats.length !== final.playerCount) throw new Error('Rollup match roster is inconsistent during settlement.');
+    const r = await sendTx(er, [await this.ix.finalize(this.authority.publicKey, this.match, occupiedSeats)], [], this.authority, {
       confirm: true,
     });
     if (r.err) throw new Error(`finalize failed: ${r.err}`);
     const commitSig = await GetCommitmentSignature(r.sig, new Connection(this.erUrl!, 'confirmed'));
-    await this.base.confirmTransaction(commitSig, 'confirmed');
+    const commitment = await this.base.confirmTransaction(commitSig, 'confirmed');
+    if (commitment.value.err) throw new Error(`Undelegation failed: ${JSON.stringify(commitment.value.err)}`);
+    let undelegated = false;
     for (let i = 0; i < 120; i++) {
       const info = await this.base.getAccountInfo(this.match, 'confirmed');
-      if (info?.owner.equals(PROGRAM_ID)) break;
+      if (info?.owner.equals(PROGRAM_ID)) {
+        undelegated = true;
+        break;
+      }
       await sleep(500);
     }
+    if (!undelegated) throw new Error('Match did not return to Solana ownership after settlement.');
     const rec = await sendTx(this.base, [await this.ix.recordResult(this.authority.publicKey, this.match)], [], this.authority, {
       confirm: true,
       pollMs: 500,
@@ -589,7 +594,7 @@ export class MatchRunner {
       events: this.events,
     };
     // Match verification is available even while independent profile writes are pending.
-    void this.recordProfiles(final.wallets);
+    if (final.winner !== NO_PLAYER) void this.recordProfiles(final.wallets);
   }
 
   private async recordProfiles(wallets: PublicKey[]) {

@@ -115,10 +115,13 @@ export class Lobby {
     const oldest = this.tickets.get(this.queue[0])!;
     const group: Ticket[] = [];
     const wallets = new Set<string>();
+    const identities = new Set<string>();
     for (const id of this.queue) {
       const ticket = this.tickets.get(id)!;
       const wallet = ticket.human.wallet?.toBase58();
-      if (wallet && wallets.has(wallet)) continue;
+      const identity = ticket.human.identity.toBase58();
+      if (identities.has(identity) || (wallet && wallets.has(wallet))) continue;
+      identities.add(identity);
       if (wallet) wallets.add(wallet);
       group.push(ticket);
       if (group.length === MAX_PLAYERS) break;
@@ -153,6 +156,9 @@ export class Lobby {
     if (!room) return { error: 'No room with that code.' };
     if (room.status !== 'open') return { error: 'That match already started.' };
     if (room.members.length >= MAX_PLAYERS) return { error: 'Room is full.' };
+    if (room.members.some(({ ticket }) => this.tickets.get(ticket)?.human.identity.equals(human.identity))) {
+      return { error: 'This browser player already has a seat. Use a different browser profile or device.' };
+    }
     const wallet = human.wallet;
     if (wallet && room.members.some(({ ticket }) => this.tickets.get(ticket)?.human.wallet?.equals(wallet))) {
       return { error: 'This wallet already has a seat in the room.' };
