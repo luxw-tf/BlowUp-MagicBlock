@@ -7,6 +7,7 @@
 import { Keypair } from '@solana/web3.js';
 import { randomBytes } from 'node:crypto';
 import { MAX_PLAYERS } from '../src/chain/program';
+import type { Weather } from '../src/game/arena';
 import { MatchRunner, type HumanJoin } from './match-runner';
 
 /** PRD §13: matchmaking < 10 s. Humans are grouped first, then bots fill. */
@@ -31,6 +32,7 @@ interface Room {
   hostTicket: string;
   members: { ticket: string; ready: boolean }[];
   botFill: boolean;
+  weather?: Weather;
   status: 'open' | 'started';
   matchId: string | null;
   lastActivity: number;
@@ -63,11 +65,11 @@ export class Lobby {
     return t;
   }
 
-  private startMatch(tickets: Ticket[], botFill: boolean): MatchRunner {
+  private startMatch(tickets: Ticket[], botFill: boolean, weather?: Weather): MatchRunner {
     const runner = new MatchRunner(
       this.authority,
       tickets.map((t) => t.human),
-      { botFill },
+      { botFill, weather },
     );
     this.matches.set(runner.id, runner);
     for (const t of tickets) {
@@ -129,7 +131,7 @@ export class Lobby {
     if (group.length < MAX_PLAYERS && Date.now() - oldest.createdAt < QUEUE_WINDOW_MS) return;
     const matched = new Set(group.map((ticket) => ticket.id));
     this.queue = this.queue.filter((id) => !matched.has(id));
-    this.startMatch(group, true);
+    this.startMatch(group, true, group[0].human.weather);
   }
 
   // ───────────────────────── private rooms ─────────────────────────
@@ -144,6 +146,7 @@ export class Lobby {
       hostTicket: t.id,
       members: [{ ticket: t.id, ready: false }],
       botFill: true,
+      weather: human.weather,
       status: 'open',
       matchId: null,
       lastActivity: Date.now(),
@@ -181,6 +184,7 @@ export class Lobby {
       code: room.code,
       status: room.status,
       botFill: room.botFill,
+      weather: room.weather ?? null,
       matchId: room.matchId,
       members: room.members.map((m) => {
         const t = this.tickets.get(m.ticket)!;
@@ -204,10 +208,11 @@ export class Lobby {
     return true;
   }
 
-  setBotFill(code: string, ticket: string, botFill: boolean) {
+  setRoomSettings(code: string, ticket: string, settings: { botFill?: boolean; weather?: Weather | null }) {
     const room = this.rooms.get(code.toUpperCase());
     if (!room || room.hostTicket !== ticket || room.status !== 'open') return false;
-    room.botFill = botFill;
+    if (settings.botFill !== undefined) room.botFill = settings.botFill;
+    if (settings.weather !== undefined) room.weather = settings.weather ?? undefined;
     room.lastActivity = Date.now();
     return true;
   }
@@ -223,6 +228,7 @@ export class Lobby {
     const runner = this.startMatch(
       room.members.map((m) => this.tickets.get(m.ticket)!),
       room.botFill,
+      room.weather,
     );
     room.status = 'started';
     room.matchId = runner.id;

@@ -91,6 +91,7 @@ export function selectMood(index: number): Mood {
  */
 export const WEATHERS = ['clear', 'breezy', 'rain', 'fog', 'storm', 'snow'] as const;
 export type Weather = (typeof WEATHERS)[number];
+export const isWeather = (value: unknown): value is Weather => WEATHERS.some((weather) => weather === value);
 let weatherIndex = 0;
 export const currentWeather = (): Weather => WEATHERS[weatherIndex];
 export function selectWeather(w: Weather): Weather {
@@ -138,11 +139,11 @@ export function selectLayout(index: number): Layout {
 export const currentLayout = (): Layout => LAYOUTS[layoutIndex];
 
 /** Same key, same layout: online matches use the match address, so every client and the lobby's bots agree. */
-export function selectLayoutFor(key: string): Layout {
+export function selectLayoutFor(key: string, weather?: Weather): Layout {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
-  const mood = selectMood(Math.abs(h >> 8));
-  selectWeather(weatherFor(mood, Math.imul(h ^ 0x9e3779b9, 0x85ebca6b) >>> 7)); // its own mix of the hash
+  const mood = selectMood(weather === 'storm' ? MOODS.indexOf('night') : Math.abs(h >> 8));
+  selectWeather(weather ?? weatherFor(mood, Math.imul(h ^ 0x9e3779b9, 0x85ebca6b) >>> 7));
   return selectLayout(Math.abs(h));
 }
 

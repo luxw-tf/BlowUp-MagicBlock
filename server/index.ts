@@ -24,6 +24,7 @@ import { CHARACTERS } from '../src/game/content';
 import type { CharacterId } from '../src/game/types';
 import { Lobby, QUEUE_WINDOW_MS } from './lobby';
 import type { HumanJoin } from './match-runner';
+import { isWeather } from '../src/game/arena';
 import { verifyWalletProof } from './wallet-verify';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -91,14 +92,16 @@ function parseJoin(b: Record<string, unknown>): HumanJoin | { error: string } {
     return { error: 'Invalid join request.' };
   }
   const proof = b.walletProof;
-  if (proof === undefined) return { name, character, identity, session, sessionExpiry: expiry };
+  if (b.weather !== undefined && !isWeather(b.weather)) return { error: 'Invalid weather selection.' };
+  const human = { name, character, identity, session, sessionExpiry: expiry, weather: b.weather };
+  if (proof === undefined) return human;
   if (!proof || typeof proof !== 'object' || !('wallet' in proof) || !('message' in proof) || !('signature' in proof)
     || typeof proof.wallet !== 'string' || typeof proof.message !== 'string' || typeof proof.signature !== 'string') {
     return { error: 'Invalid wallet proof.' };
   }
   const linked = verifyWalletProof({ wallet: proof.wallet, message: proof.message, signature: proof.signature }, identity.toBase58(), now);
   if (!linked.ok) return { error: linked.reason };
-  return { name, character, identity, session, sessionExpiry: expiry, wallet: linked.wallet };
+  return { ...human, wallet: linked.wallet };
 }
 
 const server = createServer(async (req, res) => {
@@ -148,7 +151,13 @@ const server = createServer(async (req, res) => {
           return json(res, 'error' in r ? 409 : 201, r);
         }
         if (action === 'ready') return json(res, 200, { ok: lobby.setReady(code, ticket, !!b.ready) });
-        if (action === 'settings') return json(res, 200, { ok: lobby.setBotFill(code, ticket, !!b.botFill) });
+        if (action === 'settings') {
+          const { botFill, weather } = b;
+          if ((botFill !== undefined && typeof botFill !== 'boolean') || (weather !== undefined && weather !== null && !isWeather(weather))) {
+            return json(res, 400, { error: 'Invalid room settings.' });
+          }
+          return json(res, 200, { ok: lobby.setRoomSettings(code, ticket, { botFill, weather }) });
+        }
         if (action === 'start') {
           const r = lobby.startRoom(code, ticket);
           return json(res, 'error' in r ? 409 : 200, r);

@@ -8,6 +8,8 @@ import type { Profile } from '../state/settings';
 import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 import { NetworkCredits } from './NetworkCredits';
+import { WeatherSelect } from './WeatherSelect';
+import type { Weather } from '../game/arena';
 import { heroTurn, stageReady, titleView } from '../render/MenuStage';
 
 
@@ -134,6 +136,8 @@ export function Landing({
   onCharacter,
   onTutorial,
   walletControls,
+  weather,
+  onWeather,
 }: {
   initial: Profile | null;
   onPlay: (p: Profile) => void;
@@ -149,6 +153,8 @@ export function Landing({
   /** How to play: a guided practice round. */
   onTutorial: (p: Profile) => void;
   walletControls: React.ReactNode;
+  weather?: Weather;
+  onWeather: (weather: Weather | undefined) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? `deckhand${Math.floor(100 + Math.random() * 900)}`);
   const [character, setCharacter] = useState<CharacterId>(initial?.character ?? 'frog');
@@ -263,6 +269,7 @@ export function Landing({
             </button>
           ))}
         </div>
+        {!pendingRoom && <WeatherSelect value={weather} onChange={onWeather} label={mode === 'online' ? 'Preferred weather' : 'Weather'} />}
         <button className="play-btn" onClick={go(current.go)} disabled={!clean} autoFocus>
           Play
           <small>{current.sub}</small>

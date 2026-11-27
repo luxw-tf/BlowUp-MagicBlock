@@ -277,7 +277,7 @@ describe('layouts', () => {
   });
 
   it('pick the same weather from the same match address, and storms only at night', async () => {
-    const { selectLayoutFor, currentMood, currentWeather, WEATHERS } = await import('./arena');
+    const { selectLayout, selectLayoutFor, currentLayout, currentMood, currentWeather, LAYOUTS, MOODS, selectMood, selectWeather, WEATHERS } = await import('./arena');
     const seen = new Set<string>();
     for (let i = 0; i < 400; i++) {
       const key = `Match${i * 7919}`;
@@ -290,6 +290,16 @@ describe('layouts', () => {
       seen.add(currentWeather());
     }
     expect(seen.size).toBe(WEATHERS.length); // every weather turns up
+    const previous = { layout: currentLayout(), mood: currentMood(), weather: currentWeather() };
+    const layout = selectLayoutFor('Match111').id;
+    for (const weather of WEATHERS) {
+      expect(selectLayoutFor('Match111', weather).id).toBe(layout);
+      expect(currentWeather()).toBe(weather);
+      if (weather === 'storm') expect(currentMood()).toBe('night');
+    }
+    selectLayout(LAYOUTS.indexOf(previous.layout));
+    selectMood(MOODS.indexOf(previous.mood));
+    selectWeather(previous.weather);
   });
 
   it('move people with the weather only when the match carries it, the same for everyone', async () => {

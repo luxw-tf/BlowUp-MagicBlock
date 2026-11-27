@@ -7,11 +7,14 @@ import { Icon } from './Icon';
 import { Portrait } from './Portrait';
 import type { WalletProof } from '../chain/wallet-link';
 import { NetworkCredits } from './NetworkCredits';
+import { WeatherSelect } from './WeatherSelect';
+import type { Weather } from '../game/arena';
 
 interface RoomView {
   code: string;
   status: 'open' | 'started';
   botFill: boolean;
+  weather: Weather | null;
   matchId: string | null;
   members: { name: string; character: CharacterId; ready: boolean; host: boolean; you: boolean }[];
 }
@@ -23,12 +26,14 @@ interface RoomView {
 export function RoomScreen({
   profile,
   walletProof,
+  weather,
   initialCode,
   onReady,
   onCancel,
 }: {
   profile: Profile;
   walletProof: WalletProof | null;
+  weather?: Weather;
   initialCode: string | null;
   onReady: (s: OnlineSession) => void;
   onCancel: () => void;
@@ -39,6 +44,7 @@ export function RoomScreen({
   const [error, setError] = useState<string | null>(null);
   const [setup, setSetup] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const keys = useRef<GuestKeys | null>(null);
   const ticket = useRef<string | null>(null);
   const joining = useRef(false);
@@ -50,7 +56,7 @@ export function RoomScreen({
     setError(null);
     try {
       keys.current ??= guestKeys();
-      const body = joinPayload(profile, keys.current, walletProof);
+      const body = joinPayload(profile, keys.current, walletProof, mode === 'create' ? weather : undefined);
       if (mode === 'create') {
         const r = await api<{ code: string; ticket: string }>('/api/rooms', { body });
         ticket.current = r.ticket;
@@ -103,6 +109,20 @@ export function RoomScreen({
 
   const post = (action: string, body: Record<string, unknown>) =>
     api(`/api/rooms/${code}/${action}`, { body: { ticket: ticket.current, ...body } }).catch((e: Error) => setError(e.message));
+
+  const changeSettings = async (settings: { botFill?: boolean; weather?: Weather | null }) => {
+    setSavingSettings(true);
+    setError(null);
+    try {
+      const result = await api<{ ok: boolean }>(`/api/rooms/${code}/settings`, { body: { ticket: ticket.current, ...settings } });
+      if (!result.ok) throw new Error('Could not update room settings.');
+      setRoom((previous) => previous ? { ...previous, ...settings } : previous);
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const leave = () => {
     if (ticket.current && room?.status === 'open') void api(`/api/tickets/${ticket.current}`, { method: 'DELETE' }).catch(() => {});
@@ -212,9 +232,10 @@ export function RoomScreen({
         )}
         {!setup && room && (
           <>
+            <WeatherSelect value={room.weather} disabled={!isHost || savingSettings} onChange={(choice) => void changeSettings({ weather: choice ?? null })} />
             <label className="setting toggle">
               <span>Fill empty seats with bots {isHost ? '' : '(host decides)'}</span>
-              <input type="checkbox" checked={room.botFill} disabled={!isHost} onChange={(e) => void post('settings', { botFill: e.target.checked })} />
+              <input type="checkbox" checked={room.botFill} disabled={!isHost || savingSettings} onChange={(e) => void changeSettings({ botFill: e.target.checked })} />
             </label>
             <div className="row">
               <button className={`btn ${me?.ready ? '' : 'primary'}`} onClick={() => void post('ready', { ready: !me?.ready })}>
@@ -223,7 +244,7 @@ export function RoomScreen({
               {isHost && (
                 <button
                   className="btn primary"
-                  disabled={!allReady || !enough}
+                  disabled={!allReady || !enough || savingSettings}
                   title={!allReady ? 'Everyone must be ready' : !enough ? 'Need 2 players, or turn on bot fill' : ''}
                   onClick={() => void post('start', {})}
                 >

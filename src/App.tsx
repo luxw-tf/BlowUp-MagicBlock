@@ -13,8 +13,8 @@ import type { GameSession as LocalSession } from './game/session';
 import { loadProfile, saveProfile, type Profile } from './state/settings';
 import { MenuStage } from './render/MenuStage';
 import type { CharacterId } from './game/types';
-import { signWalletLink, watchWallet } from './chain/browser-wallet';
-import type { WalletProof } from './chain/wallet-link';
+import { browserWallets, loadWalletLink, saveWalletLink, signWalletLink, WALLET_LINK_KEY, walletLinkExpiresAt, watchWallet, type SavedWalletLink } from './chain/browser-wallet';
+import type { Weather } from './game/arena';
 import { WalletProgress } from './ui/WalletProgress';
 
 type Screen =
@@ -34,19 +34,45 @@ export default function App() {
   const [pendingRoom, setPendingRoom] = useState<string | null>(inviteCode);
   const [rejoinId, setRejoinId] = useState<string | null>(activeMatchId);
   const [notice, setNotice] = useState<string | null>(null);
-  const [linked, setLinked] = useState<{ proof: WalletProof; provider: Parameters<typeof signWalletLink>[0] } | null>(null);
+  const [linked, setLinked] = useState(loadWalletLink);
+  const [weather, setWeather] = useState<Weather | undefined>();
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const walletProof = linked?.proof ?? null;
+  const storeLink = useCallback((link: SavedWalletLink | null) => {
+    saveWalletLink(link);
+    setLinked(link);
+  }, []);
   useEffect(() => {
-    if (linked) return watchWallet(linked.provider, () => setLinked(null));
-  }, [linked]);
+    const sync = (e: StorageEvent) => {
+      if (e.key === WALLET_LINK_KEY || e.key === null) setLinked(loadWalletLink());
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+  useEffect(() => {
+    if (!linked) return;
+    const provider = browserWallets().find((wallet) => wallet.name === linked.providerName)?.provider;
+    const clear = () => storeLink(null);
+    if (provider?.publicKey && provider.publicKey.toBase58() !== linked.proof.wallet) {
+      clear();
+      return;
+    }
+    const unsubscribe = provider && watchWallet(provider, linked.proof.wallet, clear);
+    const expiration = window.setTimeout(clear, Math.max(0, walletLinkExpiresAt(linked.proof) - Date.now()));
+    return () => {
+      unsubscribe?.();
+      window.clearTimeout(expiration);
+    };
+  }, [linked, storeLink]);
 
   const connectWallet = async (provider: Parameters<typeof signWalletLink>[0]) => {
     setWalletBusy(true);
     setWalletError(null);
     try {
-      setLinked({ proof: await signWalletLink(provider), provider });
+      const providerName = browserWallets().find((wallet) => wallet.provider === provider)?.name;
+      if (!providerName) throw new Error('Wallet provider unavailable.');
+      storeLink({ proof: await signWalletLink(provider), providerName });
     } catch {
       setWalletError('Could not link wallet. Try again or play as a guest.');
     } finally {
@@ -73,7 +99,7 @@ export default function App() {
     });
   }, []);
 
-  const startMatch = useCallback((participants: ParticipantSetup[]) => go({ kind: 'match', session: new GameSession(participants) }), [go]);
+  const startMatch = useCallback((participants: ParticipantSetup[]) => go({ kind: 'match', session: new GameSession(participants, undefined, weather) }), [go, weather]);
 
   const remember = useCallback((p: Profile) => {
     setProfile(p);
@@ -157,13 +183,15 @@ export default function App() {
           notice={notice}
           onCharacter={setHero}
           onTutorial={tutorial}
-          walletControls={<WalletProgress proof={walletProof} connect={connectWallet} guest={() => { setLinked(null); setWalletError(null); }} busy={walletBusy} error={walletError} />}
+          weather={weather}
+          onWeather={setWeather}
+          walletControls={<WalletProgress proof={walletProof} connect={connectWallet} guest={() => { storeLink(null); setWalletError(null); }} busy={walletBusy} error={walletError} />}
         />
       );
     else if (screen.kind === 'lobby')
       menu = <Lobby participants={screen.participants} onStart={() => startMatch(screen.participants)} onCancel={toLanding} />;
-    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} walletProof={walletProof} onReady={toMatch} onCancel={toLanding} />;
-    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} walletProof={walletProof} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
+    else if (screen.kind === 'online-lobby') menu = <OnlineLobby key={screen.attempt} profile={screen.profile} walletProof={walletProof} weather={weather} onReady={toMatch} onCancel={toLanding} />;
+    else menu = <RoomScreen key={screen.attempt} profile={screen.profile} walletProof={walletProof} weather={weather} initialCode={screen.code} onReady={toMatch} onCancel={toLanding} />;
     return (
       <>
         <MenuStage hero={hero} />

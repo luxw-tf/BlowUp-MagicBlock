@@ -1,7 +1,38 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { guestKeys } from './online-session';
 import { decodeProfile, DEFAULT_BASE_RPC, pda, PROGRAM_ID } from './program';
-import { linkMessage, type WalletProof } from './wallet-link';
+import { LINK_MAX_AGE_SEC, linkMessage, parseLinkMessage, type WalletProof } from './wallet-link';
+
+export const WALLET_LINK_KEY = 'blowup.wallet-link.v1';
+export type SavedWalletLink = { proof: WalletProof; providerName: string };
+
+export function walletLinkExpiresAt(proof: WalletProof) {
+  return ((parseLinkMessage(proof.message)?.issuedAtSec ?? 0) + LINK_MAX_AGE_SEC) * 1000;
+}
+
+export function loadWalletLink(): SavedWalletLink | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WALLET_LINK_KEY) ?? 'null') as SavedWalletLink | null;
+    if (!saved || typeof saved.providerName !== 'string') return null;
+    const { proof } = saved;
+    if (typeof proof?.message !== 'string' || typeof proof.wallet !== 'string' || typeof proof.signature !== 'string') return null;
+    const fields = parseLinkMessage(proof.message);
+    if (!fields || walletLinkExpiresAt(proof) <= Date.now() || fields.wallet !== proof.wallet) return null;
+    if (fields.identity !== guestKeys().identity.publicKey.toBase58()) return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+export function saveWalletLink(link: SavedWalletLink | null) {
+  try {
+    if (link) localStorage.setItem(WALLET_LINK_KEY, JSON.stringify(link));
+    else localStorage.removeItem(WALLET_LINK_KEY);
+  } catch {
+    // Linking still works for this page when browser storage is unavailable.
+  }
+}
 
 interface WalletProvider {
   publicKey?: { toBase58(): string } | null;
@@ -39,11 +70,14 @@ export async function signWalletLink(provider: WalletProvider): Promise<WalletPr
   return { wallet, message, signature: btoa(String.fromCharCode(...signature)) };
 }
 
-export function watchWallet(provider: WalletProvider, clear: () => void) {
-  provider.on?.('accountChanged', clear);
+export function watchWallet(provider: WalletProvider, wallet: string, clear: () => void) {
+  const changed = () => {
+    if (provider.publicKey?.toBase58() !== wallet) clear();
+  };
+  provider.on?.('accountChanged', changed);
   provider.on?.('disconnect', clear);
   return () => {
-    provider.off?.('accountChanged', clear);
+    provider.off?.('accountChanged', changed);
     provider.off?.('disconnect', clear);
   };
 }
